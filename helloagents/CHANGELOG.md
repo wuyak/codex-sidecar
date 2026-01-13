@@ -32,3 +32,8 @@
 - 优化：`shell_command` 的 `tool_output` 对 `rg` 输出做更智能的折叠（只展示命中的文件路径 + 嵌套的 `\\n` 行数估计 + 其余匹配数量）。
 - 优化：`shell_command` 的 `tool_output` 默认直接展示终端风格块（`• Ran ...` + `│/└` 树形摘要），并将工具元信息收进“详情”折叠。
 - 优化：隐藏 `shell_command/view_image` 的 `tool_call` 行，避免与 `tool_output` 重复；并调整树形缩进/`|| true` 换行，更贴近终端样式。
+- 优化：`tool_output` 的“详情”改为卡片头部按钮（详情/收起），展开后可查看更多输出与元信息。
+- 优化：隐藏 `apply_patch` 的 `tool_call` 行；`apply_patch` 的 `tool_output` 改为终端风格摘要，并在“详情”中提供补丁内容可复制。
+- 新增：所有消息的文本块/代码块右上角增加“复制”按钮。
+- 优化：思考块（`reasoning_summary`/`agent_reasoning`）改为 Markdown 渲染，并将“思考（EN/ZH）”移到时间戳同行。
+- 调整：↑ 顶部 / ↓ 底部悬浮按钮移动到左侧。

@@ -345,18 +345,36 @@ _UI_HTML = """<!doctype html>
       button.primary { background:#111827; color:#fff; border-color:#111827; }
 	      button.danger { background:#fee2e2; border-color:#fecaca; }
 	      .muted { opacity: .8; }
-	      .float-nav { position: fixed; right: 16px; bottom: 16px; display:flex; flex-direction:column; gap:8px; z-index: 1000; }
+	      .float-nav { position: fixed; left: 16px; right: auto; bottom: 16px; display:flex; flex-direction:column; gap:8px; z-index: 1000; }
 	      .float-nav button { padding: 8px 10px; border-radius: 999px; box-shadow: 0 6px 20px rgba(0,0,0,.08); }
 	      .tool-card { background:#f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; margin-top: 8px; }
-	      .tool-head { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
+	      .tool-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+	      .tool-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+	      .tool-toggle { border: 1px solid #e2e8f0; background:#fff; padding: 2px 8px; border-radius: 999px; cursor:pointer; font-size: 12px; color:#334155; }
+	      .tool-toggle:hover { background:#f1f5f9; }
+	      .tool-details { margin-top: 8px; }
+	      .hidden { display: none; }
 	      .pill { display:inline-block; padding:2px 8px; border-radius:999px; border:1px solid #e2e8f0; background:#fff; font-size:12px; }
 	      .tool-meta { display:flex; flex-wrap:wrap; gap:10px; margin-top: 6px; color:#555; font-size: 12px; }
+	      .pre-wrap { position: relative; }
+	      .copy-btn { position:absolute; top: 8px; right: 8px; padding: 4px 8px; border-radius: 8px; font-size: 12px; border: 1px solid rgba(148,163,184,.55); background: rgba(15,23,42,.88); color:#e2e8f0; cursor:pointer; opacity: 0; transition: opacity .15s; }
+	      .copy-btn.light { background:#fff; color:#0f172a; border-color:#e2e8f0; }
+	      .pre-wrap:hover .copy-btn { opacity: 1; }
+	      .copy-btn:active { transform: translateY(1px); }
 	      pre.code { background:#0b1020; color:#e5e7eb; padding: 10px; border-radius: 10px; overflow:auto; white-space: pre; word-break: normal; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; line-height: 1.35; }
 	      pre.code .diff-line { display:block; padding: 0 6px; border-radius: 6px; }
 	      pre.code .diff-add { background: rgba(34, 197, 94, .16); }
 	      pre.code .diff-del { background: rgba(239, 68, 68, .16); }
 	      pre.code .diff-ellipsis { color:#94a3b8; }
 	      .change-head { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+	      .md { font-size: 13px; line-height: 1.6; }
+	      .md h1, .md h2, .md h3 { margin: 10px 0 6px; line-height: 1.25; }
+	      .md p { margin: 6px 0; }
+	      .md ul { margin: 6px 0 6px 18px; padding: 0; }
+	      .md li { margin: 2px 0; }
+	      .md code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; background:#f1f5f9; padding: 1px 6px; border-radius: 6px; }
+	      .md pre code { background: transparent; padding: 0; }
+	      .think-split { margin-top: 10px; padding-top: 10px; border-top: 1px solid #e2e8f0; }
 	    </style>
 	  </head>
 	  <body>
@@ -487,6 +505,93 @@ _UI_HTML = """<!doctype html>
         if (!raw) return null;
         if (!(raw.startsWith("{") || raw.startsWith("["))) return null;
         try { return JSON.parse(raw); } catch (e) { return null; }
+      }
+
+      function safeDomId(s) {
+        const raw = String(s ?? "");
+        if (!raw) return "";
+        return raw.replace(/[^a-z0-9_-]/gi, "_");
+      }
+
+      async function copyToClipboard(text) {
+        const t = String(text ?? "");
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(t);
+            return true;
+          }
+        } catch (_) {}
+        try {
+          const ta = document.createElement("textarea");
+          ta.value = t;
+          ta.setAttribute("readonly", "readonly");
+          ta.style.position = "fixed";
+          ta.style.left = "-9999px";
+          document.body.appendChild(ta);
+          ta.select();
+          const ok = document.execCommand("copy");
+          document.body.removeChild(ta);
+          return !!ok;
+        } catch (_) {
+          return false;
+        }
+      }
+
+      function decoratePreBlocks(root) {
+        if (!root || !root.querySelectorAll) return;
+        const pres = root.querySelectorAll("pre");
+        for (const pre of pres) {
+          try {
+            if (!pre || !pre.parentElement) continue;
+            if (pre.parentElement.classList && pre.parentElement.classList.contains("pre-wrap")) continue;
+            const wrap = document.createElement("div");
+            wrap.className = "pre-wrap";
+            const btn = document.createElement("button");
+            btn.type = "button";
+            const isDark = pre.classList && pre.classList.contains("code");
+            btn.className = "copy-btn" + (isDark ? "" : " light");
+            btn.textContent = "复制";
+            btn.title = "复制内容";
+            btn.onclick = async (e) => {
+              try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+              const ok = await copyToClipboard(pre.textContent || "");
+              const old = btn.textContent;
+              btn.textContent = ok ? "已复制" : "复制失败";
+              setTimeout(() => { btn.textContent = old; }, 900);
+            };
+            pre.parentNode.insertBefore(wrap, pre);
+            wrap.appendChild(btn);
+            wrap.appendChild(pre);
+          } catch (_) {}
+        }
+      }
+
+      function wireToolToggles(root) {
+        if (!root || !root.querySelectorAll) return;
+        const btns = root.querySelectorAll("button.tool-toggle[data-target]");
+        for (const btn of btns) {
+          try {
+            if (btn.__wired) continue;
+            btn.__wired = true;
+            btn.onclick = (e) => {
+              try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+              const id = btn.getAttribute("data-target") || "";
+              if (!id) return;
+              let el = null;
+              try { el = document.getElementById(id); } catch (_) {}
+              if (!el) return;
+              const nowHidden = !el.classList.contains("hidden");
+              if (nowHidden) el.classList.add("hidden");
+              else el.classList.remove("hidden");
+              btn.textContent = nowHidden ? "详情" : "收起";
+            };
+          } catch (_) {}
+        }
+      }
+
+      function decorateRow(row) {
+        decoratePreBlocks(row);
+        wireToolToggles(row);
       }
 
       function parseToolCallText(text) {
@@ -726,6 +831,95 @@ _UI_HTML = """<!doctype html>
 	        }
 	        return lines.join("\\n");
 	      }
+
+	      function formatShellRunExpanded(cmdFull, outputBody, exitCode) {
+	        const cmdOne = commandPreview(cmdFull, 400);
+	        const outAll = normalizeNonEmptyLines(outputBody);
+	        const cmdWrap = wrapCommandForDisplay(cmdOne, 78);
+	        const firstCmd = String(cmdOne ?? "").trim();
+	        const isRg = /^rg\\b/.test(firstCmd);
+	        const pick = (outAll.length > 0)
+	          ? (isRg ? formatRgOutput(outAll, 6) : summarizeOutputLines(outAll, 24))
+	          : [];
+	        const lines = [];
+	        if (cmdWrap.length > 0) {
+	          lines.push(`• Ran ${cmdWrap[0]}`);
+	          for (let i = 1; i < cmdWrap.length; i++) lines.push(`  │ ${cmdWrap[i]}`);
+	        } else {
+	          lines.push("• Ran shell_command");
+	        }
+	        if (pick.length > 0) {
+	          const p0 = wrapTreeContent(pick[0], 74);
+	          if (p0.length > 0) {
+	            lines.push(`  └ ${p0[0]}`);
+	            for (let j = 1; j < p0.length; j++) lines.push(`     ${p0[j]}`);
+	          } else {
+	            lines.push("  └ (no output)");
+	          }
+	          for (let i = 1; i < pick.length; i++) {
+	            const ps = wrapTreeContent(pick[i], 74);
+	            for (const seg of ps) lines.push(`     ${seg}`);
+	          }
+	        } else if (exitCode !== null && exitCode !== 0) {
+	          lines.push("  └ (no output)");
+	        } else {
+	          lines.push("  └ (no output)");
+	        }
+	        return lines.join("\\n");
+	      }
+
+	      function summarizeApplyPatchFiles(argsRaw) {
+	        const lines = String(argsRaw ?? "").split("\\n");
+	        const out = [];
+	        const rx = /^\\*\\*\\*\\s+(Add File|Update File|Delete File):\\s+(.+)$/;
+	        for (const ln of lines) {
+	          const m = String(ln ?? "").match(rx);
+	          if (!m) continue;
+	          const path = String(m[2] ?? "").trim();
+	          if (!path) continue;
+	          out.push(path);
+	        }
+	        return Array.from(new Set(out));
+	      }
+
+	      function extractApplyPatchOutputText(outputBody) {
+	        const raw = String(outputBody ?? "").trim();
+	        if (!raw) return "";
+	        const obj = safeJsonParse(raw);
+	        if (obj && typeof obj === "object" && typeof obj.output === "string") return String(obj.output || "");
+	        return raw;
+	      }
+
+	      function formatOutputTree(headerLine, lines, maxLines = 12) {
+	        const xs = Array.isArray(lines) ? lines : normalizeNonEmptyLines(String(lines ?? ""));
+	        const pick = summarizeOutputLines(xs, maxLines);
+	        const out = [];
+	        out.push(headerLine || "• Output");
+	        if (pick.length === 0) {
+	          out.push("  └ (no output)");
+	          return out.join("\\n");
+	        }
+	        const p0 = wrapTreeContent(pick[0], 74);
+	        if (p0.length > 0) {
+	          out.push(`  └ ${p0[0]}`);
+	          for (let j = 1; j < p0.length; j++) out.push(`     ${p0[j]}`);
+	        } else {
+	          out.push("  └ (no output)");
+	        }
+	        for (let i = 1; i < pick.length; i++) {
+	          const ps = wrapTreeContent(pick[i], 74);
+	          for (const seg of ps) out.push(`     ${seg}`);
+	        }
+	        return out.join("\\n");
+	      }
+
+	      function formatApplyPatchRun(argsRaw, outputBody, maxLines = 10) {
+	        const files = summarizeApplyPatchFiles(argsRaw);
+	        const fileNote = (files.length === 1) ? ` (${files[0]})` : (files.length > 1 ? ` (${files.length} files)` : "");
+	        const text = extractApplyPatchOutputText(outputBody);
+	        const lines = normalizeNonEmptyLines(text);
+	        return formatOutputTree(`• Applied patch${fileNote}`, lines, maxLines);
+	      }
 	
 	      function isCodexEditSummary(text) {
 	        const s = String(text ?? "");
@@ -864,6 +1058,119 @@ _UI_HTML = """<!doctype html>
         return "";
       }
 
+      function renderInlineMarkdown(text) {
+        const raw = String(text ?? "");
+        if (!raw) return "";
+        const parts = raw.split("`");
+        const out = [];
+        for (let i = 0; i < parts.length; i++) {
+          const seg = parts[i] ?? "";
+          if ((i % 2) === 1) {
+            out.push(`<code>${escapeHtml(seg)}</code>`);
+          } else {
+            let h = escapeHtml(seg);
+            h = h.replace(/\\*\\*([^*]+)\\*\\*/g, "<strong>$1</strong>");
+            out.push(h);
+          }
+        }
+        return out.join("");
+      }
+
+      function renderMarkdown(md) {
+        const src = String(md ?? "").replace(/\\r\\n/g, "\\n").replace(/\\r/g, "\\n");
+        const lines = src.split("\\n");
+        const blocks = [];
+        let inCode = false;
+        let codeLines = [];
+        let para = [];
+        let listItems = null;
+
+        const flushPara = () => {
+          if (!para.length) return;
+          const text = para.join(" ").replace(/\\s+/g, " ").trim();
+          para = [];
+          if (!text) return;
+          blocks.push(`<p>${renderInlineMarkdown(text)}</p>`);
+        };
+
+        const flushList = () => {
+          if (!listItems || listItems.length === 0) { listItems = null; return; }
+          const lis = listItems.map((it) => `<li>${renderInlineMarkdown(it)}</li>`).join("");
+          blocks.push(`<ul>${lis}</ul>`);
+          listItems = null;
+        };
+
+        const flushCode = () => {
+          const body = codeLines.join("\\n").replace(/\\n+$/g, "");
+          codeLines = [];
+          blocks.push(`<pre class="code">${escapeHtml(body)}</pre>`);
+        };
+
+        for (let i = 0; i < lines.length; i++) {
+          const ln = String(lines[i] ?? "");
+          const t = ln.trimEnd();
+
+          const fence = t.match(/^\\s*```/);
+          if (fence) {
+            if (inCode) {
+              flushCode();
+              inCode = false;
+            } else {
+              flushPara();
+              flushList();
+              inCode = true;
+            }
+            continue;
+          }
+
+          if (inCode) {
+            codeLines.push(ln);
+            continue;
+          }
+
+          if (!t.trim()) {
+            flushPara();
+            flushList();
+            continue;
+          }
+
+          const bh = t.match(/^\\s*\\*\\*([^*]+)\\*\\*\\s*$/);
+          if (bh) {
+            flushPara();
+            flushList();
+            const text = String(bh[1] ?? "").trim();
+            blocks.push(`<h3>${renderInlineMarkdown(text)}</h3>`);
+            continue;
+          }
+
+          const h = t.match(/^\\s*(#{1,3})\\s+(.*)$/);
+          if (h) {
+            flushPara();
+            flushList();
+            const level = Math.min(3, Math.max(1, (h[1] || "").length));
+            const text = String(h[2] ?? "").trim();
+            blocks.push(`<h${level}>${renderInlineMarkdown(text)}</h${level}>`);
+            continue;
+          }
+
+          const li = t.match(/^\\s*[-*]\\s+(.*)$/);
+          if (li) {
+            flushPara();
+            if (!listItems) listItems = [];
+            listItems.push(String(li[1] ?? "").trim());
+            continue;
+          }
+
+          flushList();
+          para.push(t.trim());
+        }
+
+        if (inCode) flushCode();
+        flushPara();
+        flushList();
+        return blocks.join("\\n");
+      }
+
       function rolloutStampFromFile(filePath) {
         try {
           const base = (filePath || "").split("/").slice(-1)[0] || "";
@@ -946,6 +1253,7 @@ _UI_HTML = """<!doctype html>
         const autoscroll = (window.innerHeight + window.scrollY) >= (document.body.scrollHeight - 80);
 
 	        let body = "";
+	        let metaExtra = "";
 		        if (kind === "tool_output") {
 		          const parsed = parseToolOutputText(msg.text || "");
 		          const callId = parsed.callId || "";
@@ -956,37 +1264,115 @@ _UI_HTML = """<!doctype html>
 		          const wallTime = extractWallTime(outputRaw);
 		          const outputBody = extractOutputBody(outputRaw);
 		          const cmdFull = (meta && meta.args_obj && toolName === "shell_command") ? String(meta.args_obj.command || "") : "";
+		          const argsRaw = (meta && meta.args_raw) ? String(meta.args_raw || "") : "";
 		          const showRaw = (String(outputBody || "").trim() !== String(outputRaw || "").trim());
-			          let runBlock = "";
-			          if (toolName === "shell_command" && cmdFull) {
-			            runBlock = formatShellRun(cmdFull, outputBody, exitCode);
-			          } else if (toolName === "view_image") {
-			            const p = (meta && meta.args_obj) ? String(meta.args_obj.path || "") : "";
-			            const base = (p.split(/[\\\\/]/).pop() || "").trim();
-			            const first = firstMeaningfulLine(outputBody) || "attached local image";
-			            runBlock = `• ${first}${base ? `: ${base}` : ``}`;
-			          } else {
-			            runBlock = String(outputBody || "");
-			          }
-			          body = `
-			            <div class="tool-card">
-			              ${runBlock ? `<pre class="code">${escapeHtml(runBlock)}</pre>` : ``}
-		              <details>
-		                <summary class="meta">详情</summary>
+		          const detailsId = ("tool_" + safeDomId(callId || (msg.id || "")) + "_" + String(Math.random()).slice(2, 8));
+
+		          let runShort = "";
+		          let runLong = "";
+		          const detailsParts = [];
+
+		          if (toolName === "shell_command" && cmdFull) {
+		            runShort = formatShellRun(cmdFull, outputBody, exitCode);
+		            runLong = formatShellRunExpanded(cmdFull, outputBody, exitCode);
+		            detailsParts.push(`
+		              <div class="tool-meta">
+		                ${toolName ? `<span class="pill">工具：<code>${escapeHtml(toolName)}</code></span>` : ``}
+		                ${callId ? `<span class="pill">call_id：<code>${escapeHtml(callId)}</code></span>` : ``}
+		                ${exitCode !== null ? `<span class="pill">Exit：<code>${escapeHtml(exitCode)}</code></span>` : ``}
+		                ${wallTime ? `<span class="pill">耗时：<code>${escapeHtml(wallTime)}</code></span>` : ``}
+		              </div>
+		            `);
+		            if (cmdFull.trim()) {
+		              detailsParts.push(`<pre>${escapeHtml(cmdFull)}</pre>`);
+		            }
+		            if (runLong && runLong !== runShort) {
+		              detailsParts.push(`<pre class="code">${escapeHtml(runLong)}</pre>`);
+		            }
+		            if (showRaw) {
+		              detailsParts.push(`
+		                <details>
+		                  <summary class="meta">原始输出</summary>
+		                  <pre>${escapeHtml(outputRaw)}</pre>
+		                </details>
+		              `);
+		            }
+		          } else if (toolName === "apply_patch") {
+		            runShort = formatApplyPatchRun(argsRaw, outputBody, 8);
+		            runLong = formatApplyPatchRun(argsRaw, outputBody, 40);
+		            detailsParts.push(`
+		              <div class="tool-meta">
+		                ${toolName ? `<span class="pill">工具：<code>${escapeHtml(toolName)}</code></span>` : ``}
+		                ${callId ? `<span class="pill">call_id：<code>${escapeHtml(callId)}</code></span>` : ``}
+		              </div>
+		            `);
+		            if (runLong && runLong !== runShort) {
+		              detailsParts.push(`<pre class="code">${escapeHtml(runLong)}</pre>`);
+		            }
+		            if (argsRaw.trim()) {
+		              detailsParts.push(`
+		                <details>
+		                  <summary class="meta">补丁内容</summary>
+		                  <pre class="code">${escapeHtml(argsRaw)}</pre>
+		                </details>
+		              `);
+		            }
+		            if (showRaw) {
+		              detailsParts.push(`
+		                <details>
+		                  <summary class="meta">原始输出</summary>
+		                  <pre>${escapeHtml(outputRaw)}</pre>
+		                </details>
+		              `);
+		            }
+		          } else if (toolName === "view_image") {
+		            const p = (meta && meta.args_obj) ? String(meta.args_obj.path || "") : "";
+		            const base = (p.split(/[\\\\/]/).pop() || "").trim();
+		            const first = firstMeaningfulLine(outputBody) || "attached local image";
+		            runShort = `• ${first}${base ? `: ${base}` : ``}`;
+		            if (callId || toolName) {
+		              detailsParts.push(`
 		                <div class="tool-meta">
 		                  ${toolName ? `<span class="pill">工具：<code>${escapeHtml(toolName)}</code></span>` : ``}
 		                  ${callId ? `<span class="pill">call_id：<code>${escapeHtml(callId)}</code></span>` : ``}
-		                  ${exitCode !== null ? `<span class="pill">Exit：<code>${escapeHtml(exitCode)}</code></span>` : ``}
-		                  ${wallTime ? `<span class="pill">耗时：<code>${escapeHtml(wallTime)}</code></span>` : ``}
 		                </div>
-		                ${(toolName === "shell_command" && cmdFull) ? `<pre>${escapeHtml(cmdFull)}</pre>` : ``}
-		                ${showRaw ? `
-		                  <details>
-		                    <summary class="meta">原始输出</summary>
-		                    <pre>${escapeHtml(outputRaw)}</pre>
-		                  </details>
-		                ` : `<pre>${escapeHtml(outputBody)}</pre>`}
-		              </details>
+		              `);
+		            }
+		          } else {
+		            const header = `• ${toolName || "tool_output"}`;
+		            const lines = normalizeNonEmptyLines(outputBody);
+		            runShort = formatOutputTree(header, lines, 10);
+		            runLong = formatOutputTree(header, lines, 40);
+		            detailsParts.push(`
+		              <div class="tool-meta">
+		                ${toolName ? `<span class="pill">工具：<code>${escapeHtml(toolName)}</code></span>` : ``}
+		                ${callId ? `<span class="pill">call_id：<code>${escapeHtml(callId)}</code></span>` : ``}
+		              </div>
+		            `);
+		            if (runLong && runLong !== runShort) detailsParts.push(`<pre class="code">${escapeHtml(runLong)}</pre>`);
+		            if (showRaw) {
+		              detailsParts.push(`
+		                <details>
+		                  <summary class="meta">原始输出</summary>
+		                  <pre>${escapeHtml(outputRaw)}</pre>
+		                </details>
+		              `);
+		            }
+		          }
+
+		          if (!String(runShort || "").trim()) {
+		            const header = `• ${toolName || "tool_output"}`;
+		            runShort = formatOutputTree(header, normalizeNonEmptyLines(outputBody), 10);
+		          }
+
+		          const hasDetails = detailsParts.filter(x => String(x || "").trim()).length > 0;
+		          const toggleBtn = hasDetails ? `<button class="tool-toggle" type="button" data-target="${escapeHtml(detailsId)}">详情</button>` : ``;
+		          const detailsHtml = hasDetails ? `<div id="${escapeHtml(detailsId)}" class="tool-details hidden">${detailsParts.join("\\n")}</div>` : ``;
+		          body = `
+		            <div class="tool-card">
+		              ${toggleBtn ? `<div class="tool-head"><div class="tool-actions"></div>${toggleBtn}</div>` : ``}
+		              ${runShort ? `<pre class="code">${escapeHtml(runShort)}</pre>` : ``}
+		              ${detailsHtml}
 		            </div>
 		          `;
 			        } else if (kind === "tool_call") {
@@ -997,7 +1383,7 @@ _UI_HTML = """<!doctype html>
 		          const argsObj = safeJsonParse(argsRaw);
 		          if (callId) callIndex.set(callId, { tool_name: toolName, args_raw: argsRaw, args_obj: argsObj });
 		          // Avoid duplicate clutter: tool_output already renders the useful summary for these.
-		          if (toolName === "shell_command" || toolName === "view_image") return;
+		          if (toolName === "shell_command" || toolName === "view_image" || toolName === "apply_patch") return;
 
 	          if (toolName === "update_plan" && argsObj && typeof argsObj === "object") {
 	            const explanation = (typeof argsObj.explanation === "string") ? argsObj.explanation : "";
@@ -1069,10 +1455,13 @@ _UI_HTML = """<!doctype html>
 	            body = `<pre><b>回答</b>\\n${escapeHtml(txt)}</pre>`;
 	          }
 	        } else if (isThinking) {
-	          body = `
-	            ${showEn ? `<pre><b>思考（EN）</b>\\n${escapeHtml(msg.text || "")}</pre>` : ``}
-	            ${showZh && hasZh ? `<pre><b>思考（ZH）</b>\\n${escapeHtml(zhText)}</pre>` : ``}
-          `;
+	          const pills = [];
+	          if (showEn) pills.push(`<span class="pill">思考（EN）</span>`);
+	          if (showZh && hasZh) pills.push(`<span class="pill">思考（ZH）</span>`);
+	          metaExtra = pills.join("");
+	          const enHtml = showEn ? `<div class="md">${renderMarkdown(msg.text || "")}</div>` : "";
+	          const zhHtml = (showZh && hasZh) ? `<div class="md think-split">${renderMarkdown(zhText)}</div>` : "";
+	          body = `${enHtml}${zhHtml}` || `<div class="meta">（空）</div>`;
         } else {
           // Fallback for unknown kinds.
           body = `<pre>${escapeHtml(msg.text || "")}</pre>`;
@@ -1081,9 +1470,11 @@ _UI_HTML = """<!doctype html>
 	        row.innerHTML = `
 	          <div class="meta meta-line">
 	            <span class="timestamp">${escapeHtml(t.local || t.utc)}</span>
+	            ${metaExtra || ""}
 	          </div>
 	          ${body}
 	        `;
+	        decorateRow(row);
 	        list.appendChild(row);
 	        if (autoscroll) window.scrollTo(0, document.body.scrollHeight);
 	      }
