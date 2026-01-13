@@ -5,3 +5,4 @@
 - 新增：翻译 Provider 预留与 UI 切换（stub/none/http）。
 - 新增：HTTP Profiles（可保存多个翻译 API 配置并手动切换）。
 - 调整：`./run.sh` 默认沿用已保存配置（未显式传参时不再用默认值覆盖）。
+- 新增：HTTP Token 字段（可用于 Header 鉴权或替换 URL 中 `{token}`，方便对接 DeepLX）。

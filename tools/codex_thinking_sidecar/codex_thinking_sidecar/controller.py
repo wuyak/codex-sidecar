@@ -25,6 +25,7 @@ TRANSLATORS = [
         label="HTTP（通用适配器）",
         fields={
             "url": {"type": "string", "label": "翻译服务 URL", "placeholder": "http://127.0.0.1:9000/translate"},
+            "token": {"type": "string", "label": "Token（可选）", "placeholder": "用于 Authorization Header 或 URL 中 {token} 替换"},
             "timeout_s": {"type": "number", "label": "超时（秒）", "default": 3},
             "auth_env": {"type": "string", "label": "认证环境变量名（可选）", "placeholder": "CODEX_TRANSLATE_TOKEN"},
             "auth_header": {"type": "string", "label": "认证 Header（可选）", "default": "Authorization"},
@@ -180,12 +181,14 @@ class SidecarController:
             url = str(selected.get("url") or "").strip()
             timeout_s = float(selected.get("timeout_s") or 3.0)
             auth_env = str(selected.get("auth_env") or "").strip()
+            auth_token = str(selected.get("token") or "").strip()
             auth_header = str(selected.get("auth_header") or "Authorization").strip() or "Authorization"
             auth_prefix = str(selected.get("auth_prefix") or "Bearer ").strip()
             return HttpTranslator(
                 url=url,
                 timeout_s=timeout_s,
                 auth_env=auth_env,
+                auth_token=auth_token,
                 auth_header=auth_header,
                 auth_prefix=auth_prefix,
             )

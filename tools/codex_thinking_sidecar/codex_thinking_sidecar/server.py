@@ -302,7 +302,8 @@ _UI_HTML = """<!doctype html>
         <div class="meta">file_scan_interval（秒）</div><div><input id="scanInterval" type="number" min="0.2" step="0.1" /></div>
         <div class="meta">翻译 Provider</div><div><select id="translator"></select></div>
         <div class="meta">HTTP Profiles</div><div style="display:flex; gap:8px; align-items:center;"><select id="httpProfile" style="flex:1;"></select><button id="httpProfileAddBtn" type="button">新增</button><button id="httpProfileDelBtn" type="button">删除</button></div>
-        <div class="meta">HTTP URL（仅 http/https）</div><div><input id="httpUrl" placeholder="http://127.0.0.1:9000/translate" /></div>
+        <div class="meta">HTTP URL（仅 http/https）</div><div><input id="httpUrl" placeholder="https://api.deeplx.org/{token}/translate 或 http://127.0.0.1:9000/translate" /></div>
+        <div class="meta">HTTP Token（可选）</div><div><input id="httpToken" placeholder="可用于 Authorization 或替换 URL 中的 {token}" /></div>
         <div class="meta">HTTP 超时（秒）</div><div><input id="httpTimeout" type="number" min="0.5" step="0.5" /></div>
         <div class="meta">Auth ENV（可选）</div><div><input id="httpAuthEnv" placeholder="CODEX_TRANSLATE_TOKEN" /></div>
       </div>
@@ -329,6 +330,7 @@ _UI_HTML = """<!doctype html>
       const httpProfileAddBtn = document.getElementById("httpProfileAddBtn");
       const httpProfileDelBtn = document.getElementById("httpProfileDelBtn");
       const httpUrl = document.getElementById("httpUrl");
+      const httpToken = document.getElementById("httpToken");
       const httpTimeout = document.getElementById("httpTimeout");
       const httpAuthEnv = document.getElementById("httpAuthEnv");
       const saveBtn = document.getElementById("saveBtn");
@@ -430,7 +432,7 @@ _UI_HTML = """<!doctype html>
       }
 
       function showHttpFields(show) {
-        const els = [httpProfile, httpProfileAddBtn, httpProfileDelBtn, httpUrl, httpTimeout, httpAuthEnv];
+        const els = [httpProfile, httpProfileAddBtn, httpProfileDelBtn, httpUrl, httpToken, httpTimeout, httpAuthEnv];
         for (const el of els) {
           el.disabled = !show;
           el.style.opacity = show ? "1" : "0.5";
@@ -446,6 +448,7 @@ _UI_HTML = """<!doctype html>
           profiles.push({
             name: "默认",
             url: tc.url || "",
+            token: tc.token || "",
             timeout_s: (tc.timeout_s ?? 3),
             auth_env: tc.auth_env || "",
           });
@@ -459,6 +462,7 @@ _UI_HTML = """<!doctype html>
       function readHttpInputs() {
         return {
           url: httpUrl.value || "",
+          token: httpToken.value || "",
           timeout_s: Number(httpTimeout.value || 3),
           auth_env: httpAuthEnv.value || "",
         };
@@ -484,6 +488,7 @@ _UI_HTML = """<!doctype html>
         const p = httpProfiles.find(x => x && x.name === name);
         if (!p) return;
         httpUrl.value = p.url || "";
+        httpToken.value = p.token || "";
         httpTimeout.value = p.timeout_s ?? 3;
         httpAuthEnv.value = p.auth_env || "";
       }

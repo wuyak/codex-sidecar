@@ -35,20 +35,25 @@ class HttpTranslator:
     url: str
     timeout_s: float = 3.0
     auth_env: str = ""
+    auth_token: str = ""
     auth_header: str = "Authorization"
     auth_prefix: str = "Bearer "
 
     def translate(self, text: str) -> str:
         if not text or not self.url:
             return ""
+        url = self.url
+        if self.auth_token and "{token}" in url:
+            url = url.replace("{token}", self.auth_token)
         payload = {"text": text, "source": "en", "target": "zh"}
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        req = urllib.request.Request(self.url, data=data, method="POST")
+        req = urllib.request.Request(url, data=data, method="POST")
         req.add_header("Content-Type", "application/json; charset=utf-8")
-        if self.auth_env:
-            token = os.environ.get(self.auth_env)
-            if token:
-                req.add_header(self.auth_header, f"{self.auth_prefix}{token}")
+        token = (self.auth_token or "").strip()
+        if not token and self.auth_env:
+            token = (os.environ.get(self.auth_env) or "").strip()
+        if token:
+            req.add_header(self.auth_header, f"{self.auth_prefix}{token}")
         try:
             with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:
                 raw = resp.read()

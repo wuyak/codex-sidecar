@@ -36,4 +36,5 @@ WSL/Linux：
 ## 配置持久化与多翻译 API
 - UI 中点击“保存配置”会写入：`$CODEX_HOME/tmp/codex_thinking_sidecar.config.json`，下次启动会自动读取并沿用。
 - 当翻译 Provider 选择 `HTTP` 时，UI 支持 `HTTP Profiles`：可保存多个翻译 API 配置并手动切换（新增/删除）。
-  - ⚠️ 建议优先用 `Auth ENV`（环境变量名）而不是把敏感 token 直接写进 URL；否则 URL 会被持久化到本机配置文件中。
+  - 对 DeepLX 这类“token 在 URL 路径里”的接口：可将 URL 写为 `https://api.deeplx.org/{token}/translate`，并在 `HTTP Token` 中填写 token，sidecar 会自动替换 `{token}`。
+  - ⚠️ token 会随配置一起持久化到本机配置文件中；请勿把包含 token 的配置文件加入版本控制。
