@@ -25,3 +25,5 @@
 - 新增：CLI 支持 `--follow-codex-process` / `--codex-process-regex` / `--allow-follow-without-process`。
 - 优化：tool_call/tool_output 展示更友好（`shell_command` 命令块高亮、tool_output 提取 Exit/耗时/Output 正文，并保留“原始输出/参数”可展开）。
 - 新增：UI 右下角悬浮“↑ 顶部 / ↓ 底部”按钮，便于快速跳转页面上下。
+- 优化：消息时间戳统一按北京时间展示（不再额外显示 UTC 行）。
+- 优化：tool_call 默认折叠展示（点击展开），摘要更智能地跳过 `set -euo pipefail` 等 bash prologue。

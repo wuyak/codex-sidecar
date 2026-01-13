@@ -318,15 +318,17 @@ _UI_HTML = """<!doctype html>
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Codex Thinking Sidecar</title>
     <style>
-      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji"; margin: 0; background:#fff; }
-      #sidebar { position: fixed; top: 16px; left: 16px; bottom: 16px; width: 260px; overflow: auto; border: 1px solid #ddd; border-radius: 12px; padding: 12px; background:#fff; }
-      #main { margin: 16px 16px 16px 292px; }
-      .row { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin: 10px 0; }
-      .meta { color: #555; font-size: 12px; }
-      pre { white-space: pre-wrap; word-break: break-word; margin: 8px 0 0; }
-      .badge { display:inline-block; padding:2px 8px; border-radius:999px; background:#f1f5f9; font-size:12px; margin-right:8px; }
-      .badge.kind-user_message, .badge.kind-user { background:#e0f2fe; }
-      .badge.kind-assistant_message, .badge.kind-assistant { background:#dcfce7; }
+	      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji"; margin: 0; background:#fff; }
+	      #sidebar { position: fixed; top: 16px; left: 16px; bottom: 16px; width: 260px; overflow: auto; border: 1px solid #ddd; border-radius: 12px; padding: 12px; background:#fff; }
+	      #main { margin: 16px 16px 16px 292px; }
+	      .row { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin: 10px 0; }
+	      .meta { color: #555; font-size: 12px; }
+	      .meta-line { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
+	      .meta-line .timestamp { font-variant-numeric: tabular-nums; }
+	      pre { white-space: pre-wrap; word-break: break-word; margin: 8px 0 0; }
+	      .badge { display:inline-block; padding:2px 8px; border-radius:999px; background:#f1f5f9; font-size:12px; margin-right:8px; }
+	      .badge.kind-user_message, .badge.kind-user { background:#e0f2fe; }
+	      .badge.kind-assistant_message, .badge.kind-assistant { background:#dcfce7; }
       .badge.kind-tool_call, .badge.kind-tool_output { background:#fef9c3; }
       .tabs { display:flex; flex-direction:column; gap:6px; margin: 10px 0 0; }
       .tab { border: 1px solid #ddd; background:#fff; padding:6px 10px; border-radius: 10px; cursor:pointer; font-size: 12px; text-align:left; width: 100%; }
@@ -443,7 +445,7 @@ _UI_HTML = """<!doctype html>
 	          if (isNaN(d.getTime())) return { utc: ts, local: "" };
 	          // 默认按北京时间展示，减少跨时区/UTC 对照带来的视觉噪音。
 	          const bj = d.toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" });
-	          return { utc: ts, local: `${bj} (北京时间)` };
+	          return { utc: ts, local: bj };
 	        } catch (e) {
 	          return { utc: ts, local: "" };
 	        }
@@ -515,12 +517,27 @@ _UI_HTML = """<!doctype html>
         return "•";
       }
 
-      function summarizeCommand(cmd, maxLen = 96) {
-        const line = String(cmd ?? "").split("\\n")[0].trim();
-        if (!line) return "";
-        if (line.length <= maxLen) return line;
-        return line.slice(0, Math.max(0, maxLen - 1)) + "…";
-      }
+	      function summarizeCommand(cmd, maxLen = 96) {
+	        const lines = String(cmd ?? "").split("\\n");
+	        const skip = (t) => {
+	          const s = String(t || "").trim();
+	          if (!s) return true;
+	          if (s.startsWith("#!")) return true;
+	          if (s.startsWith("#")) return true;
+	          if (s.startsWith("set -")) return true; // 常见 bash prologue（如 set -euo pipefail）
+	          return false;
+	        };
+	        let line = "";
+	        for (const ln of lines) {
+	          if (skip(ln)) continue;
+	          line = String(ln || "").trim();
+	          break;
+	        }
+	        if (!line) line = String(cmd ?? "").split("\\n")[0].trim();
+	        if (!line) return "";
+	        if (line.length <= maxLen) return line;
+	        return line.slice(0, Math.max(0, maxLen - 1)) + "…";
+	      }
 
 	      function extractExitCode(outputRaw) {
 	        const lines = String(outputRaw ?? "").split("\\n");
@@ -686,68 +703,73 @@ _UI_HTML = """<!doctype html>
 	          const parsed = parseToolCallText(msg.text || "");
 	          const toolName = parsed.toolName || "tool_call";
 	          const callId = parsed.callId || "";
-          const argsRaw = parsed.argsRaw || "";
-          const argsObj = safeJsonParse(argsRaw);
-          if (callId) callIndex.set(callId, { tool_name: toolName, args_raw: argsRaw, args_obj: argsObj });
+	          const argsRaw = parsed.argsRaw || "";
+	          const argsObj = safeJsonParse(argsRaw);
+	          if (callId) callIndex.set(callId, { tool_name: toolName, args_raw: argsRaw, args_obj: argsObj });
 
-          if (toolName === "update_plan" && argsObj && typeof argsObj === "object") {
-            const explanation = (typeof argsObj.explanation === "string") ? argsObj.explanation : "";
-            const plan = Array.isArray(argsObj.plan) ? argsObj.plan : [];
-            const lines = [];
-            for (const it of plan) {
-              if (!it || typeof it !== "object") continue;
-              const st = statusIcon(it.status);
-              const step = String(it.step || "").trim();
-              if (!step) continue;
-              lines.push(`${st} ${step}`);
-            }
-            body = `
-              <div class="meta"><b>更新计划</b>${callId ? ` <span class="muted">call_id：<code>${escapeHtml(callId)}</code></span>` : ``}</div>
-              ${explanation ? `<div class="meta" style="opacity:.9">explanation：${escapeHtml(explanation)}</div>` : ``}
-              ${lines.length ? `<pre>${escapeHtml(lines.join("\\n"))}</pre>` : `<pre>（无 plan 变更）</pre>`}
-              <details>
-                <summary class="meta">原始参数</summary>
-                <pre>${escapeHtml(argsRaw)}</pre>
-              </details>
-            `;
+	          if (toolName === "update_plan" && argsObj && typeof argsObj === "object") {
+	            const explanation = (typeof argsObj.explanation === "string") ? argsObj.explanation : "";
+	            const plan = Array.isArray(argsObj.plan) ? argsObj.plan : [];
+	            const lines = [];
+	            for (const it of plan) {
+	              if (!it || typeof it !== "object") continue;
+	              const st = statusIcon(it.status);
+	              const step = String(it.step || "").trim();
+	              if (!step) continue;
+	              lines.push(`${st} ${step}`);
+	            }
+	            body = `
+	              <details class="tool-card">
+	                <summary class="meta">更新计划（点击展开）: <code>${escapeHtml(lines.length ? `${lines.length} 项` : "无变更")}</code></summary>
+	                <div class="tool-meta">
+	                  <span class="pill">工具：<code>update_plan</code></span>
+	                  ${callId ? `<span class="pill">call_id：<code>${escapeHtml(callId)}</code></span>` : ``}
+	                </div>
+	                ${explanation ? `<div class="meta" style="opacity:.9">explanation：${escapeHtml(explanation)}</div>` : ``}
+	                ${lines.length ? `<pre>${escapeHtml(lines.join("\\n"))}</pre>` : `<pre>（无 plan 变更）</pre>`}
+	                <details>
+	                  <summary class="meta">原始参数</summary>
+	                  <pre>${escapeHtml(argsRaw)}</pre>
+	                </details>
+	              </details>
+	            `;
 	          } else if (toolName === "shell_command" && argsObj && typeof argsObj === "object") {
 	            const wd = String(argsObj.workdir || "").trim();
 	            const cmd = String(argsObj.command || "");
 	            const timeoutMs = argsObj.timeout_ms;
+	            const cmdSummary = summarizeCommand(cmd) || "shell_command";
 	            body = `
-	              <div class="tool-card">
-	                <div class="tool-head">
-	                  <span class="pill"><b>执行命令</b></span>
+	              <details class="tool-card">
+	                <summary class="meta">执行命令（点击展开）: <code>${escapeHtml(cmdSummary)}</code></summary>
+	                <div class="tool-meta">
 	                  <span class="pill">工具：<code>shell_command</code></span>
 	                  ${callId ? `<span class="pill">call_id：<code>${escapeHtml(callId)}</code></span>` : ``}
-	                </div>
-	                <div class="tool-meta">
-	                  ${wd ? `<span>workdir：<code>${escapeHtml(wd)}</code></span>` : ``}
-	                  ${Number.isFinite(Number(timeoutMs)) ? `<span>timeout_ms：<code>${escapeHtml(timeoutMs)}</code></span>` : ``}
+	                  ${wd ? `<span class="pill">workdir：<code>${escapeHtml(wd)}</code></span>` : ``}
+	                  ${Number.isFinite(Number(timeoutMs)) ? `<span class="pill">timeout_ms：<code>${escapeHtml(timeoutMs)}</code></span>` : ``}
 	                </div>
 	                <pre class="code">${escapeHtml(cmd)}</pre>
 	                <details>
 	                  <summary class="meta">原始参数</summary>
 	                  <pre>${escapeHtml(argsRaw)}</pre>
 	                </details>
-	              </div>
+	              </details>
 	            `;
 	          } else {
 	            const pretty = argsObj ? JSON.stringify(argsObj, null, 2) : argsRaw;
 	            body = `
-	              <div class="tool-card">
-	                <div class="tool-head">
-	                  <span class="pill"><b>工具调用</b></span>
+	              <details class="tool-card">
+	                <summary class="meta">工具调用（点击展开）: <code>${escapeHtml(toolName)}</code></summary>
+	                <div class="tool-meta">
 	                  <span class="pill">工具：<code>${escapeHtml(toolName)}</code></span>
 	                  ${callId ? `<span class="pill">call_id：<code>${escapeHtml(callId)}</code></span>` : ``}
 	                </div>
 	                <pre>${escapeHtml(pretty || "")}</pre>
-	              </div>
+	              </details>
 	            `;
 	          }
 	        } else if (kind === "user_message") {
-          body = `<pre><b>用户</b>\\n${escapeHtml(msg.text || "")}</pre>`;
-        } else if (kind === "assistant_message") {
+	          body = `<pre><b>用户</b>\\n${escapeHtml(msg.text || "")}</pre>`;
+	        } else if (kind === "assistant_message") {
           body = `<pre><b>回答</b>\\n${escapeHtml(msg.text || "")}</pre>`;
         } else if (isThinking) {
           body = `
@@ -760,7 +782,11 @@ _UI_HTML = """<!doctype html>
         }
 
 	        row.innerHTML = `
-	          <div class="meta"><span class="badge kind-${kind}">${kind}</span>${t.local || t.utc} <span style="opacity:.7">${sid}</span></div>
+	          <div class="meta meta-line">
+	            <span class="badge kind-${kind}">${escapeHtml(kind)}</span>
+	            <span class="timestamp">${escapeHtml(t.local || t.utc)}</span>
+	            ${sid ? `<span class="pill">${escapeHtml(sid)}</span>` : ``}
+	          </div>
 	          ${body}
 	        `;
 	        list.appendChild(row);
