@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import sys
 import time
 import urllib.parse
@@ -45,9 +46,10 @@ class HttpTranslator:
     def translate(self, text: str) -> str:
         if not text or not self.url:
             return ""
-        url = self.url
+        url = _normalize_url(self.url)
         if self.auth_token and "{token}" in url:
             url = url.replace("{token}", self.auth_token)
+        url = _normalize_url(url)
 
         parsed = urllib.parse.urlsplit(url)
         base_url = urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
@@ -145,9 +147,24 @@ class HttpTranslator:
 _LAST_HTTP_ERR_TS = 0.0
 
 
+_URL_RE = re.compile(r"https?://", re.IGNORECASE)
+
+
+def _normalize_url(url: str) -> str:
+    """
+    容错：用户可能从文档/聊天复制带前缀标点（例如 `：https://...` / `URL：https://...`）。
+    这里截取第一个 http(s):// 之后的部分，避免 urllib 报 `unknown url type`。
+    """
+    u = (url or "").strip()
+    m = _URL_RE.search(u)
+    if m and m.start() > 0:
+        u = u[m.start() :]
+    return u
+
+
 def _sanitize_url(url: str, auth_token: str) -> str:
     try:
-        u = urllib.parse.urlsplit(url)
+        u = urllib.parse.urlsplit(_normalize_url(url))
         path = u.path or ""
         if auth_token and auth_token in path:
             path = path.replace(auth_token, "<token>")
