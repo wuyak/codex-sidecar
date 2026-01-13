@@ -625,6 +625,22 @@ _UI_HTML = """<!doctype html>
 	        return aa.concat(bb);
 	      }
 	
+	      function wrapTreeContent(line, width = 74) {
+	        const raw = String(line ?? "");
+	        if (!raw) return [];
+	        if (raw.length <= width) return [raw];
+	        const out = [];
+	        let rest = raw;
+	        while (rest.length > width) {
+	          let cut = rest.lastIndexOf(" ", width);
+	          if (cut < 12) cut = width;
+	          out.push(rest.slice(0, cut));
+	          rest = rest.slice(cut).replace(/^\\s+/, "");
+	        }
+	        if (rest) out.push(rest);
+	        return out;
+	      }
+	
 	      function countEscapedNewlines(s) {
 	        try {
 	          const m = String(s ?? "").match(/\\n/g);
@@ -657,7 +673,7 @@ _UI_HTML = """<!doctype html>
 	          used += 1;
 	        }
 	        const remaining = xs.length - used;
-	        if (remaining > 0) out.push(`… +${remaining} lines`);
+	        if (remaining > 0) out.push(`… +${remaining} matches`);
 	        return out;
 	      }
 	
@@ -691,10 +707,17 @@ _UI_HTML = """<!doctype html>
 	          lines.push("• Ran shell_command");
 	        }
 	        if (pick.length > 0) {
-	          lines.push(`  └ ${pick[0]}`);
-	          const lead = Math.min((String(pick[0] || "").match(/^\\s*/)[0] || "").length, 2);
-	          const followIndent = " ".repeat(4 + lead);
-	          for (let i = 1; i < pick.length; i++) lines.push(`${followIndent}${pick[i]}`);
+	          const p0 = wrapTreeContent(pick[0], 74);
+	          if (p0.length > 0) {
+	            lines.push(`  └ ${p0[0]}`);
+	            for (let j = 1; j < p0.length; j++) lines.push(`    ${p0[j]}`);
+	          } else {
+	            lines.push("  └ (no output)");
+	          }
+	          for (let i = 1; i < pick.length; i++) {
+	            const ps = wrapTreeContent(pick[i], 74);
+	            for (const seg of ps) lines.push(`    ${seg}`);
+	          }
 	        } else if (exitCode !== null && exitCode !== 0) {
 	          lines.push("  └ (no output)");
 	        } else {
