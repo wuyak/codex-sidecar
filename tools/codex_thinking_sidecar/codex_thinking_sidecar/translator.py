@@ -6,6 +6,7 @@ import time
 import urllib.parse
 import urllib.error
 import urllib.request
+from socket import timeout as _SocketTimeout
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -134,13 +135,43 @@ class HttpTranslator:
                         t = first.get("text")
                         if isinstance(t, str) and t.strip():
                             return t
-            _log_http_translate_error(url=url, auth_token=self.auth_token)
+            # Provide best-effort error hints without leaking secrets.
+            detail = ""
+            try:
+                if isinstance(obj, dict):
+                    if isinstance(obj.get("message"), str) and obj.get("message"):
+                        detail = str(obj.get("message"))[:160]
+                    elif isinstance(obj.get("info"), str) and obj.get("info"):
+                        detail = str(obj.get("info"))[:160]
+                    elif isinstance(obj.get("error"), str) and obj.get("error"):
+                        detail = str(obj.get("error"))[:160]
+                    elif isinstance(obj.get("code"), int):
+                        detail = f"code={obj.get('code')}"
+            except Exception:
+                detail = ""
+            _log_http_translate_error(url=url, auth_token=self.auth_token, detail=detail)
             return ""
-        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError):
-            _log_http_translate_error(url=url, auth_token=self.auth_token)
+        except urllib.error.HTTPError as e:
+            detail = f"http_status={getattr(e, 'code', '')}"
+            try:
+                body = (e.read() or b"")[:200]
+                # avoid printing html pages
+                if body and not body.lstrip().startswith(b"<"):
+                    detail += f" body={body.decode('utf-8', errors='replace')}"
+            except Exception:
+                pass
+            _log_http_translate_error(url=url, auth_token=self.auth_token, detail=detail)
             return ""
-        except Exception:
-            _log_http_translate_error(url=url, auth_token=self.auth_token)
+        except (TimeoutError, _SocketTimeout):
+            _log_http_translate_error(url=url, auth_token=self.auth_token, detail=f"timeout_s={self.timeout_s}")
+            return ""
+        except urllib.error.URLError as e:
+            reason = getattr(e, "reason", None)
+            rname = type(reason).__name__ if reason is not None else "URLError"
+            _log_http_translate_error(url=url, auth_token=self.auth_token, detail=f"url_error={rname}")
+            return ""
+        except Exception as e:
+            _log_http_translate_error(url=url, auth_token=self.auth_token, detail=f"error={type(e).__name__}")
             return ""
 
 
@@ -182,11 +213,12 @@ def _sanitize_url(url: str, auth_token: str) -> str:
         return "<url>"
 
 
-def _log_http_translate_error(url: str, auth_token: str) -> None:
+def _log_http_translate_error(url: str, auth_token: str, detail: str = "") -> None:
     global _LAST_HTTP_ERR_TS
     now = time.time()
     if now - _LAST_HTTP_ERR_TS < 5.0:
         return
     _LAST_HTTP_ERR_TS = now
     safe = _sanitize_url(url, auth_token)
-    print(f"[sidecar] WARN: HTTP 翻译失败（返回空译文）：{safe}", file=sys.stderr)
+    suffix = f" ({detail})" if detail else ""
+    print(f"[sidecar] WARN: HTTP 翻译失败（返回空译文）：{safe}{suffix}", file=sys.stderr)
