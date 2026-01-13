@@ -23,4 +23,5 @@
 - 新增：会话切换列表固定在页面左侧 sidebar，滚动到中后段也可随时切换。
 - 新增：UI 配置支持“自动开始监听（UI）”与进程匹配规则。
 - 新增：CLI 支持 `--follow-codex-process` / `--codex-process-regex` / `--allow-follow-without-process`。
-- 优化：tool_call/tool_output 展示更友好（`update_plan` 计划分行、`shell_command` 命令块、tool_output 摘要不再显示 call_id）。
+- 优化：tool_call/tool_output 展示更友好（`shell_command` 命令块高亮、tool_output 提取 Exit/耗时/Output 正文，并保留“原始输出/参数”可展开）。
+- 新增：UI 右下角悬浮“↑ 顶部 / ↓ 底部”按钮，便于快速跳转页面上下。

@@ -337,11 +337,18 @@ _UI_HTML = """<!doctype html>
       .btns { display:flex; gap: 8px; flex-wrap:wrap; margin-top: 10px; }
       button { border: 1px solid #ddd; background:#fff; padding: 7px 10px; border-radius: 8px; cursor:pointer; }
       button.primary { background:#111827; color:#fff; border-color:#111827; }
-      button.danger { background:#fee2e2; border-color:#fecaca; }
-      .muted { opacity: .8; }
-    </style>
-  </head>
-  <body>
+	      button.danger { background:#fee2e2; border-color:#fecaca; }
+	      .muted { opacity: .8; }
+	      .float-nav { position: fixed; right: 16px; bottom: 16px; display:flex; flex-direction:column; gap:8px; z-index: 1000; }
+	      .float-nav button { padding: 8px 10px; border-radius: 999px; box-shadow: 0 6px 20px rgba(0,0,0,.08); }
+	      .tool-card { background:#f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; margin-top: 8px; }
+	      .tool-head { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
+	      .pill { display:inline-block; padding:2px 8px; border-radius:999px; border:1px solid #e2e8f0; background:#fff; font-size:12px; }
+	      .tool-meta { display:flex; flex-wrap:wrap; gap:10px; margin-top: 6px; color:#555; font-size: 12px; }
+	      pre.code { background:#0b1020; color:#e5e7eb; padding: 10px; border-radius: 10px; overflow:auto; }
+	    </style>
+	  </head>
+	  <body>
     <div id="sidebar">
       <div class="meta"><b>会话切换</b></div>
       <div id="tabs" class="tabs"></div>
@@ -382,10 +389,14 @@ _UI_HTML = """<!doctype html>
           <summary class="meta">调试信息（配置加载/缓存排查）</summary>
           <pre id="debugText" class="meta" style="white-space:pre-wrap; user-select:text;"></pre>
         </details>
-      </div>
-      <div id="list"></div>
-    </div>
-    <script>
+	      </div>
+	      <div id="list"></div>
+	    </div>
+	    <div class="float-nav" aria-label="scroll">
+	      <button id="scrollTopBtn" type="button" title="回到页面顶部">↑ 顶部</button>
+	      <button id="scrollBottomBtn" type="button" title="回到页面底部">↓ 底部</button>
+	    </div>
+	    <script>
       const statusText = document.getElementById("statusText");
       const debugText = document.getElementById("debugText");
       const cfgHome = document.getElementById("cfgHome");
@@ -408,11 +419,13 @@ _UI_HTML = """<!doctype html>
       const httpToken = document.getElementById("httpToken");
       const httpTimeout = document.getElementById("httpTimeout");
       const httpAuthEnv = document.getElementById("httpAuthEnv");
-      const saveBtn = document.getElementById("saveBtn");
-      const recoverBtn = document.getElementById("recoverBtn");
-      const startBtn = document.getElementById("startBtn");
-      const stopBtn = document.getElementById("stopBtn");
-      const clearBtn = document.getElementById("clearBtn");
+	      const saveBtn = document.getElementById("saveBtn");
+	      const recoverBtn = document.getElementById("recoverBtn");
+	      const startBtn = document.getElementById("startBtn");
+	      const stopBtn = document.getElementById("stopBtn");
+	      const clearBtn = document.getElementById("clearBtn");
+	      const scrollTopBtn = document.getElementById("scrollTopBtn");
+	      const scrollBottomBtn = document.getElementById("scrollBottomBtn");
 
       let httpProfiles = [];
       let httpSelected = "";
@@ -508,17 +521,39 @@ _UI_HTML = """<!doctype html>
         return line.slice(0, Math.max(0, maxLen - 1)) + "…";
       }
 
-      function extractExitCode(outputRaw) {
-        const lines = String(outputRaw ?? "").split("\\n");
-        for (const ln of lines) {
-          if (ln.startsWith("Exit code:")) {
-            const v = ln.split(":", 2)[1] || "";
-            const n = parseInt(v.trim(), 10);
-            return Number.isFinite(n) ? n : null;
-          }
-        }
-        return null;
-      }
+	      function extractExitCode(outputRaw) {
+	        const lines = String(outputRaw ?? "").split("\\n");
+	        for (const ln of lines) {
+	          if (ln.startsWith("Exit code:")) {
+	            const v = ln.split(":", 2)[1] || "";
+	            const n = parseInt(v.trim(), 10);
+	            return Number.isFinite(n) ? n : null;
+	          }
+	        }
+	        return null;
+	      }
+	
+	      function extractWallTime(outputRaw) {
+	        const lines = String(outputRaw ?? "").split("\\n");
+	        for (const ln of lines) {
+	          if (ln.startsWith("Wall time:")) {
+	            const v = ln.split(":", 2)[1] || "";
+	            return v.trim();
+	          }
+	        }
+	        return "";
+	      }
+	
+	      function extractOutputBody(outputRaw) {
+	        const lines = String(outputRaw ?? "").split("\\n");
+	        for (let i = 0; i < lines.length; i++) {
+	          if ((lines[i] || "").trim() === "Output:") {
+	            const body = lines.slice(i + 1).join("\\n");
+	            return body.replace(/^\\n+/, "");
+	          }
+	        }
+	        return String(outputRaw ?? "");
+	      }
 
       function firstMeaningfulLine(s) {
         const lines = String(s ?? "").split("\\n");
@@ -607,33 +642,49 @@ _UI_HTML = """<!doctype html>
 
         const autoscroll = (window.innerHeight + window.scrollY) >= (document.body.scrollHeight - 80);
 
-        let body = "";
-        if (kind === "tool_output") {
-          const parsed = parseToolOutputText(msg.text || "");
-          const callId = parsed.callId || "";
-          const outputRaw = parsed.outputRaw || "";
-          const meta = callId ? callIndex.get(callId) : null;
-          const toolName = meta && meta.tool_name ? String(meta.tool_name) : "";
-          const exitCode = extractExitCode(outputRaw);
-          let summary = "";
-          if (toolName) summary = toolName;
-          if (exitCode !== null) summary = (summary ? summary + " " : "") + `exit ${exitCode}`;
-          if (meta && meta.args_obj && toolName === "shell_command") {
-            const cmd = summarizeCommand(meta.args_obj.command || "");
-            if (cmd) summary = (summary ? summary + ": " : "") + cmd;
-          }
-          if (!summary) summary = firstMeaningfulLine(outputRaw) || "工具输出";
-          body = `
-            <details>
-              <summary class="meta">工具输出（点击展开）: <code>${escapeHtml(summary)}</code></summary>
-              <div class="meta">${toolName ? `工具：<code>${escapeHtml(toolName)}</code> ` : ``}${callId ? `call_id：<code>${escapeHtml(callId)}</code>` : ``}</div>
-              <pre>${escapeHtml(outputRaw)}</pre>
-            </details>
-          `;
-        } else if (kind === "tool_call") {
-          const parsed = parseToolCallText(msg.text || "");
-          const toolName = parsed.toolName || "tool_call";
-          const callId = parsed.callId || "";
+	        let body = "";
+	        if (kind === "tool_output") {
+	          const parsed = parseToolOutputText(msg.text || "");
+	          const callId = parsed.callId || "";
+	          const outputRaw = parsed.outputRaw || "";
+	          const meta = callId ? callIndex.get(callId) : null;
+	          const toolName = meta && meta.tool_name ? String(meta.tool_name) : "";
+	          const exitCode = extractExitCode(outputRaw);
+	          const wallTime = extractWallTime(outputRaw);
+	          const outputBody = extractOutputBody(outputRaw);
+	          let summary = "";
+	          if (toolName) summary = toolName;
+	          if (exitCode !== null) summary = (summary ? summary + " " : "") + `exit ${exitCode}`;
+	          if (meta && meta.args_obj && toolName === "shell_command") {
+	            const cmd = summarizeCommand(meta.args_obj.command || "");
+	            if (cmd) summary = (summary ? summary + ": " : "") + cmd;
+	          }
+	          if (!summary) summary = firstMeaningfulLine(outputRaw) || "工具输出";
+	          const showRaw = (String(outputBody || "").trim() !== String(outputRaw || "").trim());
+	          const cmdFull = (meta && meta.args_obj && toolName === "shell_command") ? String(meta.args_obj.command || "") : "";
+	          body = `
+	            <details class="tool-card">
+	              <summary class="meta">工具输出（点击展开）: <code>${escapeHtml(summary)}</code></summary>
+	              <div class="tool-meta">
+	                ${toolName ? `<span class="pill">工具：<code>${escapeHtml(toolName)}</code></span>` : ``}
+	                ${callId ? `<span class="pill">call_id：<code>${escapeHtml(callId)}</code></span>` : ``}
+	                ${exitCode !== null ? `<span class="pill">Exit：<code>${escapeHtml(exitCode)}</code></span>` : ``}
+	                ${wallTime ? `<span class="pill">耗时：<code>${escapeHtml(wallTime)}</code></span>` : ``}
+	              </div>
+	              ${cmdFull ? `<pre class="code">${escapeHtml(cmdFull)}</pre>` : ``}
+	              <pre>${escapeHtml(outputBody)}</pre>
+	              ${showRaw ? `
+	                <details>
+	                  <summary class="meta">原始输出</summary>
+	                  <pre>${escapeHtml(outputRaw)}</pre>
+	                </details>
+	              ` : ``}
+	            </details>
+	          `;
+	        } else if (kind === "tool_call") {
+	          const parsed = parseToolCallText(msg.text || "");
+	          const toolName = parsed.toolName || "tool_call";
+	          const callId = parsed.callId || "";
           const argsRaw = parsed.argsRaw || "";
           const argsObj = safeJsonParse(argsRaw);
           if (callId) callIndex.set(callId, { tool_name: toolName, args_raw: argsRaw, args_obj: argsObj });
@@ -658,28 +709,42 @@ _UI_HTML = """<!doctype html>
                 <pre>${escapeHtml(argsRaw)}</pre>
               </details>
             `;
-          } else if (toolName === "shell_command" && argsObj && typeof argsObj === "object") {
-            const wd = String(argsObj.workdir || "").trim();
-            const cmd = String(argsObj.command || "");
-            const timeoutMs = argsObj.timeout_ms;
-            body = `
-              <div class="meta"><b>执行命令</b>${callId ? ` <span class="muted">call_id：<code>${escapeHtml(callId)}</code></span>` : ``}</div>
-              ${wd ? `<div class="meta">workdir：<code>${escapeHtml(wd)}</code></div>` : ``}
-              ${Number.isFinite(Number(timeoutMs)) ? `<div class="meta">timeout_ms：<code>${escapeHtml(timeoutMs)}</code></div>` : ``}
-              <pre>${escapeHtml(cmd)}</pre>
-              <details>
-                <summary class="meta">原始参数</summary>
-                <pre>${escapeHtml(argsRaw)}</pre>
-              </details>
-            `;
-          } else {
-            const pretty = argsObj ? JSON.stringify(argsObj, null, 2) : argsRaw;
-            body = `
-              <div class="meta"><b>工具调用</b>：<code>${escapeHtml(toolName)}</code>${callId ? ` <span class="muted">call_id：<code>${escapeHtml(callId)}</code></span>` : ``}</div>
-              <pre>${escapeHtml(pretty || "")}</pre>
-            `;
-          }
-        } else if (kind === "user_message") {
+	          } else if (toolName === "shell_command" && argsObj && typeof argsObj === "object") {
+	            const wd = String(argsObj.workdir || "").trim();
+	            const cmd = String(argsObj.command || "");
+	            const timeoutMs = argsObj.timeout_ms;
+	            body = `
+	              <div class="tool-card">
+	                <div class="tool-head">
+	                  <span class="pill"><b>执行命令</b></span>
+	                  <span class="pill">工具：<code>shell_command</code></span>
+	                  ${callId ? `<span class="pill">call_id：<code>${escapeHtml(callId)}</code></span>` : ``}
+	                </div>
+	                <div class="tool-meta">
+	                  ${wd ? `<span>workdir：<code>${escapeHtml(wd)}</code></span>` : ``}
+	                  ${Number.isFinite(Number(timeoutMs)) ? `<span>timeout_ms：<code>${escapeHtml(timeoutMs)}</code></span>` : ``}
+	                </div>
+	                <pre class="code">${escapeHtml(cmd)}</pre>
+	                <details>
+	                  <summary class="meta">原始参数</summary>
+	                  <pre>${escapeHtml(argsRaw)}</pre>
+	                </details>
+	              </div>
+	            `;
+	          } else {
+	            const pretty = argsObj ? JSON.stringify(argsObj, null, 2) : argsRaw;
+	            body = `
+	              <div class="tool-card">
+	                <div class="tool-head">
+	                  <span class="pill"><b>工具调用</b></span>
+	                  <span class="pill">工具：<code>${escapeHtml(toolName)}</code></span>
+	                  ${callId ? `<span class="pill">call_id：<code>${escapeHtml(callId)}</code></span>` : ``}
+	                </div>
+	                <pre>${escapeHtml(pretty || "")}</pre>
+	              </div>
+	            `;
+	          }
+	        } else if (kind === "user_message") {
           body = `<pre><b>用户</b>\\n${escapeHtml(msg.text || "")}</pre>`;
         } else if (kind === "assistant_message") {
           body = `<pre><b>回答</b>\\n${escapeHtml(msg.text || "")}</pre>`;
@@ -1107,11 +1172,13 @@ _UI_HTML = """<!doctype html>
           httpAuthEnv.value = "";
         }
       });
-      saveBtn.addEventListener("click", async () => { await saveConfig(); });
-      recoverBtn.addEventListener("click", async () => { await recoverConfig(); });
-      startBtn.addEventListener("click", async () => { await startWatch(); });
-      stopBtn.addEventListener("click", async () => { await stopWatch(); });
-      clearBtn.addEventListener("click", async () => { await clearView(); });
+	      saveBtn.addEventListener("click", async () => { await saveConfig(); });
+	      recoverBtn.addEventListener("click", async () => { await recoverConfig(); });
+	      startBtn.addEventListener("click", async () => { await startWatch(); });
+	      stopBtn.addEventListener("click", async () => { await stopWatch(); });
+	      clearBtn.addEventListener("click", async () => { await clearView(); });
+	      if (scrollTopBtn) scrollTopBtn.addEventListener("click", () => { window.scrollTo({ top: 0, behavior: "smooth" }); });
+	      if (scrollBottomBtn) scrollBottomBtn.addEventListener("click", () => { window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }); });
 
       let bootAutoStarted = false;
       async function maybeAutoStartOnce() {
