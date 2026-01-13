@@ -618,8 +618,9 @@ _UI_HTML = """<!doctype html>
 	        const words = raw.split(/\\s+/).filter(Boolean);
 	        const idx = words.indexOf("||");
 	        if (idx === -1 || idx >= words.length - 1) return base;
-	        const a = words.slice(0, idx + 1).join(" ");
-	        const b = words.slice(idx + 1).join(" ");
+	        // Keep "|| true" on the continuation line, like Codex CLI.
+	        const a = words.slice(0, idx).join(" ");
+	        const b = words.slice(idx).join(" ");
 	        const aa = wrapWords(a, width);
 	        const bb = wrapWords(b, width);
 	        return aa.concat(bb);
@@ -710,13 +711,13 @@ _UI_HTML = """<!doctype html>
 	          const p0 = wrapTreeContent(pick[0], 74);
 	          if (p0.length > 0) {
 	            lines.push(`  └ ${p0[0]}`);
-	            for (let j = 1; j < p0.length; j++) lines.push(`    ${p0[j]}`);
+	            for (let j = 1; j < p0.length; j++) lines.push(`     ${p0[j]}`);
 	          } else {
 	            lines.push("  └ (no output)");
 	          }
 	          for (let i = 1; i < pick.length; i++) {
 	            const ps = wrapTreeContent(pick[i], 74);
-	            for (const seg of ps) lines.push(`    ${seg}`);
+	            for (const seg of ps) lines.push(`     ${seg}`);
 	          }
 	        } else if (exitCode !== null && exitCode !== 0) {
 	          lines.push("  └ (no output)");
@@ -956,10 +957,20 @@ _UI_HTML = """<!doctype html>
 		          const outputBody = extractOutputBody(outputRaw);
 		          const cmdFull = (meta && meta.args_obj && toolName === "shell_command") ? String(meta.args_obj.command || "") : "";
 		          const showRaw = (String(outputBody || "").trim() !== String(outputRaw || "").trim());
-		          const runBlock = (toolName === "shell_command" && cmdFull) ? formatShellRun(cmdFull, outputBody, exitCode) : String(outputBody || "");
-		          body = `
-		            <div class="tool-card">
-		              ${runBlock ? `<pre class="code">${escapeHtml(runBlock)}</pre>` : ``}
+			          let runBlock = "";
+			          if (toolName === "shell_command" && cmdFull) {
+			            runBlock = formatShellRun(cmdFull, outputBody, exitCode);
+			          } else if (toolName === "view_image") {
+			            const p = (meta && meta.args_obj) ? String(meta.args_obj.path || "") : "";
+			            const base = (p.split(/[\\\\/]/).pop() || "").trim();
+			            const first = firstMeaningfulLine(outputBody) || "attached local image";
+			            runBlock = `• ${first}${base ? `: ${base}` : ``}`;
+			          } else {
+			            runBlock = String(outputBody || "");
+			          }
+			          body = `
+			            <div class="tool-card">
+			              ${runBlock ? `<pre class="code">${escapeHtml(runBlock)}</pre>` : ``}
 		              <details>
 		                <summary class="meta">详情</summary>
 		                <div class="tool-meta">
@@ -978,13 +989,15 @@ _UI_HTML = """<!doctype html>
 		              </details>
 		            </div>
 		          `;
-		        } else if (kind === "tool_call") {
-	          const parsed = parseToolCallText(msg.text || "");
-	          const toolName = parsed.toolName || "tool_call";
-	          const callId = parsed.callId || "";
-	          const argsRaw = parsed.argsRaw || "";
-	          const argsObj = safeJsonParse(argsRaw);
-	          if (callId) callIndex.set(callId, { tool_name: toolName, args_raw: argsRaw, args_obj: argsObj });
+			        } else if (kind === "tool_call") {
+		          const parsed = parseToolCallText(msg.text || "");
+		          const toolName = parsed.toolName || "tool_call";
+		          const callId = parsed.callId || "";
+		          const argsRaw = parsed.argsRaw || "";
+		          const argsObj = safeJsonParse(argsRaw);
+		          if (callId) callIndex.set(callId, { tool_name: toolName, args_raw: argsRaw, args_obj: argsObj });
+		          // Avoid duplicate clutter: tool_output already renders the useful summary for these.
+		          if (toolName === "shell_command" || toolName === "view_image") return;
 
 	          if (toolName === "update_plan" && argsObj && typeof argsObj === "object") {
 	            const explanation = (typeof argsObj.explanation === "string") ? argsObj.explanation : "";

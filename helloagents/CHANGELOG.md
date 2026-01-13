@@ -31,3 +31,4 @@
 - 优化：对 Codex 的 “• Edited … (+x -y)” 改动摘要做结构化渲染（按文件分卡片、diff 行高亮、避免长行强制换行）。
 - 优化：`shell_command` 的 `tool_output` 对 `rg` 输出做更智能的折叠（只展示命中的文件路径 + 嵌套的 `\\n` 行数估计 + 其余匹配数量）。
 - 优化：`shell_command` 的 `tool_output` 默认直接展示终端风格块（`• Ran ...` + `│/└` 树形摘要），并将工具元信息收进“详情”折叠。
+- 优化：隐藏 `shell_command/view_image` 的 `tool_call` 行，避免与 `tool_output` 重复；并调整树形缩进/`|| true` 换行，更贴近终端样式。
