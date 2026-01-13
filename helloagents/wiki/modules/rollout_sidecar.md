@@ -36,6 +36,7 @@
 - UI 中点击“保存配置”会将配置写入：`$CODEX_HOME/tmp/codex_thinking_sidecar.config.json`。
 - 下次启动 `./ui.sh` 或 `./run.sh` 时会自动读取并沿用已保存配置（`./run.sh` 会立即开始监听）。
 - 当翻译 Provider 选择 `HTTP` 时，可在 `HTTP Profiles` 中保存多个翻译 API 配置并手动切换（支持新增/删除）。
+  - `HTTP Profiles` 支持在 UI 中新增/删除/重命名配置。
   - DeepLX 等“token 在 URL 路径里”的接口：将 URL 写为 `https://api.deeplx.org/{token}/translate`，并在 `HTTP Token` 中填写 token，sidecar 会自动替换 `{token}`。
   - ⚠️ token 会随配置一起持久化到本机配置文件中；请勿把包含 token 的配置文件加入版本控制。
 

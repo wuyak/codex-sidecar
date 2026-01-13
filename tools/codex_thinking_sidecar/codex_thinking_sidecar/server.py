@@ -320,7 +320,7 @@ _UI_HTML = """<!doctype html>
         <div class="meta">poll_interval（秒）</div><div><input id="pollInterval" type="number" min="0.05" step="0.05" /></div>
         <div class="meta">file_scan_interval（秒）</div><div><input id="scanInterval" type="number" min="0.2" step="0.1" /></div>
         <div class="meta">翻译 Provider</div><div><select id="translator"></select></div>
-        <div class="meta">HTTP Profiles</div><div style="display:flex; gap:8px; align-items:center;"><select id="httpProfile" style="flex:1;"></select><button id="httpProfileAddBtn" type="button">新增</button><button id="httpProfileDelBtn" type="button">删除</button></div>
+        <div class="meta">HTTP Profiles</div><div style="display:flex; gap:8px; align-items:center;"><select id="httpProfile" style="flex:1;"></select><button id="httpProfileAddBtn" type="button">新增</button><button id="httpProfileRenameBtn" type="button">重命名</button><button id="httpProfileDelBtn" type="button">删除</button></div>
         <div class="meta">HTTP URL（仅 http/https）</div><div><input id="httpUrl" placeholder="https://api.deeplx.org/{token}/translate 或 http://127.0.0.1:9000/translate" /></div>
         <div class="meta">HTTP Token（可选）</div><div><input id="httpToken" placeholder="可用于 Authorization 或替换 URL 中的 {token}" /></div>
         <div class="meta">HTTP 超时（秒）</div><div><input id="httpTimeout" type="number" min="0.5" step="0.5" /></div>
@@ -348,6 +348,7 @@ _UI_HTML = """<!doctype html>
       const translatorSel = document.getElementById("translator");
       const httpProfile = document.getElementById("httpProfile");
       const httpProfileAddBtn = document.getElementById("httpProfileAddBtn");
+      const httpProfileRenameBtn = document.getElementById("httpProfileRenameBtn");
       const httpProfileDelBtn = document.getElementById("httpProfileDelBtn");
       const httpUrl = document.getElementById("httpUrl");
       const httpToken = document.getElementById("httpToken");
@@ -704,6 +705,20 @@ _UI_HTML = """<!doctype html>
           return;
         }
         httpProfiles.push({ name, ...readHttpInputs() });
+        httpSelected = name;
+        refreshHttpProfileSelect();
+        httpProfile.value = httpSelected;
+      });
+      httpProfileRenameBtn.addEventListener("click", () => {
+        upsertSelectedProfileFromInputs();
+        if (!httpSelected) return;
+        const name = (prompt("将当前 Profile 重命名为：", httpSelected) || "").trim();
+        if (!name || name === httpSelected) return;
+        if (httpProfiles.some(p => p && p.name === name)) {
+          alert("该名称已存在");
+          return;
+        }
+        httpProfiles = httpProfiles.map(p => (p && p.name === httpSelected) ? { ...p, name } : p);
         httpSelected = name;
         refreshHttpProfileSelect();
         httpProfile.value = httpSelected;
