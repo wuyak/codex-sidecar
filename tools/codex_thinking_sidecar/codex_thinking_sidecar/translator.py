@@ -1,5 +1,8 @@
 import json
 import os
+import sys
+import time
+import urllib.parse
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -65,7 +68,21 @@ class HttpTranslator:
         try:
             with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:
                 raw = resp.read()
-            obj = json.loads(raw.decode("utf-8", errors="replace"))
+                ctype = str(resp.headers.get("Content-Type") or "")
+            try:
+                obj = json.loads(raw.decode("utf-8", errors="replace"))
+            except ValueError:
+                # If server returns plain text (non-JSON), try to use it.
+                try:
+                    if "application/json" not in (ctype or "").lower():
+                        txt = raw.decode("utf-8", errors="replace").strip()
+                        if txt and not txt.lstrip().startswith("<"):
+                            return txt
+                except Exception:
+                    pass
+                _log_http_translate_error(url=url, auth_token=self.auth_token)
+                return ""
+
             # Best-effort extraction across common shapes.
             if isinstance(obj, dict):
                 for k in ("text", "data", "result", "translation", "translated_text"):
@@ -77,8 +94,52 @@ class HttpTranslator:
                             vv = v.get(kk)
                             if isinstance(vv, str) and vv.strip():
                                 return vv
+                # DeepL-like shape: {"translations":[{"text":"..."}]}
+                tr = obj.get("translations")
+                if isinstance(tr, list) and tr:
+                    first = tr[0]
+                    if isinstance(first, dict):
+                        t = first.get("text")
+                        if isinstance(t, str) and t.strip():
+                            return t
+            _log_http_translate_error(url=url, auth_token=self.auth_token)
+            return ""
         except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError):
+            _log_http_translate_error(url=url, auth_token=self.auth_token)
             return ""
         except Exception:
+            _log_http_translate_error(url=url, auth_token=self.auth_token)
             return ""
-        return ""
+
+
+_LAST_HTTP_ERR_TS = 0.0
+
+
+def _sanitize_url(url: str, auth_token: str) -> str:
+    try:
+        u = urllib.parse.urlsplit(url)
+        path = u.path or ""
+        if auth_token and auth_token in path:
+            path = path.replace(auth_token, "<token>")
+        # also redact long path segments that look like tokens
+        parts = path.split("/")
+        redacted = []
+        for p in parts:
+            if len(p) >= 24 and all(c.isalnum() or c in "-_." for c in p):
+                redacted.append("<seg>")
+            else:
+                redacted.append(p)
+        path = "/".join(redacted)
+        return urllib.parse.urlunsplit((u.scheme, u.netloc, path, "", ""))
+    except Exception:
+        return "<url>"
+
+
+def _log_http_translate_error(url: str, auth_token: str) -> None:
+    global _LAST_HTTP_ERR_TS
+    now = time.time()
+    if now - _LAST_HTTP_ERR_TS < 5.0:
+        return
+    _LAST_HTTP_ERR_TS = now
+    safe = _sanitize_url(url, auth_token)
+    print(f"[sidecar] WARN: HTTP 翻译失败（返回空译文）：{safe}", file=sys.stderr)

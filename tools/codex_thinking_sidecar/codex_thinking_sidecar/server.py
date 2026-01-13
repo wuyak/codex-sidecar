@@ -120,10 +120,19 @@ class _Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _send_text(self, status: int, body: str, content_type: str = "text/plain; charset=utf-8") -> None:
+    def _send_text(
+        self,
+        status: int,
+        body: str,
+        content_type: str = "text/plain; charset=utf-8",
+        extra_headers: Optional[Dict[str, str]] = None,
+    ) -> None:
         data = body.encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", content_type)
+        if extra_headers:
+            for k, v in extra_headers.items():
+                self.send_header(k, v)
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
@@ -162,7 +171,16 @@ class _Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/ui":
-            self._send_text(HTTPStatus.OK, _UI_HTML, content_type="text/html; charset=utf-8")
+            # Avoid stale UI HTML due to browser caching when iterating locally.
+            self._send_text(
+                HTTPStatus.OK,
+                _UI_HTML,
+                content_type="text/html; charset=utf-8",
+                extra_headers={
+                    "Cache-Control": "no-store, max-age=0",
+                    "Pragma": "no-cache",
+                },
+            )
             return
 
         if path == "/events":
@@ -568,6 +586,11 @@ _UI_HTML = """<!doctype html>
 
       async function saveConfig() {
         const provider = translatorSel.value || "stub";
+        let wasRunning = false;
+        try {
+          const st = await fetch("/api/status").then(r => r.json());
+          wasRunning = !!(st && st.running);
+        } catch (e) {}
         if (provider === "http") {
           if (!httpSelected && httpProfiles.length > 0) httpSelected = httpProfiles[0].name || "";
           if (!httpSelected) httpSelected = "默认";
@@ -590,6 +613,13 @@ _UI_HTML = """<!doctype html>
           } : {},
         };
         await api("POST", "/api/config", patch);
+        if (wasRunning) {
+          // Config changes only take effect on watcher restart; prompt to apply immediately.
+          if (confirm("已保存配置。需要重启监听使新配置生效吗？")) {
+            await api("POST", "/api/control/stop");
+            await api("POST", "/api/control/start");
+          }
+        }
         await loadControl();
         setStatus("已保存配置");
       }
