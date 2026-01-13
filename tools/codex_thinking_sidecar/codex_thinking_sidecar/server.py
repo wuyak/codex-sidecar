@@ -298,6 +298,7 @@ _UI_HTML = """<!doctype html>
         <div class="meta">监视目录（CODEX_HOME）</div><div><input id="watchHome" placeholder="/home/kino/.codex 或 /mnt/c/Users/.../.codex" /></div>
         <div class="meta">回放行数</div><div><input id="replayLines" type="number" min="0" step="1" /></div>
         <div class="meta">采集 agent_reasoning</div><div><select id="includeAgent"><option value="0">否</option><option value="1">是</option></select></div>
+        <div class="meta">显示模式</div><div><select id="displayMode"><option value="both">中英文对照</option><option value="zh">仅中文</option><option value="en">仅英文</option></select></div>
         <div class="meta">poll_interval（秒）</div><div><input id="pollInterval" type="number" min="0.05" step="0.05" /></div>
         <div class="meta">file_scan_interval（秒）</div><div><input id="scanInterval" type="number" min="0.2" step="0.1" /></div>
         <div class="meta">翻译 Provider</div><div><select id="translator"></select></div>
@@ -323,6 +324,7 @@ _UI_HTML = """<!doctype html>
       const watchHome = document.getElementById("watchHome");
       const replayLines = document.getElementById("replayLines");
       const includeAgent = document.getElementById("includeAgent");
+      const displayMode = document.getElementById("displayMode");
       const pollInterval = document.getElementById("pollInterval");
       const scanInterval = document.getElementById("scanInterval");
       const translatorSel = document.getElementById("translator");
@@ -411,11 +413,14 @@ _UI_HTML = """<!doctype html>
         const t = formatTs(msg.ts || "");
         const kind = msg.kind || "";
         const sid = msg.thread_id ? shortId(msg.thread_id) : (msg.file ? shortId((msg.file.split("/").slice(-1)[0] || msg.file)) : "");
+        const mode = (displayMode.value || "both");
+        const showEn = mode !== "zh";
+        const showZh = mode !== "en";
         row.innerHTML = `
           <div class="meta"><span class="badge">${kind}</span>${t.local || t.utc} <span style="opacity:.7">${sid}</span></div>
           ${t.local && t.utc ? `<div class="meta" style="opacity:.85">UTC: <code>${t.utc}</code></div>` : ``}
-          <pre><b>EN</b>\\n${msg.text || ""}</pre>
-          <pre><b>ZH</b>\\n${msg.zh || ""}</pre>
+          ${showEn ? `<pre><b>EN</b>\\n${msg.text || ""}</pre>` : ``}
+          ${showZh ? `<pre><b>ZH</b>\\n${msg.zh || ""}</pre>` : ``}
         `;
         list.prepend(row);
       }
@@ -534,6 +539,7 @@ _UI_HTML = """<!doctype html>
           watchHome.value = cfg.watch_codex_home || "";
           replayLines.value = cfg.replay_last_lines ?? 0;
           includeAgent.value = cfg.include_agent_reasoning ? "1" : "0";
+          displayMode.value = (localStorage.getItem("codex_sidecar_display_mode") || "both");
           pollInterval.value = cfg.poll_interval ?? 0.5;
           scanInterval.value = cfg.file_scan_interval ?? 2.0;
           translatorSel.value = cfg.translator_provider || "stub";
@@ -649,6 +655,10 @@ _UI_HTML = """<!doctype html>
       }
       translatorSel.addEventListener("change", () => {
         showHttpFields((translatorSel.value || "") === "http");
+      });
+      displayMode.addEventListener("change", async () => {
+        localStorage.setItem("codex_sidecar_display_mode", displayMode.value || "both");
+        await refreshList();
       });
       httpProfile.addEventListener("change", () => {
         upsertSelectedProfileFromInputs();

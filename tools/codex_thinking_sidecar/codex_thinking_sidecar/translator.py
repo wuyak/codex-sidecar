@@ -45,7 +45,15 @@ class HttpTranslator:
         url = self.url
         if self.auth_token and "{token}" in url:
             url = url.replace("{token}", self.auth_token)
-        payload = {"text": text, "source": "en", "target": "zh"}
+        # Many community translation endpoints (e.g., DeepLX) use different field names.
+        # Send both variants for broader compatibility; servers can ignore unknown keys.
+        payload = {
+            "text": text,
+            "source": "en",
+            "target": "zh",
+            "source_lang": "EN",
+            "target_lang": "ZH",
+        }
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         req = urllib.request.Request(url, data=data, method="POST")
         req.add_header("Content-Type", "application/json; charset=utf-8")
@@ -58,8 +66,17 @@ class HttpTranslator:
             with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:
                 raw = resp.read()
             obj = json.loads(raw.decode("utf-8", errors="replace"))
-            if isinstance(obj, dict) and isinstance(obj.get("text"), str):
-                return obj["text"]
+            # Best-effort extraction across common shapes.
+            if isinstance(obj, dict):
+                for k in ("text", "data", "result", "translation", "translated_text"):
+                    v = obj.get(k)
+                    if isinstance(v, str) and v.strip():
+                        return v
+                    if isinstance(v, dict):
+                        for kk in ("text", "data", "result", "translation", "translated_text"):
+                            vv = v.get(kk)
+                            if isinstance(vv, str) and vv.strip():
+                                return vv
         except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError):
             return ""
         except Exception:
