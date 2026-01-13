@@ -1,0 +1,176 @@
+import argparse
+import os
+import signal
+import sys
+import tempfile
+import threading
+import time
+import urllib.request
+from pathlib import Path
+
+from .controller import SidecarController
+from .server import SidecarServer
+from .translator import StubTranslator
+from .watcher import HttpIngestClient, RolloutWatcher
+
+
+def _default_codex_home() -> str:
+    env = os.environ.get("CODEX_HOME")
+    if env:
+        return env
+    return str(Path.home() / ".codex")
+
+
+def _parse_args(argv):
+    # 兼容常见误用：用户在 bash 中写成 --codex-home"$HOME/.codex"
+    # 这会变成单个参数 "--codex-home/home/kino/.codex" 并导致 argparse 报错。
+    # 这里做一次轻量修正：把它拆成 ["--codex-home", "/home/kino/.codex"]。
+    fixed = []
+    for a in argv:
+        if a.startswith("--codex-home") and a not in ("--codex-home",) and not a.startswith("--codex-home="):
+            v = a[len("--codex-home") :]
+            if v:
+                fixed.extend(["--codex-home", v])
+                continue
+        fixed.append(a)
+
+    p = argparse.ArgumentParser(
+        prog="codex_thinking_sidecar",
+        description="旁路监听 Codex rollout JSONL，提取思考摘要并推送到本地服务端（含 SSE/UI）。",
+    )
+    p.add_argument("--codex-home", default=_default_codex_home(), help="Codex 数据目录（默认: $CODEX_HOME 或 ~/.codex）")
+    p.add_argument("--host", default="127.0.0.1", help="本地服务监听地址（默认: 127.0.0.1）")
+    p.add_argument("--port", type=int, default=8787, help="本地服务端口（默认: 8787）")
+    p.add_argument("--max-messages", type=int, default=1000, help="内存中保留的最近消息条数（默认: 1000）")
+    p.add_argument("--replay-last-lines", type=int, default=200, help="启动时从文件尾部回放的行数（默认: 200）")
+    p.add_argument("--poll-interval", type=float, default=0.5, help="轮询间隔秒数（默认: 0.5）")
+    p.add_argument("--file-scan-interval", type=float, default=2.0, help="扫描最新会话文件的间隔秒数（默认: 2.0）")
+    p.add_argument("--include-agent-reasoning", action="store_true", help="同时采集 event_msg.agent_reasoning（更实时但不如 summary 稳定）")
+    p.add_argument("--ui", action="store_true", help="仅启动本地 UI/服务端，不自动开始监听（在 UI 里点“开始监听”）")
+    p.add_argument("--no-server", action="store_true", help="不启动本地服务（仅推送到 --server-url）")
+    p.add_argument("--server-url", default=None, help="将事件推送到已有服务端（如 http://127.0.0.1:8787）")
+    return p.parse_args(fixed)
+
+
+def main(argv=None) -> int:
+    args = _parse_args(sys.argv[1:] if argv is None else argv)
+
+    codex_home = Path(args.codex_home).expanduser()
+    server_url = args.server_url
+    lock_fh = None
+    controller = None
+
+    server = None
+    if not args.no_server:
+        # Prevent multiple sidecar instances pushing to the same server/port.
+        #
+        # 用户常见误用是开了多个终端重复启动 sidecar，导致“同一条内容出现两次”。
+        # 更合理的做法是阻止重复进程，而不是靠服务端去重掩盖问题。
+        try:
+            import fcntl  # type: ignore
+
+            lock_dir = codex_home / "tmp"
+            if not lock_dir.exists():
+                lock_dir = Path(tempfile.gettempdir())
+            lock_path = lock_dir / f"codex_thinking_sidecar.{args.port}.lock"
+            lock_fh = open(lock_path, "a+", encoding="utf-8")
+            try:
+                fcntl.flock(lock_fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError:
+                lock_fh.seek(0)
+                pid = (lock_fh.read() or "").strip()
+                hint = f"（PID {pid}）" if pid else ""
+                print(f"[sidecar] ERROR: 检测到已有 sidecar 正在使用端口 {args.port} {hint}，请先停止它或换一个端口。", file=sys.stderr)
+                return 3
+            lock_fh.seek(0)
+            lock_fh.truncate(0)
+            lock_fh.write(str(os.getpid()))
+            lock_fh.flush()
+        except Exception:
+            # 在不支持 fcntl 的环境里跳过锁（例如非 Linux）；仍可正常运行。
+            lock_fh = None
+
+        server_url = server_url or f"http://{args.host}:{args.port}"
+        server = SidecarServer(host=args.host, port=args.port, max_messages=args.max_messages)
+        controller = SidecarController(config_home=codex_home, server_url=server_url, state=server.state)
+        server.set_controller(controller)
+        server.start_in_background()
+
+    if not server_url:
+        print("ERROR: 必须提供 --server-url，或不要设置 --no-server。", file=sys.stderr)
+        return 2
+
+    print(f"[sidecar] codex_home={codex_home}", file=sys.stderr)
+    print(f"[sidecar] server_url={server_url}", file=sys.stderr)
+
+    # Ensure the local server is ready before we start replaying (otherwise /ingest may fail
+    # during the initial burst and never be retried).
+    if server is not None and server_url.startswith("http://"):
+        health_url = server_url.rstrip("/") + "/health"
+        ready = False
+        for _ in range(40):
+            try:
+                with urllib.request.urlopen(health_url, timeout=0.5) as resp:
+                    if resp.status == 200:
+                        ready = True
+                        break
+            except Exception:
+                time.sleep(0.05)
+        if not ready:
+            print(f"[sidecar] WARN: 本地服务未就绪：{health_url}", file=sys.stderr)
+
+    stop_event = threading.Event()
+
+    def _handle_sigint(_sig, _frame):
+        stop_event.set()
+
+    signal.signal(signal.SIGINT, _handle_sigint)
+    signal.signal(signal.SIGTERM, _handle_sigint)
+
+    try:
+        # UI mode: only run the server; watcher is controlled via HTTP endpoints.
+        if server is not None and args.ui:
+            stop_event.wait()
+        elif server is not None:
+            # Backwards-compatible: start watching immediately.
+            if controller is not None:
+                controller.apply_runtime_overrides(
+                    {
+                        "watch_codex_home": str(codex_home),
+                        "replay_last_lines": int(args.replay_last_lines),
+                        "include_agent_reasoning": bool(args.include_agent_reasoning),
+                        "poll_interval": float(args.poll_interval),
+                        "file_scan_interval": float(args.file_scan_interval),
+                        "translator_provider": "stub",
+                        "translator_config": {},
+                    }
+                )
+                controller.start()
+            stop_event.wait()
+        else:
+            # no-server mode: behave like the original watcher-only sidecar.
+            ingest = HttpIngestClient(server_url=server_url)
+            translator = StubTranslator()
+            watcher = RolloutWatcher(
+                codex_home=codex_home,
+                ingest=ingest,
+                translator=translator,
+                replay_last_lines=int(args.replay_last_lines),
+                poll_interval_s=float(args.poll_interval),
+                file_scan_interval_s=float(args.file_scan_interval),
+                include_agent_reasoning=bool(args.include_agent_reasoning),
+            )
+            watcher.run(stop_event=stop_event)
+    finally:
+        stop_event.set()
+        if server is not None:
+            server.shutdown()
+            # Give the server a moment to exit cleanly.
+            time.sleep(0.1)
+        if lock_fh is not None:
+            try:
+                lock_fh.close()
+            except Exception:
+                pass
+
+    return 0
