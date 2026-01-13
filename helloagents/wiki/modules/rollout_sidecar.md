@@ -32,3 +32,8 @@
 - 兼容（启动即监听，命令行参数方式）：
   - `cd ~/src/codex-thinking-sidecar-zh && ./run.sh --codex-home "$HOME/.codex" --port 8787 --replay-last-lines 5000 --include-agent-reasoning`
 
+## 配置持久化与多翻译 Profiles
+- UI 中点击“保存配置”会将配置写入：`$CODEX_HOME/tmp/codex_thinking_sidecar.config.json`。
+- 下次启动 `./ui.sh` 或 `./run.sh` 时会自动读取并沿用已保存配置（`./run.sh` 会立即开始监听）。
+- 当翻译 Provider 选择 `HTTP` 时，可在 `HTTP Profiles` 中保存多个翻译 API 配置并手动切换（支持新增/删除）。
+  - ⚠️ 建议优先用 `Auth ENV`（环境变量名）而不是把敏感 token 直接写进 URL；否则 URL 会被持久化到本机配置文件中。

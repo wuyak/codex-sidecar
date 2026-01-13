@@ -53,7 +53,8 @@ def _parse_args(argv):
 
 
 def main(argv=None) -> int:
-    args = _parse_args(sys.argv[1:] if argv is None else argv)
+    raw_argv = list(sys.argv[1:] if argv is None else argv)
+    args = _parse_args(raw_argv)
 
     codex_home = Path(args.codex_home).expanduser()
     server_url = args.server_url
@@ -132,19 +133,35 @@ def main(argv=None) -> int:
         if server is not None and args.ui:
             stop_event.wait()
         elif server is not None:
-            # Backwards-compatible: start watching immediately.
+            # Start watching immediately. When the user doesn't pass CLI flags, prefer
+            # the persisted config (saved via UI) instead of overwriting with defaults.
+            def _argv_has(flag: str) -> bool:
+                for a in raw_argv:
+                    if a == flag or a.startswith(flag + "="):
+                        return True
+                return False
+
+            def _argv_has_prefix(flag_prefix: str) -> bool:
+                for a in raw_argv:
+                    if a == flag_prefix or a.startswith(flag_prefix + "=") or a.startswith(flag_prefix):
+                        return True
+                return False
+
             if controller is not None:
-                controller.apply_runtime_overrides(
-                    {
-                        "watch_codex_home": str(codex_home),
-                        "replay_last_lines": int(args.replay_last_lines),
-                        "include_agent_reasoning": bool(args.include_agent_reasoning),
-                        "poll_interval": float(args.poll_interval),
-                        "file_scan_interval": float(args.file_scan_interval),
-                        "translator_provider": "stub",
-                        "translator_config": {},
-                    }
-                )
+                patch = {}
+                # If user explicitly specifies --codex-home, also watch that directory.
+                if _argv_has_prefix("--codex-home"):
+                    patch["watch_codex_home"] = str(codex_home)
+                if _argv_has("--replay-last-lines"):
+                    patch["replay_last_lines"] = int(args.replay_last_lines)
+                if _argv_has("--poll-interval"):
+                    patch["poll_interval"] = float(args.poll_interval)
+                if _argv_has("--file-scan-interval"):
+                    patch["file_scan_interval"] = float(args.file_scan_interval)
+                if _argv_has("--include-agent-reasoning"):
+                    patch["include_agent_reasoning"] = bool(args.include_agent_reasoning)
+                if patch:
+                    controller.apply_runtime_overrides(patch)
                 controller.start()
             stop_event.wait()
         else:

@@ -155,7 +155,7 @@ class SidecarController:
                 auth_env = ""
                 tc = cfg.get("translator_config") or {}
                 if isinstance(tc, dict):
-                    auth_env = str(tc.get("auth_env") or "").strip()
+                    auth_env = str(self._select_http_profile(tc).get("auth_env") or "").strip()
                 if auth_env:
                     env_hint = {"auth_env": auth_env, "auth_env_set": bool(os.environ.get(auth_env))}
         except Exception:
@@ -176,11 +176,12 @@ class SidecarController:
             return NoneTranslator()
         if provider == "http":
             tc = cfg.translator_config or {}
-            url = str(tc.get("url") or "").strip()
-            timeout_s = float(tc.get("timeout_s") or 3.0)
-            auth_env = str(tc.get("auth_env") or "").strip()
-            auth_header = str(tc.get("auth_header") or "Authorization").strip() or "Authorization"
-            auth_prefix = str(tc.get("auth_prefix") or "Bearer ").strip()
+            selected = self._select_http_profile(tc if isinstance(tc, dict) else {})
+            url = str(selected.get("url") or "").strip()
+            timeout_s = float(selected.get("timeout_s") or 3.0)
+            auth_env = str(selected.get("auth_env") or "").strip()
+            auth_header = str(selected.get("auth_header") or "Authorization").strip() or "Authorization"
+            auth_prefix = str(selected.get("auth_prefix") or "Bearer ").strip()
             return HttpTranslator(
                 url=url,
                 timeout_s=timeout_s,
@@ -189,3 +190,32 @@ class SidecarController:
                 auth_prefix=auth_prefix,
             )
         return StubTranslator()
+
+    @staticmethod
+    def _select_http_profile(tc: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        兼容两种结构：
+
+        1) 旧版：translator_config = {url, timeout_s, auth_env, ...}
+        2) 多 profile：translator_config = {profiles:[{name,url,...},...], selected:"name"}
+        """
+        try:
+            profiles = tc.get("profiles")
+            selected = str(tc.get("selected") or "").strip()
+            if isinstance(profiles, list) and profiles:
+                chosen = None
+                if selected:
+                    for p in profiles:
+                        if isinstance(p, dict) and str(p.get("name") or "").strip() == selected:
+                            chosen = p
+                            break
+                if chosen is None:
+                    for p in profiles:
+                        if isinstance(p, dict):
+                            chosen = p
+                            break
+                if isinstance(chosen, dict):
+                    return chosen
+        except Exception:
+            pass
+        return tc if isinstance(tc, dict) else {}

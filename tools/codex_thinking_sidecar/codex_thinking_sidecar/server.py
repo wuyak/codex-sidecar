@@ -301,7 +301,8 @@ _UI_HTML = """<!doctype html>
         <div class="meta">poll_interval（秒）</div><div><input id="pollInterval" type="number" min="0.05" step="0.05" /></div>
         <div class="meta">file_scan_interval（秒）</div><div><input id="scanInterval" type="number" min="0.2" step="0.1" /></div>
         <div class="meta">翻译 Provider</div><div><select id="translator"></select></div>
-        <div class="meta">HTTP URL（仅 http）</div><div><input id="httpUrl" placeholder="http://127.0.0.1:9000/translate" /></div>
+        <div class="meta">HTTP Profiles</div><div style="display:flex; gap:8px; align-items:center;"><select id="httpProfile" style="flex:1;"></select><button id="httpProfileAddBtn" type="button">新增</button><button id="httpProfileDelBtn" type="button">删除</button></div>
+        <div class="meta">HTTP URL（仅 http/https）</div><div><input id="httpUrl" placeholder="http://127.0.0.1:9000/translate" /></div>
         <div class="meta">HTTP 超时（秒）</div><div><input id="httpTimeout" type="number" min="0.5" step="0.5" /></div>
         <div class="meta">Auth ENV（可选）</div><div><input id="httpAuthEnv" placeholder="CODEX_TRANSLATE_TOKEN" /></div>
       </div>
@@ -324,6 +325,9 @@ _UI_HTML = """<!doctype html>
       const pollInterval = document.getElementById("pollInterval");
       const scanInterval = document.getElementById("scanInterval");
       const translatorSel = document.getElementById("translator");
+      const httpProfile = document.getElementById("httpProfile");
+      const httpProfileAddBtn = document.getElementById("httpProfileAddBtn");
+      const httpProfileDelBtn = document.getElementById("httpProfileDelBtn");
       const httpUrl = document.getElementById("httpUrl");
       const httpTimeout = document.getElementById("httpTimeout");
       const httpAuthEnv = document.getElementById("httpAuthEnv");
@@ -331,6 +335,9 @@ _UI_HTML = """<!doctype html>
       const startBtn = document.getElementById("startBtn");
       const stopBtn = document.getElementById("stopBtn");
       const clearBtn = document.getElementById("clearBtn");
+
+      let httpProfiles = [];
+      let httpSelected = "";
 
       const tabs = document.getElementById("tabs");
       const list = document.getElementById("list");
@@ -423,10 +430,77 @@ _UI_HTML = """<!doctype html>
       }
 
       function showHttpFields(show) {
-        const els = [httpUrl, httpTimeout, httpAuthEnv];
+        const els = [httpProfile, httpProfileAddBtn, httpProfileDelBtn, httpUrl, httpTimeout, httpAuthEnv];
         for (const el of els) {
           el.disabled = !show;
           el.style.opacity = show ? "1" : "0.5";
+        }
+      }
+
+      function normalizeHttpProfiles(tc) {
+        const profiles = Array.isArray(tc.profiles) ? tc.profiles.filter(p => p && typeof p === "object") : [];
+        let selected = (typeof tc.selected === "string") ? tc.selected : "";
+
+        // Backwards-compat: old config used {url, timeout_s, auth_env}.
+        if (profiles.length === 0 && (tc.url || tc.timeout_s || tc.auth_env)) {
+          profiles.push({
+            name: "默认",
+            url: tc.url || "",
+            timeout_s: (tc.timeout_s ?? 3),
+            auth_env: tc.auth_env || "",
+          });
+          selected = "默认";
+        }
+
+        if (!selected && profiles.length > 0) selected = profiles[0].name || "默认";
+        return { profiles, selected };
+      }
+
+      function readHttpInputs() {
+        return {
+          url: httpUrl.value || "",
+          timeout_s: Number(httpTimeout.value || 3),
+          auth_env: httpAuthEnv.value || "",
+        };
+      }
+
+      function upsertSelectedProfileFromInputs() {
+        if (!httpSelected) return;
+        const cur = readHttpInputs();
+        let found = false;
+        httpProfiles = httpProfiles.map(p => {
+          if (p && p.name === httpSelected) {
+            found = true;
+            return { ...p, ...cur, name: httpSelected };
+          }
+          return p;
+        });
+        if (!found) {
+          httpProfiles.push({ name: httpSelected, ...cur });
+        }
+      }
+
+      function applyProfileToInputs(name) {
+        const p = httpProfiles.find(x => x && x.name === name);
+        if (!p) return;
+        httpUrl.value = p.url || "";
+        httpTimeout.value = p.timeout_s ?? 3;
+        httpAuthEnv.value = p.auth_env || "";
+      }
+
+      function refreshHttpProfileSelect() {
+        httpProfile.innerHTML = "";
+        for (const p of httpProfiles) {
+          if (!p || typeof p !== "object") continue;
+          const opt = document.createElement("option");
+          opt.value = p.name || "";
+          opt.textContent = p.name || "";
+          httpProfile.appendChild(opt);
+        }
+        if (httpSelected) httpProfile.value = httpSelected;
+        if (!httpProfile.value && httpProfiles.length > 0) {
+          httpSelected = httpProfiles[0].name || "";
+          httpProfile.value = httpSelected;
         }
       }
 
@@ -459,9 +533,13 @@ _UI_HTML = """<!doctype html>
           scanInterval.value = cfg.file_scan_interval ?? 2.0;
           translatorSel.value = cfg.translator_provider || "stub";
           const tc = cfg.translator_config || {};
-          httpUrl.value = tc.url || "";
-          httpTimeout.value = tc.timeout_s ?? 3;
-          httpAuthEnv.value = tc.auth_env || "";
+          {
+            const normalized = normalizeHttpProfiles(tc || {});
+            httpProfiles = normalized.profiles;
+            httpSelected = normalized.selected;
+            refreshHttpProfileSelect();
+            if (httpSelected) applyProfileToInputs(httpSelected);
+          }
 
           showHttpFields((translatorSel.value || "") === "http");
 
@@ -479,6 +557,15 @@ _UI_HTML = """<!doctype html>
 
       async function saveConfig() {
         const provider = translatorSel.value || "stub";
+        if (provider === "http") {
+          if (!httpSelected && httpProfiles.length > 0) httpSelected = httpProfiles[0].name || "";
+          if (!httpSelected) httpSelected = "默认";
+          upsertSelectedProfileFromInputs();
+          if (httpProfiles.length === 0) {
+            httpProfiles = [{ name: httpSelected, ...readHttpInputs() }];
+          }
+          refreshHttpProfileSelect();
+        }
         const patch = {
           watch_codex_home: watchHome.value || "",
           replay_last_lines: Number(replayLines.value || 0),
@@ -487,9 +574,8 @@ _UI_HTML = """<!doctype html>
           file_scan_interval: Number(scanInterval.value || 2.0),
           translator_provider: provider,
           translator_config: (provider === "http") ? {
-            url: httpUrl.value || "",
-            timeout_s: Number(httpTimeout.value || 3),
-            auth_env: httpAuthEnv.value || "",
+            profiles: httpProfiles,
+            selected: httpSelected,
           } : {},
         };
         await api("POST", "/api/config", patch);
@@ -558,6 +644,37 @@ _UI_HTML = """<!doctype html>
       }
       translatorSel.addEventListener("change", () => {
         showHttpFields((translatorSel.value || "") === "http");
+      });
+      httpProfile.addEventListener("change", () => {
+        upsertSelectedProfileFromInputs();
+        httpSelected = httpProfile.value || "";
+        if (httpSelected) applyProfileToInputs(httpSelected);
+      });
+      httpProfileAddBtn.addEventListener("click", () => {
+        upsertSelectedProfileFromInputs();
+        const name = (prompt("新 Profile 名称（用于在下拉中切换）") || "").trim();
+        if (!name) return;
+        if (httpProfiles.some(p => p && p.name === name)) {
+          alert("该名称已存在");
+          return;
+        }
+        httpProfiles.push({ name, ...readHttpInputs() });
+        httpSelected = name;
+        refreshHttpProfileSelect();
+        httpProfile.value = httpSelected;
+      });
+      httpProfileDelBtn.addEventListener("click", () => {
+        if (!httpSelected) return;
+        if (!confirm(`删除 Profile：${httpSelected} ?`)) return;
+        httpProfiles = httpProfiles.filter(p => !(p && p.name === httpSelected));
+        httpSelected = httpProfiles.length > 0 ? (httpProfiles[0].name || "") : "";
+        refreshHttpProfileSelect();
+        if (httpSelected) applyProfileToInputs(httpSelected);
+        else {
+          httpUrl.value = "";
+          httpTimeout.value = 3;
+          httpAuthEnv.value = "";
+        }
       });
       saveBtn.addEventListener("click", async () => { await saveConfig(); });
       startBtn.addEventListener("click", async () => { await startWatch(); });
