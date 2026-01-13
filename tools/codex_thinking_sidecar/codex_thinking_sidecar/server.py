@@ -436,17 +436,18 @@ _UI_HTML = """<!doctype html>
       const threadIndex = new Map(); // key -> { key, thread_id, file, count, last_ts }
       const callIndex = new Map(); // call_id -> { tool_name, args_raw, args_obj }
 
-      function formatTs(ts) {
-        if (!ts) return { utc: "", local: "" };
-        try {
-          const d = new Date(ts);
-          if (isNaN(d.getTime())) return { utc: ts, local: "" };
-          const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "local";
-          return { utc: ts, local: `${d.toLocaleString()} (${tz})` };
-        } catch (e) {
-          return { utc: ts, local: "" };
-        }
-      }
+	      function formatTs(ts) {
+	        if (!ts) return { utc: "", local: "" };
+	        try {
+	          const d = new Date(ts);
+	          if (isNaN(d.getTime())) return { utc: ts, local: "" };
+	          // 默认按北京时间展示，减少跨时区/UTC 对照带来的视觉噪音。
+	          const bj = d.toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" });
+	          return { utc: ts, local: `${bj} (北京时间)` };
+	        } catch (e) {
+	          return { utc: ts, local: "" };
+	        }
+	      }
 
       function keyOf(msg) {
         return (msg.thread_id || msg.file || "unknown");
@@ -758,14 +759,13 @@ _UI_HTML = """<!doctype html>
           body = `<pre>${escapeHtml(msg.text || "")}</pre>`;
         }
 
-        row.innerHTML = `
-          <div class="meta"><span class="badge kind-${kind}">${kind}</span>${t.local || t.utc} <span style="opacity:.7">${sid}</span></div>
-          ${t.local && t.utc ? `<div class="meta" style="opacity:.85">UTC: <code>${t.utc}</code></div>` : ``}
-          ${body}
-        `;
-        list.appendChild(row);
-        if (autoscroll) window.scrollTo(0, document.body.scrollHeight);
-      }
+	        row.innerHTML = `
+	          <div class="meta"><span class="badge kind-${kind}">${kind}</span>${t.local || t.utc} <span style="opacity:.7">${sid}</span></div>
+	          ${body}
+	        `;
+	        list.appendChild(row);
+	        if (autoscroll) window.scrollTo(0, document.body.scrollHeight);
+	      }
 
       function renderEmpty() {
         const row = document.createElement("div");
