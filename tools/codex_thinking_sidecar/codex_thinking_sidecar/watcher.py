@@ -235,6 +235,22 @@ class RolloutWatcher:
         extracted: List[Dict[str, str]] = []
 
         if top_type == "response_item":
+            # Assistant / User messages (final output and input echo)
+            if payload.get("type") == "message":
+                role = payload.get("role")
+                # Prefer event_msg.user_message for user input (more concise).
+                if role == "assistant":
+                    content = payload.get("content")
+                    parts: List[str] = []
+                    if isinstance(content, list):
+                        for c in content:
+                            if isinstance(c, dict) and isinstance(c.get("text"), str):
+                                txt = c.get("text") or ""
+                                if txt.strip():
+                                    parts.append(txt)
+                    if parts:
+                        extracted.append({"kind": f"{role}_message", "text": "\n".join(parts)})
+
             if payload.get("type") == "reasoning":
                 summary = payload.get("summary")
                 if isinstance(summary, list):
@@ -247,17 +263,66 @@ class RolloutWatcher:
                     if parts:
                         extracted.append({"kind": "reasoning_summary", "text": "\n".join(parts)})
 
+            # Tool calls / outputs (CLI tools, custom tools, web search)
+            ptype = payload.get("type")
+            if ptype in ("function_call", "custom_tool_call", "web_search_call"):
+                name = ""
+                call_id = ""
+                if isinstance(payload.get("name"), str):
+                    name = payload.get("name") or ""
+                if isinstance(payload.get("call_id"), str):
+                    call_id = payload.get("call_id") or ""
+                if ptype == "web_search_call":
+                    action = payload.get("action")
+                    text = json.dumps(action, ensure_ascii=False) if isinstance(action, (dict, list)) else str(action or "")
+                    title = "web_search_call"
+                else:
+                    key = "arguments" if ptype == "function_call" else "input"
+                    raw = payload.get(key)
+                    text = str(raw or "")
+                    title = name or ptype
+                prefix = f"call_id={call_id}\n" if call_id else ""
+                extracted.append(
+                    {
+                        "kind": "tool_call",
+                        "text": f"{title}\n{prefix}{text}".rstrip(),
+                    }
+                )
+
+            if ptype in ("function_call_output", "custom_tool_call_output"):
+                call_id = payload.get("call_id") if isinstance(payload.get("call_id"), str) else ""
+                out = payload.get("output")
+                text = str(out or "")
+                prefix = f"call_id={call_id}\n" if call_id else ""
+                extracted.append(
+                    {
+                        "kind": "tool_output",
+                        "text": f"{prefix}{text}".rstrip(),
+                    }
+                )
+
         if self._include_agent_reasoning and top_type == "event_msg":
             if payload.get("type") == "agent_reasoning":
                 txt = payload.get("text")
                 if isinstance(txt, str) and txt.strip():
                     extracted.append({"kind": "agent_reasoning", "text": txt})
 
+        # User message echo in event stream (usually the most concise)
+        if top_type == "event_msg":
+            if payload.get("type") == "user_message":
+                msg = payload.get("message")
+                if isinstance(msg, str) and msg.strip():
+                    extracted.append({"kind": "user_message", "text": msg})
+
         ingested = 0
         for item in extracted:
             kind = item["kind"]
             text = item["text"]
-            zh = self._translator.translate(text)
+            # Only translate "thinking" content; keep tool/user/assistant as-is.
+            if kind in ("reasoning_summary", "agent_reasoning"):
+                zh = self._translator.translate(text)
+            else:
+                zh = ""
             # Dedup across replay expansions.
             #
             # - reasoning_summary: 通常每条是“最终摘要”，用 timestamp 参与 key 能更好地区分不同轮次

@@ -24,6 +24,11 @@
   - 该类型通常是“流式推理文本”，同一段内容可能重复出现（模型/客户端实现差异）。
   - sidecar 会对 `agent_reasoning` 做更激进的去重（不依赖 timestamp），但仍建议仅在需要更实时内容时开启。
 
+## UI 展示内容与翻译策略
+- UI 现在会展示更多事件类型：用户输入（`user_message`）、工具调用与输出（`tool_call` / `tool_output`）、最终回答（`assistant_message`）、思考摘要（`reasoning_summary`）。
+- 翻译策略：仅对“思考内容”（`reasoning_summary` / 可选 `agent_reasoning`）进行翻译；工具输出与最终回答不翻译。
+- 展示顺序：列表按时间从上到下（新内容在底部）；工具输出默认折叠展示。
+
 ## 运行方式（WSL 示例）
 - 推荐（短命令，先开 UI 再开始监听）：
   - `cd ~/src/codex-thinking-sidecar-zh && ./ui.sh`

@@ -293,6 +293,9 @@ _UI_HTML = """<!doctype html>
       .meta { color: #555; font-size: 12px; }
       pre { white-space: pre-wrap; word-break: break-word; margin: 8px 0 0; }
       .badge { display:inline-block; padding:2px 8px; border-radius:999px; background:#f1f5f9; font-size:12px; margin-right:8px; }
+      .badge.kind-user_message, .badge.kind-user { background:#e0f2fe; }
+      .badge.kind-assistant_message, .badge.kind-assistant { background:#dcfce7; }
+      .badge.kind-tool_call, .badge.kind-tool_output { background:#fef9c3; }
       .tabs { display:flex; gap:8px; flex-wrap:wrap; margin: 10px 0 14px; }
       .tab { border: 1px solid #ddd; background:#fff; padding:6px 10px; border-radius: 999px; cursor:pointer; font-size: 12px; }
       .tab.active { background:#111827; color:#fff; border-color:#111827; }
@@ -433,22 +436,53 @@ _UI_HTML = """<!doctype html>
         const kind = msg.kind || "";
         const sid = msg.thread_id ? shortId(msg.thread_id) : (msg.file ? shortId((msg.file.split("/").slice(-1)[0] || msg.file)) : "");
         const mode = (displayMode.value || "both");
-        const showEn = mode !== "zh";
-        const showZh = mode !== "en";
+        const isThinking = (kind === "reasoning_summary" || kind === "agent_reasoning");
+        const showEn = !isThinking ? true : (mode !== "zh");
+        const showZh = !isThinking ? false : (mode !== "en");
+        const zhText = (typeof msg.zh === "string") ? msg.zh : "";
+        const hasZh = !!zhText.trim();
+
+        const autoscroll = (window.innerHeight + window.scrollY) >= (document.body.scrollHeight - 80);
+
+        let body = "";
+        if (kind === "tool_output") {
+          const firstLine = (msg.text || "").split("\\n")[0] || "";
+          body = `
+            <details>
+              <summary class="meta">工具输出（点击展开）: <code>${firstLine}</code></summary>
+              <pre>${msg.text || ""}</pre>
+            </details>
+          `;
+        } else if (kind === "tool_call") {
+          body = `<pre>${msg.text || ""}</pre>`;
+        } else if (kind === "user_message") {
+          body = `<pre><b>用户</b>\\n${msg.text || ""}</pre>`;
+        } else if (kind === "assistant_message") {
+          body = `<pre><b>回答</b>\\n${msg.text || ""}</pre>`;
+        } else if (isThinking) {
+          body = `
+            ${showEn ? `<pre><b>思考（EN）</b>\\n${msg.text || ""}</pre>` : ``}
+            ${showZh && hasZh ? `<pre><b>思考（ZH）</b>\\n${zhText}</pre>` : ``}
+          `;
+        } else {
+          // Fallback for unknown kinds.
+          body = `<pre>${msg.text || ""}</pre>`;
+        }
+
         row.innerHTML = `
-          <div class="meta"><span class="badge">${kind}</span>${t.local || t.utc} <span style="opacity:.7">${sid}</span></div>
+          <div class="meta"><span class="badge kind-${kind}">${kind}</span>${t.local || t.utc} <span style="opacity:.7">${sid}</span></div>
           ${t.local && t.utc ? `<div class="meta" style="opacity:.85">UTC: <code>${t.utc}</code></div>` : ``}
-          ${showEn ? `<pre><b>EN</b>\\n${msg.text || ""}</pre>` : ``}
-          ${showZh ? `<pre><b>ZH</b>\\n${msg.zh || ""}</pre>` : ``}
+          ${body}
         `;
-        list.prepend(row);
+        list.appendChild(row);
+        if (autoscroll) window.scrollTo(0, document.body.scrollHeight);
       }
 
       function renderEmpty() {
         const row = document.createElement("div");
         row.className = "row";
         row.innerHTML = `<div class="meta">暂无数据（或仍在回放中）：先等待 2-5 秒；如仍为空，请确认 sidecar 的 <code>--codex-home</code> 指向包含 <code>sessions/**/rollout-*.jsonl</code> 的目录，然后在 Codex 里发一条消息。也可以打开 <code>/api/messages</code> 验证是否已采集到数据。</div>`;
-        list.prepend(row);
+        list.appendChild(row);
       }
 
       function setStatus(s) {
