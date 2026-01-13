@@ -648,16 +648,16 @@ _UI_HTML = """<!doctype html>
 	            const base = parts.pop() || path;
 	            const dir = (parts.join("/") + "/") || path;
 	            out.push(dir);
-	            out.push(`  ${base}:`);
+	            out.push(`${base}:`);
 	            const n = countEscapedNewlines(rest);
-	            if (n > 0) out.push(`  … +${n} lines`);
+	            if (n > 0) out.push(`… +${n} lines`);
 	          } else {
 	            out.push(String(ln ?? ""));
 	          }
 	          used += 1;
 	        }
 	        const remaining = xs.length - used;
-	        if (remaining > 0) out.push(`  … +${remaining} lines`);
+	        if (remaining > 0) out.push(`… +${remaining} lines`);
 	        return out;
 	      }
 	
@@ -685,16 +685,20 @@ _UI_HTML = """<!doctype html>
 	          : [];
 	        const lines = [];
 	        if (cmdWrap.length > 0) {
-	          lines.push(`Ran ${cmdWrap[0]}`);
+	          lines.push(`• Ran ${cmdWrap[0]}`);
 	          for (let i = 1; i < cmdWrap.length; i++) lines.push(`  │ ${cmdWrap[i]}`);
 	        } else {
-	          lines.push("Ran shell_command");
+	          lines.push("• Ran shell_command");
 	        }
 	        if (pick.length > 0) {
 	          lines.push(`  └ ${pick[0]}`);
-	          for (let i = 1; i < pick.length; i++) lines.push(`    ${pick[i]}`);
+	          const lead = Math.min((String(pick[0] || "").match(/^\\s*/)[0] || "").length, 2);
+	          const followIndent = " ".repeat(4 + lead);
+	          for (let i = 1; i < pick.length; i++) lines.push(`${followIndent}${pick[i]}`);
 	        } else if (exitCode !== null && exitCode !== 0) {
-	          lines.push("  └ （无输出）");
+	          lines.push("  └ (no output)");
+	        } else {
+	          lines.push("  └ (no output)");
 	        }
 	        return lines.join("\\n");
 	      }
@@ -931,28 +935,27 @@ _UI_HTML = """<!doctype html>
 		          const showRaw = (String(outputBody || "").trim() !== String(outputRaw || "").trim());
 		          const runBlock = (toolName === "shell_command" && cmdFull) ? formatShellRun(cmdFull, outputBody, exitCode) : String(outputBody || "");
 		          body = `
-		            <details class="tool-card">
-		              <summary class="meta">工具输出（点击展开）: <code>${escapeHtml(toolName || "tool")}</code>${(exitCode !== null && exitCode !== 0) ? ` <code>exit ${escapeHtml(exitCode)}</code>` : ``}</summary>
+		            <div class="tool-card">
 		              ${runBlock ? `<pre class="code">${escapeHtml(runBlock)}</pre>` : ``}
 		              <details>
 		                <summary class="meta">详情</summary>
-	                <div class="tool-meta">
-	                  ${toolName ? `<span class="pill">工具：<code>${escapeHtml(toolName)}</code></span>` : ``}
-	                  ${callId ? `<span class="pill">call_id：<code>${escapeHtml(callId)}</code></span>` : ``}
-	                  ${exitCode !== null ? `<span class="pill">Exit：<code>${escapeHtml(exitCode)}</code></span>` : ``}
-	                  ${wallTime ? `<span class="pill">耗时：<code>${escapeHtml(wallTime)}</code></span>` : ``}
-	                </div>
-	                ${(toolName === "shell_command" && cmdFull) ? `<pre>${escapeHtml(cmdFull)}</pre>` : ``}
-	                ${showRaw ? `
-	                  <details>
-	                    <summary class="meta">原始输出</summary>
-	                    <pre>${escapeHtml(outputRaw)}</pre>
-	                  </details>
-	                ` : `<pre>${escapeHtml(outputBody)}</pre>`}
-	              </details>
-	            </details>
-	          `;
-	        } else if (kind === "tool_call") {
+		                <div class="tool-meta">
+		                  ${toolName ? `<span class="pill">工具：<code>${escapeHtml(toolName)}</code></span>` : ``}
+		                  ${callId ? `<span class="pill">call_id：<code>${escapeHtml(callId)}</code></span>` : ``}
+		                  ${exitCode !== null ? `<span class="pill">Exit：<code>${escapeHtml(exitCode)}</code></span>` : ``}
+		                  ${wallTime ? `<span class="pill">耗时：<code>${escapeHtml(wallTime)}</code></span>` : ``}
+		                </div>
+		                ${(toolName === "shell_command" && cmdFull) ? `<pre>${escapeHtml(cmdFull)}</pre>` : ``}
+		                ${showRaw ? `
+		                  <details>
+		                    <summary class="meta">原始输出</summary>
+		                    <pre>${escapeHtml(outputRaw)}</pre>
+		                  </details>
+		                ` : `<pre>${escapeHtml(outputBody)}</pre>`}
+		              </details>
+		            </div>
+		          `;
+		        } else if (kind === "tool_call") {
 	          const parsed = parseToolCallText(msg.text || "");
 	          const toolName = parsed.toolName || "tool_call";
 	          const callId = parsed.callId || "";
