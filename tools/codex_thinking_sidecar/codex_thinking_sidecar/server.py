@@ -609,11 +609,80 @@ _UI_HTML = """<!doctype html>
 	        return { lines: head.concat(["…（展开查看更多）"], tail), truncated: true };
 	      }
 	
+	      function wrapCommandForDisplay(cmdOne, width = 78) {
+	        const raw = String(cmdOne ?? "").trim();
+	        if (!raw) return [];
+	        const base = wrapWords(raw, width);
+	        if (base.length > 1) return base;
+	        // Prefer breaking at "||" for readability, even if not over width.
+	        const words = raw.split(/\\s+/).filter(Boolean);
+	        const idx = words.indexOf("||");
+	        if (idx === -1 || idx >= words.length - 1) return base;
+	        const a = words.slice(0, idx + 1).join(" ");
+	        const b = words.slice(idx + 1).join(" ");
+	        const aa = wrapWords(a, width);
+	        const bb = wrapWords(b, width);
+	        return aa.concat(bb);
+	      }
+	
+	      function countEscapedNewlines(s) {
+	        try {
+	          const m = String(s ?? "").match(/\\n/g);
+	          return m ? m.length : 0;
+	        } catch (_) {
+	          return 0;
+	        }
+	      }
+	
+	      function formatRgOutput(lines, maxHits = 1) {
+	        const xs = Array.isArray(lines) ? lines : [];
+	        const out = [];
+	        let used = 0;
+	        for (const ln of xs) {
+	          if (used >= maxHits) break;
+	          const m = String(ln ?? "").match(/^(.+?):(\\d+):(.*)$/);
+	          if (m && m[1] && String(m[1]).includes("/")) {
+	            const path = String(m[1] || "");
+	            const rest = String(m[3] || "");
+	            const parts = path.split("/");
+	            const base = parts.pop() || path;
+	            const dir = (parts.join("/") + "/") || path;
+	            out.push(dir);
+	            out.push(`  ${base}:`);
+	            const n = countEscapedNewlines(rest);
+	            if (n > 0) out.push(`  … +${n} lines`);
+	          } else {
+	            out.push(String(ln ?? ""));
+	          }
+	          used += 1;
+	        }
+	        const remaining = xs.length - used;
+	        if (remaining > 0) out.push(`  … +${remaining} lines`);
+	        return out;
+	      }
+	
+	      function summarizeOutputLines(lines, maxLines = 6) {
+	        const xs = Array.isArray(lines) ? lines : [];
+	        const clipped = xs.map((ln) => {
+	          const s = String(ln ?? "");
+	          if (s.length <= 240) return s;
+	          return s.slice(0, 239) + "…";
+	        });
+	        if (clipped.length <= maxLines) return clipped;
+	        const head = clipped.slice(0, maxLines);
+	        const remaining = clipped.length - maxLines;
+	        return head.concat([`… +${remaining} lines`]);
+	      }
+	
 	      function formatShellRun(cmdFull, outputBody, exitCode) {
 	        const cmdOne = commandPreview(cmdFull, 400);
-	        const cmdWrap = wrapWords(cmdOne, 78);
 	        const outAll = normalizeNonEmptyLines(outputBody);
-	        const pick = (outAll.length > 0) ? excerptLines(outAll, 6).lines : [];
+	        const cmdWrap = wrapCommandForDisplay(cmdOne, 78);
+	        const firstCmd = String(cmdOne ?? "").trim();
+	        const isRg = /^rg\\b/.test(firstCmd);
+	        const pick = (outAll.length > 0)
+	          ? (isRg ? formatRgOutput(outAll, 1) : summarizeOutputLines(outAll, 6))
+	          : [];
 	        const lines = [];
 	        if (cmdWrap.length > 0) {
 	          lines.push(`Ran ${cmdWrap[0]}`);
@@ -623,7 +692,7 @@ _UI_HTML = """<!doctype html>
 	        }
 	        if (pick.length > 0) {
 	          lines.push(`  └ ${pick[0]}`);
-	          for (let i = 1; i < pick.length; i++) lines.push(`     ${pick[i]}`);
+	          for (let i = 1; i < pick.length; i++) lines.push(`    ${pick[i]}`);
 	        } else if (exitCode !== null && exitCode !== 0) {
 	          lines.push("  └ （无输出）");
 	        }
@@ -849,34 +918,24 @@ _UI_HTML = """<!doctype html>
         const autoscroll = (window.innerHeight + window.scrollY) >= (document.body.scrollHeight - 80);
 
 	        let body = "";
-	        if (kind === "tool_output") {
-	          const parsed = parseToolOutputText(msg.text || "");
-	          const callId = parsed.callId || "";
-	          const outputRaw = parsed.outputRaw || "";
-	          const meta = callId ? callIndex.get(callId) : null;
-	          const toolName = meta && meta.tool_name ? String(meta.tool_name) : "";
-	          const exitCode = extractExitCode(outputRaw);
-	          const wallTime = extractWallTime(outputRaw);
-	          const outputBody = extractOutputBody(outputRaw);
-	          const cmdFull = (meta && meta.args_obj && toolName === "shell_command") ? String(meta.args_obj.command || "") : "";
-	          let summary = "";
-	          if (toolName === "shell_command" && cmdFull) {
-	            const cmdSum = commandPreview(cmdFull, 140);
-	            summary = cmdSum ? `Ran ${cmdSum}` : "Ran shell_command";
-	            if (exitCode !== null && exitCode !== 0) summary += ` (exit ${exitCode})`;
-	          } else {
-	            if (toolName) summary = toolName;
-	            if (exitCode !== null && exitCode !== 0) summary = (summary ? summary + " " : "") + `exit ${exitCode}`;
-	            if (!summary) summary = firstMeaningfulLine(outputRaw) || "工具输出";
-	          }
-	          const showRaw = (String(outputBody || "").trim() !== String(outputRaw || "").trim());
-	          const runBlock = (toolName === "shell_command" && cmdFull) ? formatShellRun(cmdFull, outputBody, exitCode) : String(outputBody || "");
-	          body = `
-	            <details class="tool-card">
-	              <summary class="meta">工具输出（点击展开）: <code>${escapeHtml(summary)}</code></summary>
-	              ${runBlock ? `<pre class="code">${escapeHtml(runBlock)}</pre>` : ``}
-	              <details>
-	                <summary class="meta">详情</summary>
+		        if (kind === "tool_output") {
+		          const parsed = parseToolOutputText(msg.text || "");
+		          const callId = parsed.callId || "";
+		          const outputRaw = parsed.outputRaw || "";
+		          const meta = callId ? callIndex.get(callId) : null;
+		          const toolName = meta && meta.tool_name ? String(meta.tool_name) : "";
+		          const exitCode = extractExitCode(outputRaw);
+		          const wallTime = extractWallTime(outputRaw);
+		          const outputBody = extractOutputBody(outputRaw);
+		          const cmdFull = (meta && meta.args_obj && toolName === "shell_command") ? String(meta.args_obj.command || "") : "";
+		          const showRaw = (String(outputBody || "").trim() !== String(outputRaw || "").trim());
+		          const runBlock = (toolName === "shell_command" && cmdFull) ? formatShellRun(cmdFull, outputBody, exitCode) : String(outputBody || "");
+		          body = `
+		            <details class="tool-card">
+		              <summary class="meta">工具输出（点击展开）: <code>${escapeHtml(toolName || "tool")}</code>${(exitCode !== null && exitCode !== 0) ? ` <code>exit ${escapeHtml(exitCode)}</code>` : ``}</summary>
+		              ${runBlock ? `<pre class="code">${escapeHtml(runBlock)}</pre>` : ``}
+		              <details>
+		                <summary class="meta">详情</summary>
 	                <div class="tool-meta">
 	                  ${toolName ? `<span class="pill">工具：<code>${escapeHtml(toolName)}</code></span>` : ``}
 	                  ${callId ? `<span class="pill">call_id：<code>${escapeHtml(callId)}</code></span>` : ``}
