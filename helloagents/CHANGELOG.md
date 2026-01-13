@@ -28,3 +28,4 @@
 - 优化：消息时间戳统一按北京时间展示（不再额外显示 UTC 行）。
 - 优化：tool_call 默认折叠展示（点击展开），摘要更智能地跳过 `set -euo pipefail` 等 bash prologue。
 - 优化：tool_output 默认展示精简的 “Ran … + 关键输出摘要”，详情（call_id/Exit/耗时/原始输出）移入二级折叠，减少信息噪音。
+- 优化：对 Codex 的 “• Edited … (+x -y)” 改动摘要做结构化渲染（按文件分卡片、diff 行高亮、避免长行强制换行）。

@@ -351,7 +351,12 @@ _UI_HTML = """<!doctype html>
 	      .tool-head { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
 	      .pill { display:inline-block; padding:2px 8px; border-radius:999px; border:1px solid #e2e8f0; background:#fff; font-size:12px; }
 	      .tool-meta { display:flex; flex-wrap:wrap; gap:10px; margin-top: 6px; color:#555; font-size: 12px; }
-	      pre.code { background:#0b1020; color:#e5e7eb; padding: 10px; border-radius: 10px; overflow:auto; }
+	      pre.code { background:#0b1020; color:#e5e7eb; padding: 10px; border-radius: 10px; overflow:auto; white-space: pre; word-break: normal; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; line-height: 1.35; }
+	      pre.code .diff-line { display:block; padding: 0 6px; border-radius: 6px; }
+	      pre.code .diff-add { background: rgba(34, 197, 94, .16); }
+	      pre.code .diff-del { background: rgba(239, 68, 68, .16); }
+	      pre.code .diff-ellipsis { color:#94a3b8; }
+	      .change-head { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
 	    </style>
 	  </head>
 	  <body>
@@ -624,6 +629,98 @@ _UI_HTML = """<!doctype html>
 	        }
 	        return lines.join("\\n");
 	      }
+	
+	      function isCodexEditSummary(text) {
+	        const s = String(text ?? "");
+	        return /(^|\\n)•\\s+(Edited|Added|Deleted|Created|Updated|Removed)\\s+/m.test(s);
+	      }
+	
+	      function joinWrappedExcerptLines(lines) {
+	        const xs = Array.isArray(lines) ? lines.map(x => String(x ?? "")) : [];
+	        const out = [];
+	        for (const ln of xs) {
+	          const t = String(ln ?? "");
+	          const isContinuation = /^\\s{6,}\\S/.test(t) && !/^\\s*\\d+\\s/.test(t) && !/^\\s*\\(\\+/.test(t) && !/^\\s*•\\s+/.test(t);
+	          if (isContinuation && out.length > 0) {
+	            out[out.length - 1] = `${out[out.length - 1]} ${t.trim()}`;
+	          } else {
+	            out.push(t);
+	          }
+	        }
+	        return out;
+	      }
+	
+	      function parseCodexEditSummary(text) {
+	        const lines = String(text ?? "").split("\\n");
+	        const sections = [];
+	        let cur = null;
+	        const flush = () => { if (cur) sections.push(cur); cur = null; };
+	        for (const ln of lines) {
+	          const m = ln.match(/^•\\s+(Edited|Added|Deleted|Created|Updated|Removed)\\s+(.+?)\\s*$/);
+	          if (m) {
+	            flush();
+	            cur = { action: m[1], path: m[2], stats: \"\", excerpt: [] };
+	            continue;
+	          }
+	          if (cur && !cur.stats && /^\\(\\+\\d+\\s+-\\d+\\)\\s*$/.test(String(ln || \"\").trim())) {
+	            cur.stats = String(ln || \"\").trim();
+	            continue;
+	          }
+	          if (cur) cur.excerpt.push(ln);
+	        }
+	        flush();
+	        return sections;
+	      }
+	
+	      function actionZh(action) {
+	        const a = String(action || \"\");
+	        if (a === \"Edited\") return \"修改\";
+	        if (a === \"Added\" || a === \"Created\") return \"新增\";
+	        if (a === \"Deleted\" || a === \"Removed\") return \"删除\";
+	        if (a === \"Updated\") return \"更新\";
+	        return a;
+	      }
+	
+	      function diffClassForLine(ln) {
+	        const s = String(ln ?? \"\");
+	        const m = s.match(/^\\s*\\d+\\s+([+-])\\s/);
+	        if (m) return (m[1] === \"+\") ? \"diff-add\" : \"diff-del\";
+	        if (s.includes(\"⋮\") || s.includes(\"…\")) return \"diff-ellipsis\";
+	        return \"\";
+	      }
+	
+	      function renderDiffBlock(lines) {
+	        const xs = Array.isArray(lines) ? lines : [];
+	        const html = [];
+	        for (const ln of xs) {
+	          const cls = diffClassForLine(ln);
+	          html.push(`<span class=\"diff-line ${cls}\">${escapeHtml(ln)}</span>`);
+	        }
+	        return html.join(\"\\n\");
+	      }
+	
+	      function renderCodexEditSummary(text) {
+	        const sections = parseCodexEditSummary(text);
+	        if (!sections.length) return \"\";
+	        const blocks = [];
+	        for (const sec of sections) {
+	          const exJoined = joinWrappedExcerptLines(sec.excerpt);
+	          const exLines = normalizeNonEmptyLines(exJoined.join(\"\\n\"));
+	          const shown = excerptLines(exLines, 14).lines;
+	          const title = `${actionZh(sec.action)}: ${sec.path}`;
+	          blocks.push(`
+	            <details class=\"tool-card\">
+	              <summary class=\"meta\">改动（点击展开）: <code>${escapeHtml(title)}${sec.stats ? ` ${escapeHtml(sec.stats)}` : ``}</code></summary>
+	              <pre class=\"code\">${renderDiffBlock(shown)}</pre>
+	              <details>
+	                <summary class=\"meta\">原始文本</summary>
+	                <pre>${escapeHtml(text)}</pre>
+	              </details>
+	            </details>
+	          `);
+	        }
+	        return blocks.join(\"\\n\");
+	      }
 
 	      function extractExitCode(outputRaw) {
 	        const lines = String(outputRaw ?? "").split("\\n");
@@ -867,11 +964,16 @@ _UI_HTML = """<!doctype html>
 	        } else if (kind === "user_message") {
 	          body = `<pre><b>用户</b>\\n${escapeHtml(msg.text || "")}</pre>`;
 	        } else if (kind === "assistant_message") {
-          body = `<pre><b>回答</b>\\n${escapeHtml(msg.text || "")}</pre>`;
-        } else if (isThinking) {
-          body = `
-            ${showEn ? `<pre><b>思考（EN）</b>\\n${escapeHtml(msg.text || "")}</pre>` : ``}
-            ${showZh && hasZh ? `<pre><b>思考（ZH）</b>\\n${escapeHtml(zhText)}</pre>` : ``}
+	          const txt = String(msg.text || "");
+	          if (isCodexEditSummary(txt)) {
+	            body = renderCodexEditSummary(txt) || `<pre>${escapeHtml(txt)}</pre>`;
+	          } else {
+	            body = `<pre><b>回答</b>\\n${escapeHtml(txt)}</pre>`;
+	          }
+	        } else if (isThinking) {
+	          body = `
+	            ${showEn ? `<pre><b>思考（EN）</b>\\n${escapeHtml(msg.text || "")}</pre>` : ``}
+	            ${showZh && hasZh ? `<pre><b>思考（ZH）</b>\\n${escapeHtml(zhText)}</pre>` : ``}
           `;
         } else {
           // Fallback for unknown kinds.
