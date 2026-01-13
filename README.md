@@ -12,9 +12,8 @@ cd ~/src/codex-thinking-sidecar-zh
 打开：
 - `http://127.0.0.1:8787/ui`
 
-在 UI 里配置 `监视目录（CODEX_HOME）`，保存后点击“开始监听”。
+在 UI 里配置 `监视目录（CODEX_HOME）`，保存后点击“开始监听”；也可以启用“自动开始监听（UI）”省去手动点击。
 
 ## 说明
 - 默认翻译为占位实现（`stub`），不调用任何外部 API。
 - 你可以在 UI 里切换翻译 Provider（预留 `stub/none/http`）。
-

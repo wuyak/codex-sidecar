@@ -8,7 +8,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Set
+from typing import Dict, Iterable, List, Optional, Pattern, Set, Tuple
 
 from .translator import Translator
 
@@ -16,6 +16,7 @@ from .translator import Translator
 _ROLLOUT_RE = re.compile(
     r"^rollout-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-([0-9a-fA-F-]{36})\.jsonl$"
 )
+_PROC_ROOT = Path("/proc")
 
 
 def _latest_rollout_file(codex_home: Path) -> Optional[Path]:
@@ -39,6 +40,72 @@ def _parse_thread_id_from_filename(path: Path) -> Optional[str]:
 
 def _sha1_hex(s: str) -> str:
     return hashlib.sha1(s.encode("utf-8", errors="replace")).hexdigest()
+
+
+def _proc_list_pids() -> List[int]:
+    try:
+        names = os.listdir(str(_PROC_ROOT))
+    except Exception:
+        return []
+    out: List[int] = []
+    for n in names:
+        if not n.isdigit():
+            continue
+        try:
+            out.append(int(n))
+        except Exception:
+            continue
+    return out
+
+
+def _proc_read_cmdline(pid: int, max_bytes: int = 64 * 1024) -> str:
+    try:
+        raw = (_PROC_ROOT / str(pid) / "cmdline").read_bytes()
+    except Exception:
+        return ""
+    if not raw:
+        return ""
+    if len(raw) > max_bytes:
+        raw = raw[:max_bytes]
+    parts = [p for p in raw.split(b"\x00") if p]
+    try:
+        return " ".join(p.decode("utf-8", errors="replace") for p in parts)
+    except Exception:
+        return ""
+
+
+def _proc_read_ppid(pid: int) -> Optional[int]:
+    try:
+        txt = (_PROC_ROOT / str(pid) / "status").read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return None
+    for line in txt.splitlines():
+        if line.startswith("PPid:"):
+            v = (line.split(":", 1)[1] or "").strip()
+            try:
+                return int(v)
+            except Exception:
+                return None
+    return None
+
+
+def _proc_iter_fd_targets(pid: int) -> Iterable[str]:
+    fd_dir = _PROC_ROOT / str(pid) / "fd"
+    try:
+        entries = os.listdir(str(fd_dir))
+    except Exception:
+        return []
+    out: List[str] = []
+    for ent in entries:
+        p = fd_dir / ent
+        try:
+            target = os.readlink(str(p))
+        except Exception:
+            continue
+        if target.endswith(" (deleted)"):
+            target = target[: -len(" (deleted)")]
+        out.append(target)
+    return out
 
 
 @dataclass
@@ -68,6 +135,9 @@ class RolloutWatcher:
         poll_interval_s: float,
         file_scan_interval_s: float,
         include_agent_reasoning: bool,
+        follow_codex_process: bool = False,
+        codex_process_regex: str = "codex",
+        only_follow_when_process: bool = True,
     ) -> None:
         self._codex_home = codex_home
         self._ingest = ingest
@@ -76,6 +146,14 @@ class RolloutWatcher:
         self._poll_interval_s = max(0.05, float(poll_interval_s))
         self._file_scan_interval_s = max(0.2, float(file_scan_interval_s))
         self._include_agent_reasoning = include_agent_reasoning
+        self._follow_codex_process = bool(follow_codex_process)
+        self._only_follow_when_process = bool(only_follow_when_process)
+        self._codex_process_regex_raw = str(codex_process_regex or "codex")
+        self._codex_process_re: Optional[Pattern[str]] = None
+        try:
+            self._codex_process_re = re.compile(self._codex_process_regex_raw, flags=re.IGNORECASE)
+        except Exception:
+            self._codex_process_re = None
 
         self._current_file: Optional[Path] = None
         self._offset: int = 0
@@ -87,6 +165,10 @@ class RolloutWatcher:
         self._last_file_scan_ts = 0.0
         self._warned_missing = False
         self._last_error: str = ""
+        self._follow_mode: str = "legacy"  # legacy|process|fallback|idle
+        self._codex_detected: bool = False
+        self._codex_pids: List[int] = []
+        self._process_file: Optional[Path] = None
 
     def status(self) -> Dict[str, str]:
         return {
@@ -95,16 +177,24 @@ class RolloutWatcher:
             "offset": str(self._offset),
             "line_no": str(self._line_no),
             "last_error": self._last_error or "",
+            "follow_mode": self._follow_mode or "",
+            "codex_detected": "1" if self._codex_detected else "0",
+            "codex_pids": ",".join(str(x) for x in self._codex_pids[:8]),
+            "codex_process_regex": self._codex_process_regex_raw,
+            "process_file": str(self._process_file) if self._process_file is not None else "",
         }
 
     def run(self, stop_event) -> None:
         # Initial pick
         self._switch_to_latest_if_needed(force=True)
         if self._current_file is None and not self._warned_missing:
-            print(
-                f"[sidecar] 未找到会话文件：{self._codex_home}/sessions/**/rollout-*.jsonl",
-                file=sys.stderr,
-            )
+            if self._follow_mode == "idle":
+                print("[sidecar] 等待 Codex 进程（尚未开始跟随会话文件）", file=sys.stderr)
+            else:
+                print(
+                    f"[sidecar] 未找到会话文件：{self._codex_home}/sessions/**/rollout-*.jsonl",
+                    file=sys.stderr,
+                )
             self._warned_missing = True
         while not stop_event.is_set():
             now = time.time()
@@ -115,23 +205,173 @@ class RolloutWatcher:
             stop_event.wait(self._poll_interval_s)
 
     def _switch_to_latest_if_needed(self, force: bool) -> None:
-        latest = _latest_rollout_file(self._codex_home)
-        if latest is None:
+        picked = self._pick_follow_file()
+        if picked is None:
             return
-        if force or self._current_file is None or latest != self._current_file:
-            self._current_file = latest
-            self._thread_id = _parse_thread_id_from_filename(latest)
+        if force or self._current_file is None or picked != self._current_file:
+            self._current_file = picked
+            self._thread_id = _parse_thread_id_from_filename(picked)
             self._offset = 0
             self._line_no = 0
-            print(f"[sidecar] follow_file={latest}", file=sys.stderr)
+            print(f"[sidecar] follow_file={picked}", file=sys.stderr)
             if self._replay_last_lines > 0:
-                self._replay_tail(latest, self._replay_last_lines)
+                self._replay_tail(picked, self._replay_last_lines)
             else:
                 # Seek to end (follow only new writes)
                 try:
-                    self._offset = latest.stat().st_size
+                    self._offset = picked.stat().st_size
                 except Exception:
                     self._offset = 0
+
+    def _pick_follow_file(self) -> Optional[Path]:
+        """
+        选择要跟随的 rollout 文件。
+
+        在启用 follow_codex_process 时，优先级为：
+        1) 进程 FD 定位（更精准：正在写入的会话文件）
+        2) sessions 扫描最新文件（回退：用于“进程已启动但文件尚未打开/被发现”的窗口期）
+        3) 空闲（仅在 only_follow_when_process=true 且未检测到 Codex 时）
+        """
+        self._process_file = None
+        self._codex_detected = False
+        self._codex_pids = []
+
+        if not self._follow_codex_process:
+            self._follow_mode = "legacy"
+            self._last_error = ""
+            return _latest_rollout_file(self._codex_home)
+
+        detected, root_pids = self._detect_codex_processes()
+        self._codex_detected = detected
+        self._codex_pids = root_pids
+
+        if not detected:
+            self._follow_mode = "idle" if self._only_follow_when_process else "fallback"
+            if self._only_follow_when_process:
+                self._last_error = "wait_codex"
+                return None
+            self._last_error = ""
+            return _latest_rollout_file(self._codex_home)
+
+        # Codex 已检测到：优先从进程打开的 FD 中找当前会话文件。
+        tree = self._collect_process_tree(root_pids)
+        proc_file = self._find_rollout_opened_by_pids(tree)
+        if proc_file is not None:
+            self._follow_mode = "process"
+            self._process_file = proc_file
+            self._last_error = ""
+            return proc_file
+
+        # 进程存在但暂未定位到文件：回退到 sessions 最新文件（等待窗口期）。
+        latest = _latest_rollout_file(self._codex_home)
+        if latest is None:
+            self._follow_mode = "fallback"
+            self._last_error = "wait_rollout"
+            return None
+        self._follow_mode = "fallback"
+        self._last_error = ""
+        return latest
+
+    def _detect_codex_processes(self) -> Tuple[bool, List[int]]:
+        if self._codex_process_re is None:
+            return False, []
+        me = os.getpid()
+        hits: List[int] = []
+        for pid in _proc_list_pids():
+            if pid == me:
+                continue
+            cmd = _proc_read_cmdline(pid)
+            if not cmd:
+                continue
+            try:
+                if self._codex_process_re.search(cmd):
+                    hits.append(pid)
+            except Exception:
+                continue
+        hits.sort()
+        return (len(hits) > 0), hits
+
+    def _collect_process_tree(self, root_pids: List[int], max_pids: int = 512) -> List[int]:
+        """
+        从 root_pids 扩展子进程，形成进程树集合（用于覆盖“写入发生在子进程”的情况）。
+        """
+        roots = [p for p in root_pids if p > 0]
+        if not roots:
+            return []
+
+        # 每隔 file_scan_interval 扫描一次，成本可控。
+        all_pids = _proc_list_pids()
+        children: Dict[int, List[int]] = {}
+        for pid in all_pids:
+            ppid = _proc_read_ppid(pid)
+            if ppid is None:
+                continue
+            children.setdefault(ppid, []).append(pid)
+
+        out: List[int] = []
+        seen: Set[int] = set()
+        q: List[int] = list(roots)
+        while q and len(out) < max_pids:
+            pid = q.pop(0)
+            if pid in seen:
+                continue
+            seen.add(pid)
+            out.append(pid)
+            for c in children.get(pid, []):
+                if c not in seen:
+                    q.append(c)
+        return out
+
+    def _find_rollout_opened_by_pids(self, pids: List[int]) -> Optional[Path]:
+        sessions_root = (self._codex_home / "sessions").resolve()
+        candidates: List[Path] = []
+        for pid in pids:
+            for target in _proc_iter_fd_targets(pid):
+                if "rollout-" not in target or not target.endswith(".jsonl"):
+                    continue
+                try:
+                    p = Path(target)
+                except Exception:
+                    continue
+                # 限定为当前 watch_codex_home 下的 sessions 文件，避免误命中其它 jsonl。
+                try:
+                    _ = p.resolve().relative_to(sessions_root)
+                except Exception:
+                    continue
+                if not _ROLLOUT_RE.match(p.name):
+                    continue
+                try:
+                    if not p.exists():
+                        continue
+                except Exception:
+                    continue
+                candidates.append(p)
+
+        if not candidates:
+            return None
+
+        # 若当前已跟随文件仍在候选中，优先保持，避免在多个 FD 之间抖动切换。
+        if self._current_file is not None:
+            try:
+                cur = self._current_file.resolve()
+                for c in candidates:
+                    if c.resolve() == cur:
+                        return c
+            except Exception:
+                pass
+
+        best: Optional[Path] = None
+        best_mtime: float = -1.0
+        for c in candidates:
+            try:
+                st = c.stat()
+                mtime = float(st.st_mtime)
+            except Exception:
+                continue
+            if mtime > best_mtime:
+                best = c
+                best_mtime = mtime
+        return best
 
     def _read_tail_lines(self, path: Path, last_lines: int, max_bytes: int = 32 * 1024 * 1024) -> List[bytes]:
         """

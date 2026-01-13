@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from .config import SidecarConfig, load_config, save_config
+from .config import SidecarConfig, find_recoverable_translator_snapshot, load_config, save_config
 from .translator import HttpTranslator, NoneTranslator, StubTranslator, Translator
 from .watcher import HttpIngestClient, RolloutWatcher
 
@@ -63,6 +63,28 @@ class SidecarController:
     def apply_runtime_overrides(self, patch: Dict[str, Any]) -> Dict[str, Any]:
         return self._patch_config(patch, persist=False)
 
+    def recover_translator_config(self) -> Dict[str, Any]:
+        """
+        Recover translator config (HTTP profiles) from lastgood/backups.
+        """
+        snap, source = find_recoverable_translator_snapshot(self._config_home)
+        if not snap:
+            return {"ok": False, "error": "no_recovery_source"}
+
+        with self._lock:
+            cur = self._cfg.to_dict()
+            provider = str(snap.get("translator_provider") or cur.get("translator_provider") or "http").strip() or "http"
+            tc = snap.get("translator_config")
+            if not isinstance(tc, dict):
+                tc = {}
+            cur["translator_provider"] = provider
+            cur["translator_config"] = tc
+            # config_home is immutable (controls where the config is stored)
+            cur["config_home"] = str(self._config_home)
+            self._cfg = SidecarConfig.from_dict(cur)
+            save_config(self._config_home, self._cfg)
+            return {"ok": True, "restored": True, "source": source, "config": self._cfg.to_dict()}
+
     def _patch_config(self, patch: Dict[str, Any], persist: bool) -> Dict[str, Any]:
         with self._lock:
             cur = self._cfg.to_dict()
@@ -104,6 +126,9 @@ class SidecarController:
                 poll_interval_s=float(cfg.poll_interval),
                 file_scan_interval_s=float(cfg.file_scan_interval),
                 include_agent_reasoning=bool(cfg.include_agent_reasoning),
+                follow_codex_process=bool(getattr(cfg, "follow_codex_process", False)),
+                codex_process_regex=str(getattr(cfg, "codex_process_regex", "codex") or "codex"),
+                only_follow_when_process=bool(getattr(cfg, "only_follow_when_process", True)),
             )
             self._stop_event = stop_event
             self._watcher = watcher

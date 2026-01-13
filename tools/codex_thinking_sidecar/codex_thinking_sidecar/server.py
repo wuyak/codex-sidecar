@@ -116,6 +116,8 @@ class _Handler(BaseHTTPRequestHandler):
         body = _json_bytes(obj)
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Cache-Control", "no-store, max-age=0")
+        self.send_header("Pragma", "no-cache")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -159,7 +161,11 @@ class _Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/config":
-            self._send_json(HTTPStatus.OK, {"ok": True, "config": self._controller.get_config()})
+            cfg = self._controller.get_config()
+            payload = {"ok": True, "config": cfg}
+            if isinstance(cfg, dict):
+                payload.update(cfg)
+            self._send_json(HTTPStatus.OK, payload)
             return
 
         if path == "/api/status":
@@ -167,7 +173,16 @@ class _Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/translators":
-            self._send_json(HTTPStatus.OK, self._controller.translators())
+            payload = self._controller.translators()
+            try:
+                translators = payload.get("translators")
+                if isinstance(translators, list):
+                    for t in translators:
+                        if isinstance(t, dict) and "id" in t and "name" not in t:
+                            t["name"] = t["id"]
+            except Exception:
+                pass
+            self._send_json(HTTPStatus.OK, payload)
             return
 
         if path == "/ui":
@@ -224,6 +239,18 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         # Control plane (JSON).
+        if self.path == "/api/config/recover":
+            r = self._controller.recover_translator_config()
+            if not isinstance(r, dict) or not r.get("ok"):
+                self._send_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": "no_recovery_source"})
+                return
+            cfg = r.get("config")
+            payload = {"ok": True, "restored": True, "source": r.get("source") or "", "config": cfg}
+            if isinstance(cfg, dict):
+                payload.update(cfg)
+            self._send_json(HTTPStatus.OK, payload)
+            return
+
         if self.path == "/api/config":
             length = int(self.headers.get("Content-Length") or "0")
             raw = self.rfile.read(length) if length > 0 else b"{}"
@@ -236,7 +263,10 @@ class _Handler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "invalid_payload"})
                 return
             cfg = self._controller.update_config(obj)
-            self._send_json(HTTPStatus.OK, {"ok": True, "config": cfg})
+            payload = {"ok": True, "config": cfg}
+            if isinstance(cfg, dict):
+                payload.update(cfg)
+            self._send_json(HTTPStatus.OK, payload)
             return
 
         if self.path == "/api/control/start":
@@ -288,7 +318,9 @@ _UI_HTML = """<!doctype html>
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Codex Thinking Sidecar</title>
     <style>
-      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji"; margin: 16px; }
+      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji"; margin: 0; background:#fff; }
+      #sidebar { position: fixed; top: 16px; left: 16px; bottom: 16px; width: 260px; overflow: auto; border: 1px solid #ddd; border-radius: 12px; padding: 12px; background:#fff; }
+      #main { margin: 16px 16px 16px 292px; }
       .row { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin: 10px 0; }
       .meta { color: #555; font-size: 12px; }
       pre { white-space: pre-wrap; word-break: break-word; margin: 8px 0 0; }
@@ -296,8 +328,8 @@ _UI_HTML = """<!doctype html>
       .badge.kind-user_message, .badge.kind-user { background:#e0f2fe; }
       .badge.kind-assistant_message, .badge.kind-assistant { background:#dcfce7; }
       .badge.kind-tool_call, .badge.kind-tool_output { background:#fef9c3; }
-      .tabs { display:flex; gap:8px; flex-wrap:wrap; margin: 10px 0 14px; }
-      .tab { border: 1px solid #ddd; background:#fff; padding:6px 10px; border-radius: 999px; cursor:pointer; font-size: 12px; }
+      .tabs { display:flex; flex-direction:column; gap:6px; margin: 10px 0 0; }
+      .tab { border: 1px solid #ddd; background:#fff; padding:6px 10px; border-radius: 10px; cursor:pointer; font-size: 12px; text-align:left; width: 100%; }
       .tab.active { background:#111827; color:#fff; border-color:#111827; }
       .tab small { opacity: .75; }
       .grid { display:grid; grid-template-columns: 220px 1fr; gap: 8px 10px; align-items:center; margin-top: 10px; }
@@ -310,39 +342,58 @@ _UI_HTML = """<!doctype html>
     </style>
   </head>
   <body>
-    <h2>Codex Thinking Sidecar（旁路思考摘要）</h2>
-    <p class="meta">实时订阅：<code>/events</code>（SSE），最近数据：<code>/api/messages</code>，会话列表：<code>/api/threads</code></p>
-    <div class="row" id="control">
-      <div class="meta"><b>控制面板</b> <span class="muted">（建议：先保存配置，再点“开始监听”）</span></div>
-      <div class="grid">
-        <div class="meta">配置目录（只读）</div><div><input id="cfgHome" readonly /></div>
-        <div class="meta">监视目录（CODEX_HOME）</div><div><input id="watchHome" placeholder="/home/kino/.codex 或 /mnt/c/Users/.../.codex" /></div>
-        <div class="meta">回放行数</div><div><input id="replayLines" type="number" min="0" step="1" /></div>
-        <div class="meta">采集 agent_reasoning</div><div><select id="includeAgent"><option value="0">否</option><option value="1">是</option></select></div>
-        <div class="meta">显示模式</div><div><select id="displayMode"><option value="both">中英文对照</option><option value="zh">仅中文</option><option value="en">仅英文</option></select></div>
-        <div class="meta">poll_interval（秒）</div><div><input id="pollInterval" type="number" min="0.05" step="0.05" /></div>
-        <div class="meta">file_scan_interval（秒）</div><div><input id="scanInterval" type="number" min="0.2" step="0.1" /></div>
-        <div class="meta">翻译 Provider</div><div><select id="translator"></select></div>
-        <div class="meta">HTTP Profiles</div><div style="display:flex; gap:8px; align-items:center;"><select id="httpProfile" style="flex:1;"></select><button id="httpProfileAddBtn" type="button">新增</button><button id="httpProfileRenameBtn" type="button">重命名</button><button id="httpProfileDelBtn" type="button">删除</button></div>
-        <div class="meta">HTTP URL（仅 http/https）</div><div><input id="httpUrl" placeholder="https://api.deeplx.org/{token}/translate 或 http://127.0.0.1:9000/translate" /></div>
-        <div class="meta">HTTP Token（可选）</div><div><input id="httpToken" placeholder="可用于 Authorization 或替换 URL 中的 {token}" /></div>
-        <div class="meta">HTTP 超时（秒）</div><div><input id="httpTimeout" type="number" min="0.5" step="0.5" /></div>
-        <div class="meta">Auth ENV（可选）</div><div><input id="httpAuthEnv" placeholder="CODEX_TRANSLATE_TOKEN" /></div>
-      </div>
-      <div class="btns">
-        <button class="primary" id="saveBtn">保存配置</button>
-        <button class="primary" id="startBtn">开始监听</button>
-        <button id="stopBtn">停止监听</button>
-        <button class="danger" id="clearBtn">清空显示</button>
-        <span class="meta" id="statusText"></span>
-      </div>
+    <div id="sidebar">
+      <div class="meta"><b>会话切换</b></div>
+      <div id="tabs" class="tabs"></div>
     </div>
-    <div id="tabs" class="tabs"></div>
-    <div id="list"></div>
+    <div id="main">
+      <h2>Codex Thinking Sidecar（旁路思考摘要）</h2>
+      <p class="meta">实时订阅：<code>/events</code>（SSE），最近数据：<code>/api/messages</code>，会话列表：<code>/api/threads</code></p>
+      <div class="row" id="control">
+        <div class="meta"><b>控制面板</b> <span class="muted">（可选：启用“自动开始监听”，则无需手动点“开始监听”）</span></div>
+        <div class="grid">
+          <div class="meta">配置目录（只读）</div><div><input id="cfgHome" readonly /></div>
+          <div class="meta">监视目录（CODEX_HOME）</div><div><input id="watchHome" placeholder="/home/kino/.codex 或 /mnt/c/Users/.../.codex" /></div>
+          <div class="meta">自动开始监听（UI）</div><div><select id="autoStart"><option value="0">否</option><option value="1">是</option></select></div>
+          <div class="meta">基于 Codex 进程定位</div><div><select id="followProc"><option value="0">否</option><option value="1">是</option></select></div>
+          <div class="meta">仅在检测到进程时跟随</div><div><select id="onlyWhenProc"><option value="1">是</option><option value="0">否</option></select></div>
+          <div class="meta">Codex 进程匹配（regex）</div><div><input id="procRegex" placeholder="codex" /></div>
+          <div class="meta">回放行数</div><div><input id="replayLines" type="number" min="0" step="1" /></div>
+          <div class="meta">采集 agent_reasoning</div><div><select id="includeAgent"><option value="0">否</option><option value="1">是</option></select></div>
+          <div class="meta">显示模式</div><div><select id="displayMode"><option value="both">中英文对照</option><option value="zh">仅中文</option><option value="en">仅英文</option></select></div>
+          <div class="meta">poll_interval（秒）</div><div><input id="pollInterval" type="number" min="0.05" step="0.05" /></div>
+          <div class="meta">file_scan_interval（秒）</div><div><input id="scanInterval" type="number" min="0.2" step="0.1" /></div>
+          <div class="meta">翻译 Provider</div><div><select id="translator"></select></div>
+          <div class="meta">HTTP Profiles</div><div style="display:flex; gap:8px; align-items:center;"><select id="httpProfile" style="flex:1;"></select><button id="httpProfileAddBtn" type="button">新增</button><button id="httpProfileRenameBtn" type="button">重命名</button><button id="httpProfileDelBtn" type="button">删除</button></div>
+          <div class="meta">HTTP URL（仅 http/https）</div><div><input id="httpUrl" placeholder="https://api.deeplx.org/{token}/translate 或 http://127.0.0.1:9000/translate" /></div>
+          <div class="meta">HTTP Token（可选）</div><div><input id="httpToken" placeholder="可用于 Authorization 或替换 URL 中的 {token}" /></div>
+          <div class="meta">HTTP 超时（秒）</div><div><input id="httpTimeout" type="number" min="0.5" step="0.5" /></div>
+          <div class="meta">Auth ENV（可选）</div><div><input id="httpAuthEnv" placeholder="CODEX_TRANSLATE_TOKEN" /></div>
+        </div>
+        <div class="btns">
+          <button class="primary" id="saveBtn">保存配置</button>
+          <button id="recoverBtn">恢复配置</button>
+          <button class="primary" id="startBtn">开始监听</button>
+          <button id="stopBtn">停止监听</button>
+          <button class="danger" id="clearBtn">清空显示</button>
+          <span class="meta" id="statusText"></span>
+        </div>
+        <details id="debugDetails" style="margin-top:8px;">
+          <summary class="meta">调试信息（配置加载/缓存排查）</summary>
+          <pre id="debugText" class="meta" style="white-space:pre-wrap; user-select:text;"></pre>
+        </details>
+      </div>
+      <div id="list"></div>
+    </div>
     <script>
       const statusText = document.getElementById("statusText");
+      const debugText = document.getElementById("debugText");
       const cfgHome = document.getElementById("cfgHome");
       const watchHome = document.getElementById("watchHome");
+      const autoStart = document.getElementById("autoStart");
+      const followProc = document.getElementById("followProc");
+      const onlyWhenProc = document.getElementById("onlyWhenProc");
+      const procRegex = document.getElementById("procRegex");
       const replayLines = document.getElementById("replayLines");
       const includeAgent = document.getElementById("includeAgent");
       const displayMode = document.getElementById("displayMode");
@@ -358,6 +409,7 @@ _UI_HTML = """<!doctype html>
       const httpTimeout = document.getElementById("httpTimeout");
       const httpAuthEnv = document.getElementById("httpAuthEnv");
       const saveBtn = document.getElementById("saveBtn");
+      const recoverBtn = document.getElementById("recoverBtn");
       const startBtn = document.getElementById("startBtn");
       const stopBtn = document.getElementById("stopBtn");
       const clearBtn = document.getElementById("clearBtn");
@@ -369,6 +421,7 @@ _UI_HTML = """<!doctype html>
       const list = document.getElementById("list");
       let currentKey = "all";
       const threadIndex = new Map(); // key -> { key, thread_id, file, count, last_ts }
+      const callIndex = new Map(); // call_id -> { tool_name, args_raw, args_obj }
 
       function formatTs(ts) {
         if (!ts) return { utc: "", local: "" };
@@ -390,6 +443,110 @@ _UI_HTML = """<!doctype html>
         if (!s) return "";
         if (s.length <= 10) return s;
         return s.slice(0, 6) + "…" + s.slice(-4);
+      }
+
+      function escapeHtml(s) {
+        const str = String(s ?? "");
+        return str.replace(/[&<>"']/g, (ch) => {
+          if (ch === "&") return "&amp;";
+          if (ch === "<") return "&lt;";
+          if (ch === ">") return "&gt;";
+          if (ch === "\"") return "&quot;";
+          if (ch === "'") return "&#39;";
+          return ch;
+        });
+      }
+
+      function safeJsonParse(s) {
+        const raw = String(s ?? "").trim();
+        if (!raw) return null;
+        if (!(raw.startsWith("{") || raw.startsWith("["))) return null;
+        try { return JSON.parse(raw); } catch (e) { return null; }
+      }
+
+      function parseToolCallText(text) {
+        const lines = String(text ?? "").split("\\n");
+        const toolName = (lines[0] || "").trim();
+        let callId = "";
+        let idx = 1;
+        if ((lines[1] || "").startsWith("call_id=")) {
+          callId = (lines[1] || "").slice("call_id=".length).trim();
+          idx = 2;
+        }
+        const argsRaw = lines.slice(idx).join("\\n");
+        return { toolName, callId, argsRaw };
+      }
+
+      function parseToolOutputText(text) {
+        const lines = String(text ?? "").split("\\n");
+        let callId = "";
+        let idx = 0;
+        if ((lines[0] || "").startsWith("call_id=")) {
+          callId = (lines[0] || "").slice("call_id=".length).trim();
+          idx = 1;
+        }
+        // Defensive: 某些输出可能重复带 call_id 行；去掉前导的 call_id 行。
+        while ((lines[idx] || "").startsWith("call_id=")) idx += 1;
+        const outputRaw = lines.slice(idx).join("\\n");
+        return { callId, outputRaw };
+      }
+
+      function statusIcon(status) {
+        const s = String(status || "").toLowerCase();
+        if (s === "completed" || s === "done") return "✅";
+        if (s === "in_progress" || s === "running") return "▶";
+        if (s === "pending" || s === "todo") return "⏳";
+        if (s === "canceled" || s === "cancelled") return "🚫";
+        if (s === "failed" || s === "error") return "❌";
+        return "•";
+      }
+
+      function summarizeCommand(cmd, maxLen = 96) {
+        const line = String(cmd ?? "").split("\\n")[0].trim();
+        if (!line) return "";
+        if (line.length <= maxLen) return line;
+        return line.slice(0, Math.max(0, maxLen - 1)) + "…";
+      }
+
+      function extractExitCode(outputRaw) {
+        const lines = String(outputRaw ?? "").split("\\n");
+        for (const ln of lines) {
+          if (ln.startsWith("Exit code:")) {
+            const v = ln.split(":", 2)[1] || "";
+            const n = parseInt(v.trim(), 10);
+            return Number.isFinite(n) ? n : null;
+          }
+        }
+        return null;
+      }
+
+      function firstMeaningfulLine(s) {
+        const lines = String(s ?? "").split("\\n");
+        for (const ln of lines) {
+          const t = ln.trim();
+          if (!t) continue;
+          if (t.startsWith("call_id=")) continue;
+          return t;
+        }
+        return "";
+      }
+
+      function rolloutStampFromFile(filePath) {
+        try {
+          const base = (filePath || "").split("/").slice(-1)[0] || "";
+          const m = base.match(new RegExp("^rollout-(\\\\d{4}-\\\\d{2}-\\\\d{2})T(\\\\d{2}-\\\\d{2}-\\\\d{2})-"));
+          if (!m) return "";
+          return `${m[1]} ${String(m[2] || "").replace(/-/g, ":")}`;
+        } catch (e) {
+          return "";
+        }
+      }
+
+      function threadLabel(t) {
+        const stamp = rolloutStampFromFile(t.file || "");
+        const idPart = t.thread_id ? shortId(t.thread_id) : shortId(((t.file || "").split("/").slice(-1)[0]) || (t.key || ""));
+        if (stamp && idPart) return `${stamp} · ${idPart}`;
+        return idPart || stamp || "unknown";
       }
 
       function clearList() {
@@ -414,15 +571,21 @@ _UI_HTML = """<!doctype html>
         clearTabs();
         const allBtn = document.createElement("button");
         allBtn.className = "tab" + (currentKey === "all" ? " active" : "");
-        allBtn.textContent = `全部`;
+        allBtn.textContent = "全部";
         allBtn.onclick = async () => { currentKey = "all"; await refreshList(); };
         tabs.appendChild(allBtn);
 
         for (const t of items) {
           const btn = document.createElement("button");
           btn.className = "tab" + (currentKey === t.key ? " active" : "");
-          const label = t.thread_id ? shortId(t.thread_id) : (t.file ? shortId(t.file.split("/").slice(-1)[0]) : "unknown");
-          btn.innerHTML = `${label} <small>(${t.count || 0})</small>`;
+          const label = threadLabel(t);
+          const labelSpan = document.createElement("span");
+          labelSpan.textContent = label;
+          const small = document.createElement("small");
+          small.textContent = `(${t.count || 0})`;
+          btn.appendChild(labelSpan);
+          btn.appendChild(document.createTextNode(" "));
+          btn.appendChild(small);
           btn.title = t.thread_id || t.file || t.key;
           btn.onclick = async () => { currentKey = t.key; await refreshList(); };
           tabs.appendChild(btn);
@@ -446,27 +609,88 @@ _UI_HTML = """<!doctype html>
 
         let body = "";
         if (kind === "tool_output") {
-          const firstLine = (msg.text || "").split("\\n")[0] || "";
+          const parsed = parseToolOutputText(msg.text || "");
+          const callId = parsed.callId || "";
+          const outputRaw = parsed.outputRaw || "";
+          const meta = callId ? callIndex.get(callId) : null;
+          const toolName = meta && meta.tool_name ? String(meta.tool_name) : "";
+          const exitCode = extractExitCode(outputRaw);
+          let summary = "";
+          if (toolName) summary = toolName;
+          if (exitCode !== null) summary = (summary ? summary + " " : "") + `exit ${exitCode}`;
+          if (meta && meta.args_obj && toolName === "shell_command") {
+            const cmd = summarizeCommand(meta.args_obj.command || "");
+            if (cmd) summary = (summary ? summary + ": " : "") + cmd;
+          }
+          if (!summary) summary = firstMeaningfulLine(outputRaw) || "工具输出";
           body = `
             <details>
-              <summary class="meta">工具输出（点击展开）: <code>${firstLine}</code></summary>
-              <pre>${msg.text || ""}</pre>
+              <summary class="meta">工具输出（点击展开）: <code>${escapeHtml(summary)}</code></summary>
+              <div class="meta">${toolName ? `工具：<code>${escapeHtml(toolName)}</code> ` : ``}${callId ? `call_id：<code>${escapeHtml(callId)}</code>` : ``}</div>
+              <pre>${escapeHtml(outputRaw)}</pre>
             </details>
           `;
         } else if (kind === "tool_call") {
-          body = `<pre>${msg.text || ""}</pre>`;
+          const parsed = parseToolCallText(msg.text || "");
+          const toolName = parsed.toolName || "tool_call";
+          const callId = parsed.callId || "";
+          const argsRaw = parsed.argsRaw || "";
+          const argsObj = safeJsonParse(argsRaw);
+          if (callId) callIndex.set(callId, { tool_name: toolName, args_raw: argsRaw, args_obj: argsObj });
+
+          if (toolName === "update_plan" && argsObj && typeof argsObj === "object") {
+            const explanation = (typeof argsObj.explanation === "string") ? argsObj.explanation : "";
+            const plan = Array.isArray(argsObj.plan) ? argsObj.plan : [];
+            const lines = [];
+            for (const it of plan) {
+              if (!it || typeof it !== "object") continue;
+              const st = statusIcon(it.status);
+              const step = String(it.step || "").trim();
+              if (!step) continue;
+              lines.push(`${st} ${step}`);
+            }
+            body = `
+              <div class="meta"><b>更新计划</b>${callId ? ` <span class="muted">call_id：<code>${escapeHtml(callId)}</code></span>` : ``}</div>
+              ${explanation ? `<div class="meta" style="opacity:.9">explanation：${escapeHtml(explanation)}</div>` : ``}
+              ${lines.length ? `<pre>${escapeHtml(lines.join("\\n"))}</pre>` : `<pre>（无 plan 变更）</pre>`}
+              <details>
+                <summary class="meta">原始参数</summary>
+                <pre>${escapeHtml(argsRaw)}</pre>
+              </details>
+            `;
+          } else if (toolName === "shell_command" && argsObj && typeof argsObj === "object") {
+            const wd = String(argsObj.workdir || "").trim();
+            const cmd = String(argsObj.command || "");
+            const timeoutMs = argsObj.timeout_ms;
+            body = `
+              <div class="meta"><b>执行命令</b>${callId ? ` <span class="muted">call_id：<code>${escapeHtml(callId)}</code></span>` : ``}</div>
+              ${wd ? `<div class="meta">workdir：<code>${escapeHtml(wd)}</code></div>` : ``}
+              ${Number.isFinite(Number(timeoutMs)) ? `<div class="meta">timeout_ms：<code>${escapeHtml(timeoutMs)}</code></div>` : ``}
+              <pre>${escapeHtml(cmd)}</pre>
+              <details>
+                <summary class="meta">原始参数</summary>
+                <pre>${escapeHtml(argsRaw)}</pre>
+              </details>
+            `;
+          } else {
+            const pretty = argsObj ? JSON.stringify(argsObj, null, 2) : argsRaw;
+            body = `
+              <div class="meta"><b>工具调用</b>：<code>${escapeHtml(toolName)}</code>${callId ? ` <span class="muted">call_id：<code>${escapeHtml(callId)}</code></span>` : ``}</div>
+              <pre>${escapeHtml(pretty || "")}</pre>
+            `;
+          }
         } else if (kind === "user_message") {
-          body = `<pre><b>用户</b>\\n${msg.text || ""}</pre>`;
+          body = `<pre><b>用户</b>\\n${escapeHtml(msg.text || "")}</pre>`;
         } else if (kind === "assistant_message") {
-          body = `<pre><b>回答</b>\\n${msg.text || ""}</pre>`;
+          body = `<pre><b>回答</b>\\n${escapeHtml(msg.text || "")}</pre>`;
         } else if (isThinking) {
           body = `
-            ${showEn ? `<pre><b>思考（EN）</b>\\n${msg.text || ""}</pre>` : ``}
-            ${showZh && hasZh ? `<pre><b>思考（ZH）</b>\\n${zhText}</pre>` : ``}
+            ${showEn ? `<pre><b>思考（EN）</b>\\n${escapeHtml(msg.text || "")}</pre>` : ``}
+            ${showZh && hasZh ? `<pre><b>思考（ZH）</b>\\n${escapeHtml(zhText)}</pre>` : ``}
           `;
         } else {
           // Fallback for unknown kinds.
-          body = `<pre>${msg.text || ""}</pre>`;
+          body = `<pre>${escapeHtml(msg.text || "")}</pre>`;
         }
 
         row.innerHTML = `
@@ -487,6 +711,23 @@ _UI_HTML = """<!doctype html>
 
       function setStatus(s) {
         statusText.textContent = s || "";
+      }
+
+      function setDebug(s) {
+        if (!debugText) return;
+        debugText.textContent = s || "";
+      }
+
+      function fmtErr(e) {
+        try {
+          if (!e) return "unknown";
+          if (typeof e === "string") return e;
+          const msg = e.message ? String(e.message) : String(e);
+          const st = e.stack ? String(e.stack) : "";
+          return st ? `${msg}\n${st}` : msg;
+        } catch (_) {
+          return "unknown";
+        }
       }
 
       function showHttpFields(show) {
@@ -568,34 +809,70 @@ _UI_HTML = """<!doctype html>
       }
 
       async function api(method, url, body) {
-        const opts = { method, headers: { "Content-Type": "application/json; charset=utf-8" } };
+        const opts = { method, cache: "no-store", headers: { "Content-Type": "application/json; charset=utf-8" } };
         if (body !== undefined) opts.body = JSON.stringify(body);
         const resp = await fetch(url, opts);
         return await resp.json();
       }
 
       async function loadControl() {
+        const ts = Date.now();
+        let debugLines = [];
+        setDebug("");
+
+        // 1) Translators（容错：接口失败时仍展示默认三项，避免“下拉为空”）
+        let translators = [
+          { id: "stub", label: "Stub（占位）" },
+          { id: "none", label: "None（不翻译）" },
+          { id: "http", label: "HTTP（通用适配器）" },
+        ];
         try {
-          const tr = await fetch("/api/translators").then(r => r.json());
-          const translators = tr.translators || [];
+          const tr = await fetch(`/api/translators?t=${ts}`, { cache: "no-store" }).then(r => r.json());
+          const remote = Array.isArray(tr.translators) ? tr.translators : (Array.isArray(tr) ? tr : []);
+          if (remote.length > 0) translators = remote;
+        } catch (e) {
+          debugLines.push(`[warn] /api/translators: ${fmtErr(e)}`);
+        }
+        try {
           translatorSel.innerHTML = "";
           for (const t of translators) {
             const opt = document.createElement("option");
-            opt.value = t.id;
-            opt.textContent = t.label || t.id;
+            opt.value = t.id || t.name || "";
+            opt.textContent = t.label || t.id || t.name || "";
             translatorSel.appendChild(opt);
           }
+        } catch (e) {
+          debugLines.push(`[error] render translators: ${fmtErr(e)}`);
+        }
 
-          const c = await fetch("/api/config").then(r => r.json());
-          const cfg = c.config || {};
+        // 2) Config
+        let cfg = {};
+        try {
+          const c = await fetch(`/api/config?t=${ts}`, { cache: "no-store" }).then(r => r.json());
+          cfg = c.config || c || {};
+        } catch (e) {
+          debugLines.push(`[error] /api/config: ${fmtErr(e)}`);
+          cfg = {};
+        }
+
+        // 3) Apply config to UI（尽量继续，不让某个字段报错导致整体“全无”）
+        try {
           cfgHome.value = cfg.config_home || "";
           watchHome.value = cfg.watch_codex_home || "";
+          autoStart.value = cfg.auto_start ? "1" : "0";
+          followProc.value = cfg.follow_codex_process ? "1" : "0";
+          onlyWhenProc.value = (cfg.only_follow_when_process === false) ? "0" : "1";
+          procRegex.value = cfg.codex_process_regex || "codex";
           replayLines.value = cfg.replay_last_lines ?? 0;
           includeAgent.value = cfg.include_agent_reasoning ? "1" : "0";
           displayMode.value = (localStorage.getItem("codex_sidecar_display_mode") || "both");
           pollInterval.value = cfg.poll_interval ?? 0.5;
           scanInterval.value = cfg.file_scan_interval ?? 2.0;
-          translatorSel.value = cfg.translator_provider || "stub";
+          {
+            const want = cfg.translator_provider || "stub";
+            translatorSel.value = want;
+            if (translatorSel.value !== want) translatorSel.value = "stub";
+          }
           const tc = cfg.translator_config || {};
           {
             const normalized = normalizeHttpProfiles(tc || {});
@@ -604,26 +881,63 @@ _UI_HTML = """<!doctype html>
             refreshHttpProfileSelect();
             if (httpSelected) applyProfileToInputs(httpSelected);
           }
-
           showHttpFields((translatorSel.value || "") === "http");
+        } catch (e) {
+          debugLines.push(`[error] apply config: ${fmtErr(e)}`);
+        }
 
-          const st = await fetch("/api/status").then(r => r.json());
+        // 4) Status（运行态提示）
+        try {
+          const st = await fetch(`/api/status?t=${ts}`, { cache: "no-store" }).then(r => r.json());
           let hint = "";
           if (st.env && st.env.auth_env) {
             hint = st.env.auth_env_set ? `（已检测到 ${st.env.auth_env}）` : `（未设置环境变量 ${st.env.auth_env}）`;
           }
-          const cur = (st.watcher && st.watcher.current_file) ? st.watcher.current_file : "";
-          setStatus(st.running ? `运行中：${cur} ${hint}` : `未运行 ${hint}`);
+          const w = (st && st.watcher) ? st.watcher : {};
+          const cur = w.current_file || "";
+          const mode = w.follow_mode || "";
+          const detected = (w.codex_detected === "1");
+          const pids = w.codex_pids || "";
+          const procFile = w.process_file || "";
+          let detail = "";
+          if (mode === "idle") detail = "（等待 Codex 进程）";
+          else if (mode === "process") detail = pids ? `（process | pid:${pids}）` : "（process）";
+          else if (mode === "fallback") detail = detected && pids ? `（fallback | pid:${pids}）` : "（fallback）";
+          else if (mode) detail = `(${mode})`;
+          if (st.running) {
+            if (cur) setStatus(`运行中：${cur} ${detail} ${hint}`.trim());
+            else setStatus(`运行中：${detail} ${hint}`.trim());
+          } else {
+            setStatus(`未运行 ${hint}`.trim());
+          }
         } catch (e) {
-          setStatus("控制面板加载失败");
+          debugLines.push(`[warn] /api/status: ${fmtErr(e)}`);
         }
+
+        // 5) Debug summary（不打印 token/url）
+        try {
+          const profNames = (httpProfiles || []).map(p => (p && p.name) ? String(p.name) : "").filter(Boolean);
+          const cfgHomePath = String(cfg.config_home || "").replace(/\\/+$/, "");
+          const cfgFile = cfgHomePath ? `${cfgHomePath}/tmp/codex_thinking_sidecar.config.json` : "";
+          debugLines.unshift(
+            `config_home: ${cfg.config_home || ""}`,
+            `watch_codex_home: ${cfg.watch_codex_home || ""}`,
+            `config_file: ${cfgFile}`,
+            `translator_provider: ${cfg.translator_provider || ""}`,
+            `http_profiles: ${profNames.length}${profNames.length ? " (" + profNames.join(", ") + ")" : ""}`,
+            `http_selected: ${httpSelected || ""}`,
+          );
+        } catch (e) {
+          debugLines.push(`[warn] debug: ${fmtErr(e)}`);
+        }
+        if (debugLines.length) setDebug(debugLines.join("\\n"));
       }
 
       async function saveConfig() {
         const provider = translatorSel.value || "stub";
         let wasRunning = false;
         try {
-          const st = await fetch("/api/status").then(r => r.json());
+          const st = await fetch(`/api/status?t=${Date.now()}`, { cache: "no-store" }).then(r => r.json());
           wasRunning = !!(st && st.running);
         } catch (e) {}
         if (provider === "http") {
@@ -637,16 +951,19 @@ _UI_HTML = """<!doctype html>
         }
         const patch = {
           watch_codex_home: watchHome.value || "",
+          auto_start: autoStart.value === "1",
+          follow_codex_process: followProc.value === "1",
+          only_follow_when_process: onlyWhenProc.value === "1",
+          codex_process_regex: (procRegex.value || "codex").trim(),
           replay_last_lines: Number(replayLines.value || 0),
           include_agent_reasoning: includeAgent.value === "1",
           poll_interval: Number(pollInterval.value || 0.5),
           file_scan_interval: Number(scanInterval.value || 2.0),
           translator_provider: provider,
-          translator_config: (provider === "http") ? {
-            profiles: httpProfiles,
-            selected: httpSelected,
-          } : {},
         };
+        if (provider === "http") {
+          patch.translator_config = { profiles: httpProfiles, selected: httpSelected };
+        }
         await api("POST", "/api/config", patch);
         if (wasRunning) {
           // Config changes only take effect on watcher restart; prompt to apply immediately.
@@ -655,8 +972,26 @@ _UI_HTML = """<!doctype html>
             await api("POST", "/api/control/start");
           }
         }
+        if (!wasRunning && patch.auto_start) {
+          // 让“自动开始”在保存后即可生效（无需手动点开始）。
+          await api("POST", "/api/control/start");
+        }
         await loadControl();
         setStatus("已保存配置");
+      }
+
+      async function recoverConfig() {
+        if (!confirm("将从本机配置备份尝试恢复翻译 Profiles，并覆盖当前翻译配置。是否继续？")) return;
+        try {
+          const r = await api("POST", "/api/config/recover", {});
+          await loadControl();
+          const src = (r && r.source) ? `（${r.source}）` : "";
+          setStatus(`已恢复配置${src}`);
+        } catch (e) {
+          const msg = `恢复失败：${fmtErr(e)}`;
+          setStatus(msg);
+          setDebug(msg);
+        }
       }
 
       async function startWatch() {
@@ -674,6 +1009,7 @@ _UI_HTML = """<!doctype html>
       async function clearView() {
         await api("POST", "/api/control/clear");
         threadIndex.clear();
+        callIndex.clear();
         currentKey = "all";
         await refreshList();
         setStatus("已清空显示");
@@ -692,6 +1028,7 @@ _UI_HTML = """<!doctype html>
           const resp = await fetch(url);
           const data = await resp.json();
           const msgs = (data.messages || []);
+          callIndex.clear();
           clearList();
           const filtered = currentKey === "all" ? msgs : msgs.filter(m => keyOf(m) === currentKey);
           if (filtered.length === 0) renderEmpty();
@@ -771,12 +1108,32 @@ _UI_HTML = """<!doctype html>
         }
       });
       saveBtn.addEventListener("click", async () => { await saveConfig(); });
+      recoverBtn.addEventListener("click", async () => { await recoverConfig(); });
       startBtn.addEventListener("click", async () => { await startWatch(); });
       stopBtn.addEventListener("click", async () => { await stopWatch(); });
       clearBtn.addEventListener("click", async () => { await clearView(); });
 
-      loadControl();
-      bootstrap();
+      let bootAutoStarted = false;
+      async function maybeAutoStartOnce() {
+        if (bootAutoStarted) return;
+        bootAutoStarted = true;
+        try {
+          const ts = Date.now();
+          const c = await fetch(`/api/config?t=${ts}`, { cache: "no-store" }).then(r => r.json());
+          const cfg = c.config || c || {};
+          if (!cfg.auto_start) return;
+          const st = await fetch(`/api/status?t=${ts}`, { cache: "no-store" }).then(r => r.json());
+          if (st && st.running) return;
+          await api("POST", "/api/control/start");
+        } catch (e) {}
+      }
+
+      (async () => {
+        await loadControl();
+        await maybeAutoStartOnce();
+        await loadControl();
+        await bootstrap();
+      })();
       const es = new EventSource("/events");
       es.addEventListener("message", (ev) => {
         try {

@@ -65,6 +65,12 @@ open_browser() {
   fi
 }
 
+# 端口已被占用时，直接打开已有 UI（避免“报错但不知道去哪看”）。
+if curl -fsS --max-time 0.4 "${health_url}" >/dev/null 2>&1; then
+  open_browser "${ui_url}"
+  exit 0
+fi
+
 "${here}/tools/codex_thinking_sidecar/ui.sh" "$@" &
 pid="$!"
 

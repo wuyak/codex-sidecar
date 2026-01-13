@@ -4,6 +4,8 @@
 
 ## 2026-01
 - 202601131333_ui_order_and_full_turn_view
+- 202601131400_toolcall_tooloutput_pretty
+- 202601131314_auto_process_rollout_sidebar
 - 202601131151_siliconflow_translate_json
 - 202601131134_fix_empty_zh_and_ui_cache
 - 202601131123_display_modes_and_http_compat

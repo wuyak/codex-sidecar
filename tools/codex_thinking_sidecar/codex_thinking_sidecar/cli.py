@@ -46,6 +46,9 @@ def _parse_args(argv):
     p.add_argument("--poll-interval", type=float, default=0.5, help="轮询间隔秒数（默认: 0.5）")
     p.add_argument("--file-scan-interval", type=float, default=2.0, help="扫描最新会话文件的间隔秒数（默认: 2.0）")
     p.add_argument("--include-agent-reasoning", action="store_true", help="同时采集 event_msg.agent_reasoning（更实时但不如 summary 稳定）")
+    p.add_argument("--follow-codex-process", action="store_true", help="优先基于 Codex 进程定位当前 rollout 文件（WSL2/Linux）")
+    p.add_argument("--codex-process-regex", default=None, help="匹配 Codex 进程 cmdline 的正则（默认: codex）")
+    p.add_argument("--allow-follow-without-process", action="store_true", help="允许在未检测到 Codex 进程时仍按 sessions 扫描回退")
     p.add_argument("--ui", action="store_true", help="仅启动本地 UI/服务端，不自动开始监听（在 UI 里点“开始监听”）")
     p.add_argument("--no-server", action="store_true", help="不启动本地服务（仅推送到 --server-url）")
     p.add_argument("--server-url", default=None, help="将事件推送到已有服务端（如 http://127.0.0.1:8787）")
@@ -160,6 +163,12 @@ def main(argv=None) -> int:
                     patch["file_scan_interval"] = float(args.file_scan_interval)
                 if _argv_has("--include-agent-reasoning"):
                     patch["include_agent_reasoning"] = bool(args.include_agent_reasoning)
+                if _argv_has("--follow-codex-process"):
+                    patch["follow_codex_process"] = True
+                if _argv_has("--codex-process-regex"):
+                    patch["codex_process_regex"] = str(args.codex_process_regex or "codex")
+                if _argv_has("--allow-follow-without-process"):
+                    patch["only_follow_when_process"] = False
                 if patch:
                     controller.apply_runtime_overrides(patch)
                 controller.start()
@@ -176,6 +185,9 @@ def main(argv=None) -> int:
                 poll_interval_s=float(args.poll_interval),
                 file_scan_interval_s=float(args.file_scan_interval),
                 include_agent_reasoning=bool(args.include_agent_reasoning),
+                follow_codex_process=bool(args.follow_codex_process),
+                codex_process_regex=str(args.codex_process_regex or "codex"),
+                only_follow_when_process=not bool(args.allow_follow_without_process),
             )
             watcher.run(stop_event=stop_event)
     finally:

@@ -18,7 +18,11 @@
 ## 关键实现点
 - 只读解析 JSONL（不改写原始日志）
 - 轮询 + 增量读取（按 offset tail），支持启动时回放尾部 N 行
+- 可选：WSL2/Linux 下支持“进程优先定位”当前会话文件
+  - 扫描 `/proc/<pid>/fd`，优先锁定匹配到的 Codex 进程（及其子进程）正在写入的 `sessions/**/rollout-*.jsonl`
+  - 并保留 sessions 扫描作为回退（用于进程已启动但文件尚未被发现的窗口期）
 - UI 控制面：保存配置、开始/停止监听、清空显示
+- UI 会话切换：会话列表固定在左侧 sidebar，滚动到中后段也可随时切换
 - 翻译 Provider 可插拔并可在 UI 中切换：`stub/none/http`
 - `--include-agent-reasoning` 说明：
   - 该类型通常是“流式推理文本”，同一段内容可能重复出现（模型/客户端实现差异）。
@@ -28,6 +32,7 @@
 - UI 现在会展示更多事件类型：用户输入（`user_message`）、工具调用与输出（`tool_call` / `tool_output`）、最终回答（`assistant_message`）、思考摘要（`reasoning_summary`）。
 - 翻译策略：仅对“思考内容”（`reasoning_summary` / 可选 `agent_reasoning`）进行翻译；工具输出与最终回答不翻译。
 - 展示顺序：列表按时间从上到下（新内容在底部）；工具输出默认折叠展示。
+- tool_call/tool_output 会做友好格式化（例如 `update_plan` 计划分行、`shell_command` 命令块展示）；原始参数/输出仍可展开查看，便于排障。
 
 ## 运行方式（WSL 示例）
 - 推荐（短命令，先开 UI 再开始监听）：
@@ -44,6 +49,10 @@
   - `HTTP Profiles` 支持在 UI 中新增/删除/重命名配置。
   - DeepLX 等“token 在 URL 路径里”的接口：将 URL 写为 `https://api.deeplx.org/{token}/translate`，并在 `HTTP Token` 中填写 token，sidecar 会自动替换 `{token}`。
   - ⚠️ token 会随配置一起持久化到本机配置文件中；请勿把包含 token 的配置文件加入版本控制。
+- 为避免误操作丢失翻译配置，sidecar 会在保存前自动做本机备份：
+  - `codex_thinking_sidecar.config.json.lastgood`（最近一次“有效 HTTP Profiles”的快照）
+  - `codex_thinking_sidecar.config.json.bak-*`（保存前的时间戳备份，保留最近若干份）
+- 如遇到“Profiles 变空/配置丢失”，可在 UI 点击“恢复配置”从上述备份中自动恢复。
 
 ## UI 显示模式
 UI 支持三种显示模式：`中英文对照 / 仅中文 / 仅英文`（保存在浏览器 localStorage，不写入配置文件）。
