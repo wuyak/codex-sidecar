@@ -451,7 +451,7 @@ _UI_HTML = """<!doctype html>
           if (ch === "&") return "&amp;";
           if (ch === "<") return "&lt;";
           if (ch === ">") return "&gt;";
-          if (ch === "\"") return "&quot;";
+          if (ch === '"') return "&quot;";
           if (ch === "'") return "&#39;";
           return ch;
         });
