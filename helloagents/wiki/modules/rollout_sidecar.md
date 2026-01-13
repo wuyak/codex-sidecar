@@ -44,3 +44,10 @@ UI 支持三种显示模式：`中英文对照 / 仅中文 / 仅英文`（保存
 
 ## 配置生效提示
 sidecar 的监听线程启动时会读取一次配置；若在“已开始监听”状态下修改翻译配置，需重启监听后才会生效（UI 会提示是否重启）。
+
+## 硅基流动 translate.json 配置（免费优先）
+硅基流动的 translate.js 提供了 `translate.json`（表单提交）接口。sidecar 已对该接口做兼容：仍使用 `HTTP（通用适配器）`，仅需把 URL 指向 `translate.json`。
+
+- `HTTP URL`：`https://siliconflow.zvo.cn/translate.json?to=chinese_simplified`
+- `HTTP Token/Auth ENV`：留空
+- 语言参数：通过 URL query 传入 `to` / `from`（未传 `from` 默认 `auto`）

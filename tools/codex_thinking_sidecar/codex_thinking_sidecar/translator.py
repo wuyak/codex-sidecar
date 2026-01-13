@@ -48,18 +48,42 @@ class HttpTranslator:
         url = self.url
         if self.auth_token and "{token}" in url:
             url = url.replace("{token}", self.auth_token)
-        # Many community translation endpoints (e.g., DeepLX) use different field names.
-        # Send both variants for broader compatibility; servers can ignore unknown keys.
-        payload = {
-            "text": text,
-            "source": "en",
-            "target": "zh",
-            "source_lang": "EN",
-            "target_lang": "ZH",
-        }
-        data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        req = urllib.request.Request(url, data=data, method="POST")
-        req.add_header("Content-Type", "application/json; charset=utf-8")
+
+        parsed = urllib.parse.urlsplit(url)
+        base_url = urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
+        qs = urllib.parse.parse_qs(parsed.query or "")
+        is_translate_json = parsed.path.endswith("/translate.json") or parsed.path.endswith("translate.json")
+
+        if is_translate_json:
+            # SiliconFlow translate.js compatible endpoint:
+            # - POST application/x-www-form-urlencoded
+            # - text is a JSON array string: text=["..."]
+            # - returns: {"text":["..."], ...}
+            to_lang = (qs.get("to") or ["chinese_simplified"])[0] or "chinese_simplified"
+            from_lang = (qs.get("from") or ["auto"])[0] or "auto"
+            form = {
+                "to": to_lang,
+                "text": json.dumps([text], ensure_ascii=False),
+            }
+            if from_lang:
+                form["from"] = from_lang
+            data = urllib.parse.urlencode(form).encode("utf-8")
+            req = urllib.request.Request(base_url, data=data, method="POST")
+            req.add_header("Content-Type", "application/x-www-form-urlencoded; charset=utf-8")
+        else:
+            # Many community translation endpoints (e.g., DeepLX) use different field names.
+            # Send both variants for broader compatibility; servers can ignore unknown keys.
+            payload = {
+                "text": text,
+                "source": "en",
+                "target": "zh",
+                "source_lang": "EN",
+                "target_lang": "ZH",
+            }
+            data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+            req = urllib.request.Request(base_url, data=data, method="POST")
+            req.add_header("Content-Type", "application/json; charset=utf-8")
+
         token = (self.auth_token or "").strip()
         if not token and self.auth_env:
             token = (os.environ.get(self.auth_env) or "").strip()
@@ -85,6 +109,12 @@ class HttpTranslator:
 
             # Best-effort extraction across common shapes.
             if isinstance(obj, dict):
+                # translate.json: {"text":["..."]}
+                tlist = obj.get("text")
+                if isinstance(tlist, list) and tlist:
+                    first = tlist[0]
+                    if isinstance(first, str) and first.strip():
+                        return first
                 for k in ("text", "data", "result", "translation", "translated_text"):
                     v = obj.get(k)
                     if isinstance(v, str) and v.strip():

@@ -44,3 +44,13 @@ UI 支持三种显示模式：`中英文对照 / 仅中文 / 仅英文`，该选
 
 ## 配置生效时机
 监听线程启动时会读取一次配置；如果你在“已开始监听”的状态下修改翻译配置，UI 会提示是否重启监听以立即生效。
+
+## 硅基流动 translate.json（免费优先的简单方案）
+如果你想用硅基流动 translate.js 暴露的翻译接口（`application/x-www-form-urlencoded`），无需新增 Provider：直接使用 `HTTP（通用适配器）` 并把 URL 指向 `translate.json` 即可。
+
+- `HTTP URL`：`https://siliconflow.zvo.cn/translate.json?to=chinese_simplified`
+- `HTTP Token/Auth ENV`：留空
+
+可选参数（通过 URL query 传入）：
+- `to`：目标语言（例如 `chinese_simplified` / `chinese_traditional`）
+- `from`：源语言（默认 `auto`）
