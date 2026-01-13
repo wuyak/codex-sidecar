@@ -321,7 +321,11 @@ _UI_HTML = """<!doctype html>
 	      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji"; margin: 0; background:#fff; }
 	      #sidebar { position: fixed; top: 16px; left: 16px; bottom: 16px; width: 260px; overflow: auto; border: 1px solid #ddd; border-radius: 12px; padding: 12px; background:#fff; }
 	      #main { margin: 16px 16px 16px 292px; }
-	      .row { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin: 10px 0; }
+	      .row { border: 1px solid #ddd; border-left: 4px solid #e5e7eb; border-radius: 8px; padding: 12px; margin: 10px 0; }
+	      .row.kind-user_message { border-left-color:#38bdf8; }
+	      .row.kind-assistant_message { border-left-color:#4ade80; }
+	      .row.kind-tool_call, .row.kind-tool_output { border-left-color:#fbbf24; }
+	      .row.kind-reasoning_summary, .row.kind-agent_reasoning { border-left-color:#c4b5fd; }
 	      .meta { color: #555; font-size: 12px; }
 	      .meta-line { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
 	      .meta-line .timestamp { font-variant-numeric: tabular-nums; }
@@ -493,8 +497,8 @@ _UI_HTML = """<!doctype html>
         return { toolName, callId, argsRaw };
       }
 
-      function parseToolOutputText(text) {
-        const lines = String(text ?? "").split("\\n");
+	      function parseToolOutputText(text) {
+	        const lines = String(text ?? "").split("\\n");
         let callId = "";
         let idx = 0;
         if ((lines[0] || "").startsWith("call_id=")) {
@@ -504,8 +508,8 @@ _UI_HTML = """<!doctype html>
         // Defensive: 某些输出可能重复带 call_id 行；去掉前导的 call_id 行。
         while ((lines[idx] || "").startsWith("call_id=")) idx += 1;
         const outputRaw = lines.slice(idx).join("\\n");
-        return { callId, outputRaw };
-      }
+	        return { callId, outputRaw };
+	      }
 
       function statusIcon(status) {
         const s = String(status || "").toLowerCase();
@@ -537,6 +541,88 @@ _UI_HTML = """<!doctype html>
 	        if (!line) return "";
 	        if (line.length <= maxLen) return line;
 	        return line.slice(0, Math.max(0, maxLen - 1)) + "…";
+	      }
+	
+	      function commandPreview(cmd, maxLen = 220) {
+	        const lines = String(cmd ?? "").split("\\n");
+	        const skip = (t) => {
+	          const s = String(t || "").trim();
+	          if (!s) return true;
+	          if (s.startsWith("#!")) return true;
+	          if (s.startsWith("#")) return true;
+	          if (s.startsWith("set -")) return true;
+	          return false;
+	        };
+	        const kept = [];
+	        for (const ln of lines) {
+	          if (skip(ln)) continue;
+	          kept.push(String(ln || "").trim());
+	        }
+	        if (kept.length === 0) return summarizeCommand(cmd, maxLen);
+	        let s = kept[0];
+	        if (kept.length > 1) s += ` (… +${kept.length - 1} 行)`;
+	        if (s.length <= maxLen) return s;
+	        return s.slice(0, Math.max(0, maxLen - 1)) + "…";
+	      }
+	
+	      function wrapWords(text, width = 78) {
+	        const raw = String(text ?? "").trim();
+	        if (!raw) return [];
+	        const words = raw.split(/\\s+/).filter(Boolean);
+	        const out = [];
+	        let line = "";
+	        const push = () => { if (line) out.push(line); line = ""; };
+	        for (const w of words) {
+	          if (w.length > width) {
+	            push();
+	            for (let i = 0; i < w.length; i += width) out.push(w.slice(i, i + width));
+	            continue;
+	          }
+	          if (!line) { line = w; continue; }
+	          if ((line + " " + w).length <= width) line += " " + w;
+	          else { push(); line = w; }
+	        }
+	        push();
+	        return out;
+	      }
+	
+	      function normalizeNonEmptyLines(s) {
+	        const lines = String(s ?? "").split("\\n");
+	        // trim leading/trailing empties
+	        let a = 0;
+	        let b = lines.length;
+	        while (a < b && !String(lines[a] || "").trim()) a++;
+	        while (b > a && !String(lines[b - 1] || "").trim()) b--;
+	        return lines.slice(a, b).map(x => String(x ?? "").replace(/\\s+$/g, ""));
+	      }
+	
+	      function excerptLines(lines, maxLines = 6) {
+	        const xs = Array.isArray(lines) ? lines : [];
+	        if (xs.length <= maxLines) return { lines: xs, truncated: false };
+	        const head = xs.slice(0, 3);
+	        const tail = xs.slice(-3);
+	        return { lines: head.concat(["…（展开查看更多）"], tail), truncated: true };
+	      }
+	
+	      function formatShellRun(cmdFull, outputBody, exitCode) {
+	        const cmdOne = commandPreview(cmdFull, 400);
+	        const cmdWrap = wrapWords(cmdOne, 78);
+	        const outAll = normalizeNonEmptyLines(outputBody);
+	        const pick = (outAll.length > 0) ? excerptLines(outAll, 6).lines : [];
+	        const lines = [];
+	        if (cmdWrap.length > 0) {
+	          lines.push(`Ran ${cmdWrap[0]}`);
+	          for (let i = 1; i < cmdWrap.length; i++) lines.push(`  │ ${cmdWrap[i]}`);
+	        } else {
+	          lines.push("Ran shell_command");
+	        }
+	        if (pick.length > 0) {
+	          lines.push(`  └ ${pick[0]}`);
+	          for (let i = 1; i < pick.length; i++) lines.push(`     ${pick[i]}`);
+	        } else if (exitCode !== null && exitCode !== 0) {
+	          lines.push("  └ （无输出）");
+	        }
+	        return lines.join("\\n");
 	      }
 
 	      function extractExitCode(outputRaw) {
@@ -645,12 +731,17 @@ _UI_HTML = """<!doctype html>
         }
       }
 
-      function render(msg) {
-        const row = document.createElement("div");
-        row.className = "row";
-        const t = formatTs(msg.ts || "");
-        const kind = msg.kind || "";
-        const sid = msg.thread_id ? shortId(msg.thread_id) : (msg.file ? shortId((msg.file.split("/").slice(-1)[0] || msg.file)) : "");
+	      function render(msg) {
+	        const row = document.createElement("div");
+	        const t = formatTs(msg.ts || "");
+	        const kind = msg.kind || "";
+	        const kindClass = String(kind || "").replace(/[^a-z0-9_-]/gi, "-");
+	        row.className = "row" + (kindClass ? ` kind-${kindClass}` : "");
+	        try {
+	          const fullId = msg.thread_id || msg.file || "";
+	          row.title = fullId ? `${kind} ${fullId}` : String(kind || "");
+	        } catch (e) {}
+	        const sid = msg.thread_id ? shortId(msg.thread_id) : (msg.file ? shortId((msg.file.split("/").slice(-1)[0] || msg.file)) : "");
         const mode = (displayMode.value || "both");
         const isThinking = (kind === "reasoning_summary" || kind === "agent_reasoning");
         const showEn = !isThinking ? true : (mode !== "zh");
@@ -670,33 +761,39 @@ _UI_HTML = """<!doctype html>
 	          const exitCode = extractExitCode(outputRaw);
 	          const wallTime = extractWallTime(outputRaw);
 	          const outputBody = extractOutputBody(outputRaw);
-	          let summary = "";
-	          if (toolName) summary = toolName;
-	          if (exitCode !== null) summary = (summary ? summary + " " : "") + `exit ${exitCode}`;
-	          if (meta && meta.args_obj && toolName === "shell_command") {
-	            const cmd = summarizeCommand(meta.args_obj.command || "");
-	            if (cmd) summary = (summary ? summary + ": " : "") + cmd;
-	          }
-	          if (!summary) summary = firstMeaningfulLine(outputRaw) || "工具输出";
-	          const showRaw = (String(outputBody || "").trim() !== String(outputRaw || "").trim());
 	          const cmdFull = (meta && meta.args_obj && toolName === "shell_command") ? String(meta.args_obj.command || "") : "";
+	          let summary = "";
+	          if (toolName === "shell_command" && cmdFull) {
+	            const cmdSum = commandPreview(cmdFull, 140);
+	            summary = cmdSum ? `Ran ${cmdSum}` : "Ran shell_command";
+	            if (exitCode !== null && exitCode !== 0) summary += ` (exit ${exitCode})`;
+	          } else {
+	            if (toolName) summary = toolName;
+	            if (exitCode !== null && exitCode !== 0) summary = (summary ? summary + " " : "") + `exit ${exitCode}`;
+	            if (!summary) summary = firstMeaningfulLine(outputRaw) || "工具输出";
+	          }
+	          const showRaw = (String(outputBody || "").trim() !== String(outputRaw || "").trim());
+	          const runBlock = (toolName === "shell_command" && cmdFull) ? formatShellRun(cmdFull, outputBody, exitCode) : String(outputBody || "");
 	          body = `
 	            <details class="tool-card">
 	              <summary class="meta">工具输出（点击展开）: <code>${escapeHtml(summary)}</code></summary>
-	              <div class="tool-meta">
-	                ${toolName ? `<span class="pill">工具：<code>${escapeHtml(toolName)}</code></span>` : ``}
-	                ${callId ? `<span class="pill">call_id：<code>${escapeHtml(callId)}</code></span>` : ``}
-	                ${exitCode !== null ? `<span class="pill">Exit：<code>${escapeHtml(exitCode)}</code></span>` : ``}
-	                ${wallTime ? `<span class="pill">耗时：<code>${escapeHtml(wallTime)}</code></span>` : ``}
-	              </div>
-	              ${cmdFull ? `<pre class="code">${escapeHtml(cmdFull)}</pre>` : ``}
-	              <pre>${escapeHtml(outputBody)}</pre>
-	              ${showRaw ? `
-	                <details>
-	                  <summary class="meta">原始输出</summary>
-	                  <pre>${escapeHtml(outputRaw)}</pre>
-	                </details>
-	              ` : ``}
+	              ${runBlock ? `<pre class="code">${escapeHtml(runBlock)}</pre>` : ``}
+	              <details>
+	                <summary class="meta">详情</summary>
+	                <div class="tool-meta">
+	                  ${toolName ? `<span class="pill">工具：<code>${escapeHtml(toolName)}</code></span>` : ``}
+	                  ${callId ? `<span class="pill">call_id：<code>${escapeHtml(callId)}</code></span>` : ``}
+	                  ${exitCode !== null ? `<span class="pill">Exit：<code>${escapeHtml(exitCode)}</code></span>` : ``}
+	                  ${wallTime ? `<span class="pill">耗时：<code>${escapeHtml(wallTime)}</code></span>` : ``}
+	                </div>
+	                ${(toolName === "shell_command" && cmdFull) ? `<pre>${escapeHtml(cmdFull)}</pre>` : ``}
+	                ${showRaw ? `
+	                  <details>
+	                    <summary class="meta">原始输出</summary>
+	                    <pre>${escapeHtml(outputRaw)}</pre>
+	                  </details>
+	                ` : `<pre>${escapeHtml(outputBody)}</pre>`}
+	              </details>
 	            </details>
 	          `;
 	        } else if (kind === "tool_call") {
@@ -783,9 +880,7 @@ _UI_HTML = """<!doctype html>
 
 	        row.innerHTML = `
 	          <div class="meta meta-line">
-	            <span class="badge kind-${kind}">${escapeHtml(kind)}</span>
 	            <span class="timestamp">${escapeHtml(t.local || t.utc)}</span>
-	            ${sid ? `<span class="pill">${escapeHtml(sid)}</span>` : ``}
 	          </div>
 	          ${body}
 	        `;
