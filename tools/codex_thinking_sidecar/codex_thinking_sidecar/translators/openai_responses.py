@@ -89,6 +89,75 @@ def _extract_openai_responses_text(obj) -> str:
     return ""
 
 
+def _extract_openai_responses_text_from_sse(raw: bytes) -> str:
+    """
+    Some gateways may return Responses streaming (text/event-stream) even when `stream:false`.
+
+    We parse SSE `data:` lines (each should be a JSON object) and try to reconstruct
+    `output_text` from:
+      - response.output_text.delta / delta
+      - response.output_text.done / text
+      - response.completed / response (final object)
+    """
+    try:
+        text = raw.decode("utf-8", errors="replace")
+    except Exception:
+        return ""
+
+    deltas = []
+    final_text = ""
+    last_response = None
+
+    for ln in text.splitlines():
+        s = ln.strip()
+        if not s:
+            continue
+        if not s.startswith("data:"):
+            continue
+        payload = s[len("data:") :].strip()
+        if not payload or payload == "[DONE]":
+            continue
+        try:
+            obj = json.loads(payload)
+        except Exception:
+            continue
+        if not isinstance(obj, dict):
+            continue
+
+        # Some servers wrap the response object under `response`.
+        resp_obj = obj.get("response") if isinstance(obj.get("response"), dict) else None
+        if resp_obj is not None:
+            last_response = resp_obj
+
+        typ = str(obj.get("type") or "").strip()
+        if typ.endswith("output_text.delta"):
+            d = obj.get("delta")
+            if isinstance(d, str) and d:
+                deltas.append(d)
+                continue
+        if typ.endswith("output_text.done"):
+            t = obj.get("text")
+            if isinstance(t, str) and t.strip():
+                final_text = t.strip()
+                continue
+        if typ.endswith("completed") and isinstance(resp_obj, dict):
+            # Prefer extracting from final response object.
+            ft = _extract_openai_responses_text(resp_obj)
+            if isinstance(ft, str) and ft.strip():
+                final_text = ft.strip()
+                continue
+
+    if final_text:
+        return final_text
+    if deltas:
+        return "".join(deltas).strip()
+    if isinstance(last_response, dict):
+        ft = _extract_openai_responses_text(last_response)
+        if isinstance(ft, str) and ft.strip():
+            return ft.strip()
+    return ""
+
+
 def _format_openai_translate_error(url: str, auth_token: str, detail: str = "") -> str:
     safe = sanitize_url(url, auth_token)
     suffix = f" ({detail})" if detail else ""
@@ -190,6 +259,22 @@ class OpenAIResponsesTranslator:
             try:
                 obj = json.loads(raw.decode("utf-8", errors="replace"))
             except ValueError:
+                # Some gateways may return SSE even when `stream:false`.
+                if "text/event-stream" in (ctype or "").lower() or raw.lstrip().startswith(b"event:") or b"\ndata:" in raw:
+                    out = _extract_openai_responses_text_from_sse(raw)
+                    if isinstance(out, str) and out.strip():
+                        res = out.strip()
+                        if ck:
+                            try:
+                                self._cache[ck] = res
+                                while len(self._cache) > int(self.cache_size or 0):
+                                    self._cache.popitem(last=False)
+                            except Exception:
+                                pass
+                        return res
+                    self.last_error = _log_openai_translate_error(endpoint, auth_token=token, detail="sse_no_output_text")
+                    return ""
+
                 # If server returns plain text (non-JSON), try to use it.
                 try:
                     if "application/json" not in (ctype or "").lower():

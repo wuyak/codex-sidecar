@@ -87,3 +87,4 @@
 - 调整：保存配置后的“立即生效”改为直接复用右侧 🔄 的“重启 Sidecar”逻辑（更确定，不受 in-flight 翻译请求影响）。
 - 调整：right.codes（Codex 网关）默认模型改为 `gpt-5.1`（避免部分 ChatGPT 账号不支持 `gpt-4o-mini` 导致 400，同时较 `gpt-5.2` 更省）。
 - 新增：UI Markdown 渲染支持表格（pipe table），输入/输出里含 `|---|` 的表格会渲染为 HTML table。
+- 修复：兼容部分网关在 `stream:false` 时仍返回 `text/event-stream`（SSE）；翻译器会解析 SSE 事件并提取 `output_text`，避免把整段 `event: response.created ...` 原样展示到思考内容里。
