@@ -57,17 +57,33 @@ class SidecarController:
         with self._lock:
             return self._cfg.to_dict()
 
+    def recovery_info(self) -> Dict[str, Any]:
+        """
+        Return whether translator profiles are recoverable from local backups (without leaking secrets).
+        """
+        try:
+            with self._lock:
+                wh = Path(str(self._cfg.watch_codex_home or "")).expanduser()
+            snap, source = find_recoverable_translator_snapshot(self._config_home, watch_codex_home=wh)
+            return {"available": bool(snap), "source": source or ""}
+        except Exception:
+            return {"available": False, "source": ""}
+
     def update_config(self, patch: Dict[str, Any]) -> Dict[str, Any]:
-        return self._patch_config(patch, persist=True)
+        allow_empty = bool(patch.pop("__allow_empty_translator_config", False))
+        return self._patch_config(patch, persist=True, allow_empty_translator_config=allow_empty)
 
     def apply_runtime_overrides(self, patch: Dict[str, Any]) -> Dict[str, Any]:
-        return self._patch_config(patch, persist=False)
+        patch.pop("__allow_empty_translator_config", None)
+        return self._patch_config(patch, persist=False, allow_empty_translator_config=True)
 
     def recover_translator_config(self) -> Dict[str, Any]:
         """
-        Recover translator config (HTTP profiles) from lastgood/backups.
+        Recover translator config (HTTP profiles) from local backups (and legacy snapshots).
         """
-        snap, source = find_recoverable_translator_snapshot(self._config_home)
+        with self._lock:
+            wh = Path(str(self._cfg.watch_codex_home or "")).expanduser()
+        snap, source = find_recoverable_translator_snapshot(self._config_home, watch_codex_home=wh)
         if not snap:
             return {"ok": False, "error": "no_recovery_source"}
 
@@ -85,7 +101,31 @@ class SidecarController:
             save_config(self._config_home, self._cfg)
             return {"ok": True, "restored": True, "source": source, "config": self._cfg.to_dict()}
 
-    def _patch_config(self, patch: Dict[str, Any], persist: bool) -> Dict[str, Any]:
+    @staticmethod
+    def _count_valid_http_profiles(tc: Any) -> int:
+        if not isinstance(tc, dict):
+            return 0
+        profiles = tc.get("profiles")
+        if isinstance(profiles, list):
+            score = 0
+            for p in profiles:
+                if not isinstance(p, dict):
+                    continue
+                name = str(p.get("name") or "").strip()
+                url = str(p.get("url") or "").strip()
+                if not name or not url:
+                    continue
+                if not (url.startswith("http://") or url.startswith("https://")):
+                    continue
+                score += 1
+            return score
+        # Legacy single-url format
+        url = str(tc.get("url") or "").strip()
+        if url.startswith("http://") or url.startswith("https://"):
+            return 1
+        return 0
+
+    def _patch_config(self, patch: Dict[str, Any], persist: bool, allow_empty_translator_config: bool) -> Dict[str, Any]:
         with self._lock:
             cur = self._cfg.to_dict()
             # merge shallow
@@ -97,6 +137,19 @@ class SidecarController:
                 cur[k] = v
             # config_home is immutable (controls where the config is stored)
             cur["config_home"] = str(self._config_home)
+            # Guard: avoid accidentally clearing HTTP profiles (user can recover or switch provider).
+            try:
+                provider = str(cur.get("translator_provider") or "stub").strip().lower()
+                if provider == "http":
+                    tc = cur.get("translator_config") or {}
+                    if self._count_valid_http_profiles(tc) <= 0 and not allow_empty_translator_config:
+                        raise ValueError("empty_http_profiles")
+            except ValueError:
+                raise
+            except Exception:
+                # On unexpected validation errors, do not block saving.
+                pass
+
             self._cfg = SidecarConfig.from_dict(cur)
             if persist:
                 save_config(self._config_home, self._cfg)

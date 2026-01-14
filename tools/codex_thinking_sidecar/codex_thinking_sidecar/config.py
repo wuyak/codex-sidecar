@@ -1,7 +1,6 @@
 import json
 import os
 import tempfile
-import time
 from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
@@ -9,7 +8,7 @@ from typing import Any, Dict, Optional, Tuple
 
 @dataclass
 class SidecarConfig:
-    # Where config is stored (usually ~/.codex). Not necessarily the watched codex home.
+    # Where sidecar config is stored (NOT the watched Codex home).
     config_home: str
     # Which CODEX_HOME to watch for sessions/rollout jsonl.
     watch_codex_home: str
@@ -46,7 +45,7 @@ class SidecarConfig:
     @staticmethod
     def from_dict(d: Dict[str, Any]) -> "SidecarConfig":
         cfg_home = str(d.get("config_home") or "")
-        watch_home = str(d.get("watch_codex_home") or cfg_home)
+        watch_home = str(d.get("watch_codex_home") or _default_watch_codex_home())
         translator_config = d.get("translator_config")
         if not isinstance(translator_config, dict):
             translator_config = {}
@@ -71,11 +70,41 @@ class SidecarConfig:
         )
 
 
+def _default_watch_codex_home() -> str:
+    env = os.environ.get("CODEX_HOME")
+    if env:
+        return str(Path(env).expanduser())
+    return str(Path.home() / ".codex")
+
+
+def default_config_home() -> Path:
+    """
+    Where sidecar stores user-level config by default (XDG).
+    """
+    base = os.environ.get("XDG_CONFIG_HOME")
+    root = Path(base).expanduser() if base else (Path.home() / ".config")
+    return root / "codex-thinking-sidecar"
+
+
 def config_path(config_home: Path) -> Path:
-    return config_home / "tmp" / "codex_thinking_sidecar.config.json"
+    return config_home / "config.json"
+
+
+def backup_path(config_home: Path) -> Path:
+    p = config_path(config_home)
+    return p.with_name(p.name + ".bak")
+
+
+def _legacy_config_path(watch_codex_home: Path) -> Path:
+    return watch_codex_home / "tmp" / "codex_thinking_sidecar.config.json"
 
 
 def lastgood_path(config_home: Path) -> Path:
+    """
+    Legacy path kept for backward compatibility (no longer written by default).
+    """
+    # When config lived under CODEX_HOME/tmp:
+    #   codex_thinking_sidecar.config.json.lastgood
     return config_path(config_home).with_name("codex_thinking_sidecar.config.json.lastgood")
 
 
@@ -121,73 +150,59 @@ def _safe_write_text(path: Path, text: str) -> None:
         return
 
 
-def _backup_existing_config_file(p: Path, keep: int = 10) -> None:
+def _backup_existing_config_file(config_home: Path) -> None:
     """
-    Create timestamped backups before overwriting the config.
-
-    Backups are stored next to the config file:
-      codex_thinking_sidecar.config.json.bak-YYYYMMDDHHMMSS
+    Simple backup mechanism: keep 1 backup file next to config.json.
     """
+    p = config_path(config_home)
+    b = backup_path(config_home)
     try:
         if not p.exists():
             return
         raw = p.read_text(encoding="utf-8")
         if not raw.strip():
             return
-        ts = time.strftime("%Y%m%d%H%M%S", time.localtime())
-        bak = p.with_name(p.name + f".bak-{ts}")
-        _safe_write_text(bak, raw)
-
-        try:
-            backups = sorted(p.parent.glob(p.name + ".bak-*"), key=lambda x: x.stat().st_mtime, reverse=True)
-            for extra in backups[keep:]:
-                try:
-                    extra.unlink()
-                except Exception:
-                    pass
-        except Exception:
-            pass
+        _safe_write_text(b, raw)
     except Exception:
         return
 
 
-def _maybe_update_lastgood(config_home: Path, cfg_dict: Dict[str, Any], raw_text: Optional[str] = None) -> None:
-    try:
-        tc = cfg_dict.get("translator_config")
-        if not isinstance(tc, dict):
-            return
-        if _score_http_profiles(tc) <= 0:
-            return
-        lg = lastgood_path(config_home)
-        if raw_text is None:
-            raw_text = json.dumps(cfg_dict, ensure_ascii=False, indent=2) + "\n"
-        _safe_write_text(lg, raw_text)
-    except Exception:
-        return
-
-
-def find_recoverable_translator_snapshot(config_home: Path) -> Tuple[Optional[Dict[str, Any]], str]:
+def find_recoverable_translator_snapshot(
+    config_home: Path, watch_codex_home: Optional[Path] = None
+) -> Tuple[Optional[Dict[str, Any]], str]:
     """
     Find the best translator snapshot from:
-    - lastgood
-    - backups (newest first)
     - current config
+    - config backup (single file)
+    - legacy lastgood / backups / legacy config under CODEX_HOME/tmp
 
     Returns: (snapshot, source_path_str)
     snapshot = {"translator_provider": "...", "translator_config": {...}}
     """
-    p = config_path(config_home)
     candidates = []
-    lg = lastgood_path(config_home)
-    if lg.exists():
-        candidates.append(lg)
-    try:
-        backups = sorted(p.parent.glob(p.name + ".bak-*"), key=lambda x: x.stat().st_mtime, reverse=True)
-        candidates.extend(backups)
-    except Exception:
-        pass
+    p = config_path(config_home)
+    b = backup_path(config_home)
     if p.exists():
         candidates.append(p)
+    if b.exists():
+        candidates.append(b)
+
+    # Legacy sources (older versions stored config in CODEX_HOME/tmp)
+    try:
+        wh = watch_codex_home or Path(_default_watch_codex_home())
+        legacy = _legacy_config_path(wh)
+        lg = legacy.with_name(legacy.name + ".lastgood")
+        if lg.exists():
+            candidates.append(lg)
+        try:
+            backups = sorted(legacy.parent.glob(legacy.name + ".bak-*"), key=lambda x: x.stat().st_mtime, reverse=True)
+            candidates.extend(backups)
+        except Exception:
+            pass
+        if legacy.exists():
+            candidates.append(legacy)
+    except Exception:
+        pass
 
     best = None
     best_score = -1
@@ -220,7 +235,7 @@ def default_config(config_home: Path) -> SidecarConfig:
     cfg_home = str(config_home)
     return SidecarConfig(
         config_home=cfg_home,
-        watch_codex_home=cfg_home,
+        watch_codex_home=_default_watch_codex_home(),
         replay_last_lines=0,
         poll_interval=0.5,
         file_scan_interval=2.0,
@@ -242,16 +257,30 @@ def load_config(config_home: Path) -> SidecarConfig:
         obj = json.loads(raw)
         if isinstance(obj, dict):
             cfg = SidecarConfig.from_dict(obj)
-            if not cfg.config_home:
-                cfg.config_home = str(config_home)
+            # config_home is immutable (controls where the config is stored)
+            cfg.config_home = str(config_home)
             if not cfg.watch_codex_home:
-                cfg.watch_codex_home = cfg.config_home
-            # Keep a "last known good" snapshot for recovery.
-            try:
-                _maybe_update_lastgood(config_home, cfg.to_dict())
-            except Exception:
-                pass
+                cfg.watch_codex_home = _default_watch_codex_home()
             return cfg
+    except Exception:
+        pass
+
+    # First-run migration: try legacy config in CODEX_HOME/tmp if present.
+    try:
+        legacy = _legacy_config_path(Path(_default_watch_codex_home()))
+        if legacy.exists():
+            raw = legacy.read_text(encoding="utf-8")
+            obj = json.loads(raw)
+            if isinstance(obj, dict):
+                cfg = SidecarConfig.from_dict(obj)
+                cfg.config_home = str(config_home)
+                if not cfg.watch_codex_home:
+                    cfg.watch_codex_home = _default_watch_codex_home()
+                try:
+                    save_config(config_home, cfg)
+                except Exception:
+                    pass
+                return cfg
     except Exception:
         pass
     return default_config(config_home)
@@ -264,7 +293,7 @@ def save_config(config_home: Path, cfg: SidecarConfig) -> None:
     except Exception:
         return
     data = json.dumps(cfg.to_dict(), ensure_ascii=False, indent=2) + "\n"
-    _backup_existing_config_file(p)
+    _backup_existing_config_file(config_home)
     tmp_dir = p.parent if p.parent.exists() else Path(tempfile.gettempdir())
     try:
         fd, tmp_path = tempfile.mkstemp(prefix="codex_thinking_sidecar.", suffix=".tmp", dir=str(tmp_dir))
@@ -276,7 +305,3 @@ def save_config(config_home: Path, cfg: SidecarConfig) -> None:
             p.write_text(data, encoding="utf-8")
         except Exception:
             return
-    try:
-        _maybe_update_lastgood(config_home, cfg.to_dict(), raw_text=data)
-    except Exception:
-        return

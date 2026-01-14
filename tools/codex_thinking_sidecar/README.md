@@ -41,14 +41,17 @@ WSL/Linux：
 - 请勿在未审计的情况下将日志内容转发到第三方服务。
 
 ## 配置持久化与多翻译 API
-- UI 中点击“保存配置”会写入：`$CODEX_HOME/tmp/codex_thinking_sidecar.config.json`，下次启动会自动读取并沿用。
+- UI 中点击“保存配置”会写入用户级配置目录（XDG）：
+  - 默认：`$XDG_CONFIG_HOME/codex-thinking-sidecar/config.json`
+  - 常见路径：`~/.config/codex-thinking-sidecar/config.json`
+  下次启动会自动读取并沿用。
 - 当翻译 Provider 选择 `HTTP` 时，UI 支持 `HTTP Profiles`：可保存多个翻译 API 配置并手动切换（新增/删除）。
   - 对 DeepLX 这类“token 在 URL 路径里”的接口：可将 URL 写为 `https://api.deeplx.org/{token}/translate`，并在 `HTTP Token` 中填写 token，sidecar 会自动替换 `{token}`。
   - ⚠️ token 会随配置一起持久化到本机配置文件中；请勿把包含 token 的配置文件加入版本控制。
-- 为避免误操作丢失翻译配置，sidecar 会在保存前自动做本机备份：
-  - `codex_thinking_sidecar.config.json.lastgood`（最近一次“有效 HTTP Profiles”的快照）
-  - `codex_thinking_sidecar.config.json.bak-*`（保存前的时间戳备份，保留最近若干份）
-- 如遇到“Profiles 变空/配置丢失”，可在 UI 点击“恢复配置”从备份中自动恢复。
+- 为避免误操作丢失翻译配置，sidecar 会在保存前自动生成 1 份备份（覆盖式）：
+  - `config.json.bak`
+- 如遇到“Profiles 变空/配置丢失”，UI 会提示是否从备份恢复；也可手动点击“恢复配置”从备份中自动恢复。
+- 兼容说明：旧版本写入在 `CODEX_HOME/tmp/` 下的 `.lastgood` / `.bak-*` 仍会被纳入恢复候选来源（只读，不再继续写入）。
 
 ## 进程优先定位当前会话（WSL2/Linux，可选）
 默认的文件选择策略是扫描 `sessions/**/rollout-*.jsonl` 并跟随“最近修改”的文件。为了更精准地跟随“正在进行的会话”，可以启用进程优先定位：

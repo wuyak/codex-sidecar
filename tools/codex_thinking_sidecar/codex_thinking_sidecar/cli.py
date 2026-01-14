@@ -8,6 +8,7 @@ import time
 import urllib.request
 from pathlib import Path
 
+from .config import default_config_home
 from .controller import SidecarController
 from .server import SidecarServer
 from .translator import StubTranslator
@@ -39,6 +40,11 @@ def _parse_args(argv):
         description="旁路监听 Codex rollout JSONL，提取思考摘要并推送到本地服务端（含 SSE/UI）。",
     )
     p.add_argument("--codex-home", default=_default_codex_home(), help="Codex 数据目录（默认: $CODEX_HOME 或 ~/.codex）")
+    p.add_argument(
+        "--config-home",
+        default=str(default_config_home()),
+        help="Sidecar 配置目录（默认: $XDG_CONFIG_HOME/codex-thinking-sidecar 或 ~/.config/codex-thinking-sidecar）",
+    )
     p.add_argument("--host", default="127.0.0.1", help="本地服务监听地址（默认: 127.0.0.1）")
     p.add_argument("--port", type=int, default=8787, help="本地服务端口（默认: 8787）")
     p.add_argument("--max-messages", type=int, default=1000, help="内存中保留的最近消息条数（默认: 1000）")
@@ -60,6 +66,7 @@ def main(argv=None) -> int:
     args = _parse_args(raw_argv)
 
     codex_home = Path(args.codex_home).expanduser()
+    config_home = Path(args.config_home).expanduser()
     server_url = args.server_url
     lock_fh = None
     controller = None
@@ -73,8 +80,10 @@ def main(argv=None) -> int:
         try:
             import fcntl  # type: ignore
 
-            lock_dir = codex_home / "tmp"
-            if not lock_dir.exists():
+            lock_dir = config_home
+            try:
+                lock_dir.mkdir(parents=True, exist_ok=True)
+            except Exception:
                 lock_dir = Path(tempfile.gettempdir())
             lock_path = lock_dir / f"codex_thinking_sidecar.{args.port}.lock"
             lock_fh = open(lock_path, "a+", encoding="utf-8")
@@ -96,7 +105,7 @@ def main(argv=None) -> int:
 
         server_url = server_url or f"http://{args.host}:{args.port}"
         server = SidecarServer(host=args.host, port=args.port, max_messages=args.max_messages)
-        controller = SidecarController(config_home=codex_home, server_url=server_url, state=server.state)
+        controller = SidecarController(config_home=config_home, server_url=server_url, state=server.state)
         server.set_controller(controller)
         server.start_in_background()
 
@@ -104,6 +113,7 @@ def main(argv=None) -> int:
         print("ERROR: 必须提供 --server-url，或不要设置 --no-server。", file=sys.stderr)
         return 2
 
+    print(f"[sidecar] config_home={config_home}", file=sys.stderr)
     print(f"[sidecar] codex_home={codex_home}", file=sys.stderr)
     print(f"[sidecar] server_url={server_url}", file=sys.stderr)
 

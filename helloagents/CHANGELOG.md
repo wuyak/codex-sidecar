@@ -14,7 +14,7 @@
 - 优化：控制面板接口请求增加 cache-bust，API 响应标记为 no-store，避免浏览器缓存导致配置不刷新。
 - 优化：控制面板新增“调试信息”面板，显示配置来源/Profiles 概览与加载失败原因（不展示 token/url）。
 - 修复：保存配置时不再在 Provider≠HTTP 的情况下清空已保存的 HTTP Profiles，避免误操作导致配置丢失。
-- 新增：翻译配置自动备份（`codex_thinking_sidecar.config.json.bak-*` / `.lastgood`）与 UI 一键“恢复配置”。
+- 调整：配置持久化迁移到 XDG（`~/.config/codex-thinking-sidecar/config.json`），备份机制简化为单文件 `config.json.bak`；Profiles 为空时 UI 提示一键恢复，后端拒绝保存空 Profiles 以防误覆盖。
 - 诊断：HTTP 翻译失败时输出去敏后的告警日志（终端可见）。
 - 新增：HTTP 适配 `translate.json`（硅基流动 translate.js 形式，表单提交）。
 - 优化：UI 列表改为从上到下（新内容在底部），并展示用户输入/工具调用与输出/最终回答。

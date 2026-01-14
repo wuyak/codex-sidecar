@@ -162,7 +162,7 @@ class _Handler(BaseHTTPRequestHandler):
 
         if path == "/api/config":
             cfg = self._controller.get_config()
-            payload = {"ok": True, "config": cfg}
+            payload = {"ok": True, "config": cfg, "recovery": self._controller.recovery_info()}
             if isinstance(cfg, dict):
                 payload.update(cfg)
             self._send_json(HTTPStatus.OK, payload)
@@ -262,7 +262,11 @@ class _Handler(BaseHTTPRequestHandler):
             if not isinstance(obj, dict):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "invalid_payload"})
                 return
-            cfg = self._controller.update_config(obj)
+            try:
+                cfg = self._controller.update_config(obj)
+            except ValueError as e:
+                self._send_json(HTTPStatus.CONFLICT, {"ok": False, "error": str(e)})
+                return
             payload = {"ok": True, "config": cfg}
             if isinstance(cfg, dict):
                 payload.update(cfg)
@@ -648,18 +652,50 @@ _UI_HTML = """<!doctype html>
         wireToolToggles(row);
       }
 
-      function parseToolCallText(text) {
-        const lines = String(text ?? "").split("\\n");
-        const toolName = (lines[0] || "").trim();
-        let callId = "";
-        let idx = 1;
-        if ((lines[1] || "").startsWith("call_id=")) {
-          callId = (lines[1] || "").slice("call_id=".length).trim();
-          idx = 2;
-        }
-        const argsRaw = lines.slice(idx).join("\\n");
-        return { toolName, callId, argsRaw };
-      }
+	      function parseToolCallText(text) {
+	        const lines = String(text ?? "").split("\\n");
+	        const known = ["shell_command", "apply_patch", "view_image", "update_plan", "web_search_call"];
+
+	        let toolName = "";
+	        for (const ln of lines) {
+	          const t = String(ln ?? "").trim();
+	          if (!t) continue;
+	          toolName = t;
+	          break;
+	        }
+
+	        let callId = "";
+	        let callIdx = -1;
+	        for (let i = 0; i < lines.length; i++) {
+	          const t = String(lines[i] ?? "").trim();
+	          if (!t) continue;
+	          let m = t.match(/^call_id\\s*[=:\\uFF1A]\\s*([^\\s]+)\\s*$/);
+	          if (m) { callId = String(m[1] ?? "").trim(); callIdx = i; break; }
+	          m = t.match(/call_id\\s*[=:\\uFF1A]\\s*([A-Za-z0-9_-]+)/);
+	          if (m) { callId = String(m[1] ?? "").trim(); callIdx = i; break; }
+	        }
+
+	        // If the first line isn't a plain tool name (rare variants), try to detect known tool names.
+	        if (toolName && !known.includes(toolName) && (toolName.startsWith("tool_call") || toolName.includes("tool_call"))) {
+	          for (const k of known) {
+	            if (String(text ?? "").includes(k)) { toolName = k; break; }
+	          }
+	        }
+
+	        let idx = 1;
+	        if (callIdx >= 0) idx = callIdx + 1;
+	        // Prefer the first JSON-ish line after call_id (useful for "原始参数" variants).
+	        for (let i = idx; i < lines.length; i++) {
+	          const t = String(lines[i] ?? "").trimStart();
+	          if (!t) continue;
+	          if (t === "原始参数" || t === "参数") continue;
+	          if (t.startsWith("{") || t.startsWith("[")) { idx = i; break; }
+	          // Otherwise keep idx as-is.
+	          break;
+	        }
+	        const argsRaw = lines.slice(idx).join("\\n").trimEnd();
+	        return { toolName, callId, argsRaw };
+	      }
 
 	      function parseToolOutputText(text) {
 	        const lines = String(text ?? "").split("\\n");
@@ -1399,12 +1435,13 @@ _UI_HTML = """<!doctype html>
 		          const parsed = parseToolOutputText(msg.text || "");
 		          const callId = parsed.callId || "";
 		          const outputRaw = parsed.outputRaw || "";
-		          const meta = callId ? callIndex.get(callId) : null;
-		          const toolName = meta && meta.tool_name ? String(meta.tool_name) : "";
-			          const exitCode = extractExitCode(outputRaw);
-			          const outputBody = extractOutputBody(outputRaw);
-			          const cmdFull = (meta && meta.args_obj && toolName === "shell_command") ? String(meta.args_obj.command || "") : "";
-			          const argsRaw = (meta && meta.args_raw) ? String(meta.args_raw || "") : "";
+			          const meta = callId ? callIndex.get(callId) : null;
+			          const toolName = meta && meta.tool_name ? String(meta.tool_name) : "";
+			          if (toolName === "update_plan") return; // update_plan 已在 tool_call 里优雅展示，避免重复
+				          const exitCode = extractExitCode(outputRaw);
+				          const outputBody = extractOutputBody(outputRaw);
+				          const cmdFull = (meta && meta.args_obj && toolName === "shell_command") ? String(meta.args_obj.command || "") : "";
+				          const argsRaw = (meta && meta.args_raw) ? String(meta.args_raw || "") : "";
 		          const detailsId = ("tool_" + safeDomId((msg.id || callId || "") + "_details"));
 		          const summaryId = ("tool_" + safeDomId((msg.id || callId || "") + "_summary"));
 
@@ -1417,16 +1454,15 @@ _UI_HTML = """<!doctype html>
 		            runShort = formatShellRun(cmdFull, outputBody, exitCode);
 		            const runLong = formatShellRunExpanded(cmdFull, outputBody, exitCode);
 		            if (runLong && runLong !== runShort) expandedText = runLong;
-		          } else if (toolName === "apply_patch") {
-		            metaLeftExtra = `<span class="pill">工具输出</span><span class="pill"><code>${escapeHtml(toolName)}</code></span>`;
-		            runShort = formatApplyPatchRun(argsRaw, outputBody, 8);
-		            const runLong = formatApplyPatchRun(argsRaw, outputBody, 120);
-		            const parts = [];
-		            if (argsRaw.trim()) parts.push(argsRaw.trim());
-		            if (runLong && runLong.trim()) parts.push(runLong.trim());
-		            expandedText = parts.join("\\n\\n");
-		            if (expandedText.trim()) expandedHtml = renderDiffText(expandedText);
-		          } else if (toolName === "view_image") {
+			          } else if (toolName === "apply_patch") {
+			            metaLeftExtra = `<span class="pill">工具输出</span><span class="pill"><code>${escapeHtml(toolName)}</code></span>`;
+			            runShort = formatApplyPatchRun(argsRaw, outputBody, 8);
+			            expandedText = String(argsRaw || "").trim();
+			            if (!expandedText) {
+			              expandedText = formatApplyPatchRun(argsRaw, outputBody, 120);
+			            }
+			            if (expandedText.trim()) expandedHtml = renderDiffText(expandedText);
+			          } else if (toolName === "view_image") {
 		            metaLeftExtra = `<span class="pill">工具输出</span><span class="pill"><code>${escapeHtml(toolName)}</code></span>`;
 		            const p = (meta && meta.args_obj) ? String(meta.args_obj.path || "") : "";
 		            const base = (p.split(/[\\\\/]/).pop() || "").trim();
@@ -1671,17 +1707,31 @@ _UI_HTML = """<!doctype html>
         }
       }
 
-      async function api(method, url, body) {
-        const opts = { method, cache: "no-store", headers: { "Content-Type": "application/json; charset=utf-8" } };
-        if (body !== undefined) opts.body = JSON.stringify(body);
-        const resp = await fetch(url, opts);
-        return await resp.json();
-      }
+	      async function api(method, url, body) {
+	        const opts = { method, cache: "no-store", headers: { "Content-Type": "application/json; charset=utf-8" } };
+	        if (body !== undefined) opts.body = JSON.stringify(body);
+	        const resp = await fetch(url, opts);
+	        return await resp.json();
+	      }
 
-      async function loadControl() {
-        const ts = Date.now();
-        let debugLines = [];
-        setDebug("");
+	      function countValidHttpProfiles(profiles) {
+	        const xs = Array.isArray(profiles) ? profiles : [];
+	        let score = 0;
+	        for (const p of xs) {
+	          if (!p || typeof p !== "object") continue;
+	          const name = String(p.name || "").trim();
+	          const url = String(p.url || "").trim();
+	          if (!name || !url) continue;
+	          if (!(url.startsWith("http://") || url.startsWith("https://"))) continue;
+	          score += 1;
+	        }
+	        return score;
+	      }
+
+	      async function loadControl() {
+	        const ts = Date.now();
+	        let debugLines = [];
+	        setDebug("");
 
         // 1) Translators（容错：接口失败时仍展示默认三项，避免“下拉为空”）
         let translators = [
@@ -1708,19 +1758,22 @@ _UI_HTML = """<!doctype html>
           debugLines.push(`[error] render translators: ${fmtErr(e)}`);
         }
 
-        // 2) Config
-        let cfg = {};
-        try {
-          const c = await fetch(`/api/config?t=${ts}`, { cache: "no-store" }).then(r => r.json());
-          cfg = c.config || c || {};
-        } catch (e) {
-          debugLines.push(`[error] /api/config: ${fmtErr(e)}`);
-          cfg = {};
-        }
+	        // 2) Config
+	        let cfg = {};
+	        let recovery = {};
+	        try {
+	          const c = await fetch(`/api/config?t=${ts}`, { cache: "no-store" }).then(r => r.json());
+	          cfg = c.config || c || {};
+	          recovery = (c && typeof c === "object") ? (c.recovery || {}) : {};
+	        } catch (e) {
+	          debugLines.push(`[error] /api/config: ${fmtErr(e)}`);
+	          cfg = {};
+	          recovery = {};
+	        }
 
         // 3) Apply config to UI（尽量继续，不让某个字段报错导致整体“全无”）
-        try {
-          cfgHome.value = cfg.config_home || "";
+	        try {
+	          cfgHome.value = cfg.config_home || "";
           watchHome.value = cfg.watch_codex_home || "";
           autoStart.value = cfg.auto_start ? "1" : "0";
           followProc.value = cfg.follow_codex_process ? "1" : "0";
@@ -1736,18 +1789,35 @@ _UI_HTML = """<!doctype html>
             translatorSel.value = want;
             if (translatorSel.value !== want) translatorSel.value = "stub";
           }
-          const tc = cfg.translator_config || {};
-          {
-            const normalized = normalizeHttpProfiles(tc || {});
-            httpProfiles = normalized.profiles;
-            httpSelected = normalized.selected;
-            refreshHttpProfileSelect();
-            if (httpSelected) applyProfileToInputs(httpSelected);
-          }
-          showHttpFields((translatorSel.value || "") === "http");
-        } catch (e) {
-          debugLines.push(`[error] apply config: ${fmtErr(e)}`);
-        }
+	          const tc = cfg.translator_config || {};
+	          {
+	            const normalized = normalizeHttpProfiles(tc || {});
+	            httpProfiles = normalized.profiles;
+	            httpSelected = normalized.selected;
+	            refreshHttpProfileSelect();
+	            if (httpSelected) applyProfileToInputs(httpSelected);
+	          }
+	          showHttpFields((translatorSel.value || "") === "http");
+	        } catch (e) {
+	          debugLines.push(`[error] apply config: ${fmtErr(e)}`);
+	        }
+
+	        // 3.1) 提示恢复：Profiles 为空但存在可恢复备份（仅提示一次）
+	        try {
+	          if (!window.__sidecarRecoveryPrompted) window.__sidecarRecoveryPrompted = false;
+	          const provider = String(cfg.translator_provider || "").trim().toLowerCase();
+	          const canRecover = !!(recovery && typeof recovery === "object" && recovery.available);
+	          const valid = countValidHttpProfiles(httpProfiles);
+	          if (!window.__sidecarRecoveryPrompted && provider === "http" && valid <= 0 && canRecover) {
+	            window.__sidecarRecoveryPrompted = true;
+	            if (confirm("检测到翻译 HTTP Profiles 为空，但本机备份中存在可恢复配置。是否现在恢复？")) {
+	              await api("POST", "/api/config/recover", {});
+	              // 重新加载一次（避免 UI 状态与后端不一致）
+	              await loadControl();
+	              return;
+	            }
+	          }
+	        } catch (e) {}
 
         // 4) Status（运行态提示）
         try {
@@ -1777,43 +1847,64 @@ _UI_HTML = """<!doctype html>
           debugLines.push(`[warn] /api/status: ${fmtErr(e)}`);
         }
 
-        // 5) Debug summary（不打印 token/url）
-        try {
-          const profNames = (httpProfiles || []).map(p => (p && p.name) ? String(p.name) : "").filter(Boolean);
-          const cfgHomePath = String(cfg.config_home || "").replace(/\\/+$/, "");
-          const cfgFile = cfgHomePath ? `${cfgHomePath}/tmp/codex_thinking_sidecar.config.json` : "";
-          debugLines.unshift(
-            `config_home: ${cfg.config_home || ""}`,
-            `watch_codex_home: ${cfg.watch_codex_home || ""}`,
-            `config_file: ${cfgFile}`,
-            `translator_provider: ${cfg.translator_provider || ""}`,
-            `http_profiles: ${profNames.length}${profNames.length ? " (" + profNames.join(", ") + ")" : ""}`,
-            `http_selected: ${httpSelected || ""}`,
-          );
-        } catch (e) {
-          debugLines.push(`[warn] debug: ${fmtErr(e)}`);
-        }
+	        // 5) Debug summary（不打印 token/url）
+	        try {
+	          const profNames = (httpProfiles || []).map(p => (p && p.name) ? String(p.name) : "").filter(Boolean);
+	          const cfgHomePath = String(cfg.config_home || "").replace(/\\/+$/, "");
+	          const cfgFile = cfgHomePath ? `${cfgHomePath}/config.json` : "";
+	          const rAvail = (recovery && typeof recovery === "object" && recovery.available) ? "yes" : "no";
+	          const rSrc = (recovery && typeof recovery === "object" && recovery.source) ? String(recovery.source || "") : "";
+	          debugLines.unshift(
+	            `config_home: ${cfg.config_home || ""}`,
+	            `watch_codex_home: ${cfg.watch_codex_home || ""}`,
+	            `config_file: ${cfgFile}`,
+	            `recovery_available: ${rAvail}${rSrc ? " (" + rSrc + ")" : ""}`,
+	            `translator_provider: ${cfg.translator_provider || ""}`,
+	            `http_profiles: ${profNames.length}${profNames.length ? " (" + profNames.join(", ") + ")" : ""}`,
+	            `http_selected: ${httpSelected || ""}`,
+	          );
+	        } catch (e) {
+	          debugLines.push(`[warn] debug: ${fmtErr(e)}`);
+	        }
         if (debugLines.length) setDebug(debugLines.join("\\n"));
       }
 
-      async function saveConfig() {
-        const provider = translatorSel.value || "stub";
-        let wasRunning = false;
+	      async function saveConfig() {
+	        const provider = translatorSel.value || "stub";
+	        let wasRunning = false;
         try {
           const st = await fetch(`/api/status?t=${Date.now()}`, { cache: "no-store" }).then(r => r.json());
           wasRunning = !!(st && st.running);
         } catch (e) {}
-        if (provider === "http") {
-          if (!httpSelected && httpProfiles.length > 0) httpSelected = httpProfiles[0].name || "";
-          if (!httpSelected) httpSelected = "默认";
-          upsertSelectedProfileFromInputs();
-          if (httpProfiles.length === 0) {
-            httpProfiles = [{ name: httpSelected, ...readHttpInputs() }];
-          }
-          refreshHttpProfileSelect();
-        }
-        const patch = {
-          watch_codex_home: watchHome.value || "",
+	        if (provider === "http") {
+	          if (!httpSelected && httpProfiles.length > 0) httpSelected = httpProfiles[0].name || "";
+	          if (!httpSelected) httpSelected = "默认";
+	          upsertSelectedProfileFromInputs();
+	          refreshHttpProfileSelect();
+	        }
+	        if (provider === "http") {
+	          // Guard: do not allow saving empty/invalid profiles (protect against accidental wipe).
+	          const valid = countValidHttpProfiles(httpProfiles);
+	          if (valid <= 0) {
+	            // Try recover first if available
+	            try {
+	              const c = await fetch(`/api/config?t=${Date.now()}`, { cache: "no-store" }).then(r => r.json());
+	              const rec = (c && typeof c === "object") ? (c.recovery || {}) : {};
+	              if (rec && rec.available) {
+	                if (confirm("当前没有可用的 HTTP Profiles。是否从本机备份恢复？")) {
+	                  await api("POST", "/api/config/recover", {});
+	                  await loadControl();
+	                  setStatus("已恢复配置");
+	                  return;
+	                }
+	              }
+	            } catch (e) {}
+	            alert("请至少保留 1 个可用的 HTTP Profile（需要 name + http/https URL），或切换翻译 Provider。");
+	            return;
+	          }
+	        }
+	        const patch = {
+	          watch_codex_home: watchHome.value || "",
           auto_start: autoStart.value === "1",
           follow_codex_process: followProc.value === "1",
           only_follow_when_process: onlyWhenProc.value === "1",
@@ -1824,16 +1915,25 @@ _UI_HTML = """<!doctype html>
           file_scan_interval: Number(scanInterval.value || 2.0),
           translator_provider: provider,
         };
-        if (provider === "http") {
-          patch.translator_config = { profiles: httpProfiles, selected: httpSelected };
-        }
-        await api("POST", "/api/config", patch);
-        if (wasRunning) {
-          // Config changes only take effect on watcher restart; prompt to apply immediately.
-          if (confirm("已保存配置。需要重启监听使新配置生效吗？")) {
-            await api("POST", "/api/control/stop");
-            await api("POST", "/api/control/start");
-          }
+	        if (provider === "http") {
+	          patch.translator_config = { profiles: httpProfiles, selected: httpSelected };
+	        }
+	        const saved = await api("POST", "/api/config", patch);
+	        if (saved && saved.ok === false) {
+	          const err = String(saved.error || "");
+	          if (err === "empty_http_profiles") {
+	            alert("保存被拒绝：HTTP Profiles 为空/不可用。可点击“恢复配置”从备份找回。");
+	          } else {
+	            alert(`保存失败：${err || "unknown_error"}`);
+	          }
+	          return;
+	        }
+	        if (wasRunning) {
+	          // Config changes only take effect on watcher restart; prompt to apply immediately.
+	          if (confirm("已保存配置。需要重启监听使新配置生效吗？")) {
+	            await api("POST", "/api/control/stop");
+	            await api("POST", "/api/control/start");
+	          }
         }
         if (!wasRunning && patch.auto_start) {
           // 让“自动开始”在保存后即可生效（无需手动点开始）。

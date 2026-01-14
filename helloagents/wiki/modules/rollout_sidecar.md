@@ -55,16 +55,18 @@
   - `cd ~/src/codex-thinking-sidecar-zh && ./run.sh --codex-home "$HOME/.codex" --port 8787 --replay-last-lines 5000 --include-agent-reasoning`
 
 ## 配置持久化与多翻译 Profiles
-- UI 中点击“保存配置”会将配置写入：`$CODEX_HOME/tmp/codex_thinking_sidecar.config.json`。
+- UI 中点击“保存配置”会将配置写入用户级配置目录（XDG）：
+  - 默认：`$XDG_CONFIG_HOME/codex-thinking-sidecar/config.json`
+  - 常见路径：`~/.config/codex-thinking-sidecar/config.json`
 - 下次启动 `./ui.sh` 或 `./run.sh` 时会自动读取并沿用已保存配置（`./run.sh` 会立即开始监听）。
 - 当翻译 Provider 选择 `HTTP` 时，可在 `HTTP Profiles` 中保存多个翻译 API 配置并手动切换（支持新增/删除）。
   - `HTTP Profiles` 支持在 UI 中新增/删除/重命名配置。
   - DeepLX 等“token 在 URL 路径里”的接口：将 URL 写为 `https://api.deeplx.org/{token}/translate`，并在 `HTTP Token` 中填写 token，sidecar 会自动替换 `{token}`。
   - ⚠️ token 会随配置一起持久化到本机配置文件中；请勿把包含 token 的配置文件加入版本控制。
-- 为避免误操作丢失翻译配置，sidecar 会在保存前自动做本机备份：
-  - `codex_thinking_sidecar.config.json.lastgood`（最近一次“有效 HTTP Profiles”的快照）
-  - `codex_thinking_sidecar.config.json.bak-*`（保存前的时间戳备份，保留最近若干份）
-- 如遇到“Profiles 变空/配置丢失”，可在 UI 点击“恢复配置”从上述备份中自动恢复。
+- 为避免误操作丢失翻译配置，sidecar 会在保存前自动生成 1 份备份（覆盖式）：
+  - `config.json.bak`
+- 如遇到“Profiles 变空/配置丢失”，UI 会提示是否从备份恢复；也可手动点击“恢复配置”。
+- 兼容说明：旧版本写入在 `CODEX_HOME/tmp/` 下的 `.lastgood` / `.bak-*` 仍会被纳入恢复候选来源（只读，不再继续写入）。
 
 ## UI 显示模式
 UI 支持三种显示模式：`中英文对照 / 仅中文 / 仅英文`（保存在浏览器 localStorage，不写入配置文件）。
