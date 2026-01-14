@@ -610,10 +610,19 @@ _UI_HTML = """<!doctype html>
               let el = null;
               try { el = document.getElementById(id); } catch (_) {}
               if (!el) return;
-              const nowHidden = !el.classList.contains("hidden");
-              if (nowHidden) el.classList.add("hidden");
+              const swapId = btn.getAttribute("data-swap") || "";
+              let swapEl = null;
+              if (swapId) {
+                try { swapEl = document.getElementById(swapId); } catch (_) {}
+              }
+              const willHide = !el.classList.contains("hidden");
+              if (willHide) el.classList.add("hidden");
               else el.classList.remove("hidden");
-              btn.textContent = nowHidden ? "详情" : "收起";
+              if (swapEl) {
+                if (willHide) swapEl.classList.remove("hidden");
+                else swapEl.classList.add("hidden");
+              }
+              btn.textContent = willHide ? "详情" : "收起";
             };
           } catch (_) {}
         }
@@ -748,18 +757,42 @@ _UI_HTML = """<!doctype html>
 	      function wrapCommandForDisplay(cmdOne, width = 78) {
 	        const raw = String(cmdOne ?? "").trim();
 	        if (!raw) return [];
-	        const base = wrapWords(raw, width);
-	        if (base.length > 1) return base;
-	        // Prefer breaking at "||" for readability, even if not over width.
 	        const words = raw.split(/\\s+/).filter(Boolean);
-	        const idx = words.indexOf("||");
-	        if (idx === -1 || idx >= words.length - 1) return base;
-	        // Keep "|| true" on the continuation line, like Codex CLI.
-	        const a = words.slice(0, idx).join(" ");
-	        const b = words.slice(idx).join(" ");
-	        const aa = wrapWords(a, width);
-	        const bb = wrapWords(b, width);
-	        return aa.concat(bb);
+	        const splitTokens = (xs, sep) => {
+	          const out = [];
+	          let cur = [];
+	          for (const w of xs) {
+	            if (w === sep) {
+	              if (cur.length) out.push(cur);
+	              cur = [w];
+	              continue;
+	            }
+	            cur.push(w);
+	          }
+	          if (cur.length) out.push(cur);
+	          return out;
+	        };
+
+	        // Prefer breaking at control operators/pipes for readability.
+	        let segs = [words];
+	        for (const sep of ["||", "&&", "|"]) {
+	          const next = [];
+	          for (const seg of segs) {
+	            if (seg.includes(sep)) next.push(...splitTokens(seg, sep));
+	            else next.push(seg);
+	          }
+	          segs = next;
+	        }
+
+	        const lines = [];
+	        for (const seg of segs) {
+	          const s = seg.join(" ").trim();
+	          if (!s) continue;
+	          const wrapped = wrapWords(s, width);
+	          for (const w of wrapped) lines.push(w);
+	        }
+	        if (lines.length) return lines;
+	        return wrapWords(raw, width);
 	      }
 	
 	      function wrapTreeContent(line, width = 74) {
@@ -776,6 +809,13 @@ _UI_HTML = """<!doctype html>
 	        }
 	        if (rest) out.push(rest);
 	        return out;
+	      }
+
+	      function normalizeTreeLine(line) {
+	        const s = String(line ?? "");
+	        // Reduce ugly indentation for typical `nl -ba` / line-numbered outputs.
+	        if (/^\\s+\\d+(\\s|$)/.test(s)) return s.replace(/^\\s+/, "");
+	        return s;
 	      }
 	
 	      function countEscapedNewlines(s) {
@@ -844,7 +884,7 @@ _UI_HTML = """<!doctype html>
 	          lines.push("• Ran shell_command");
 	        }
 	        if (pick.length > 0) {
-	          const p0 = wrapTreeContent(pick[0], 74);
+	          const p0 = wrapTreeContent(normalizeTreeLine(pick[0]), 74);
 	          if (p0.length > 0) {
 	            lines.push(`  └ ${p0[0]}`);
 	            for (let j = 1; j < p0.length; j++) lines.push(`     ${p0[j]}`);
@@ -852,7 +892,7 @@ _UI_HTML = """<!doctype html>
 	            lines.push("  └ (no output)");
 	          }
 	          for (let i = 1; i < pick.length; i++) {
-	            const ps = wrapTreeContent(pick[i], 74);
+	            const ps = wrapTreeContent(normalizeTreeLine(pick[i]), 74);
 	            for (const seg of ps) lines.push(`     ${seg}`);
 	          }
 	        } else if (exitCode !== null && exitCode !== 0) {
@@ -880,7 +920,7 @@ _UI_HTML = """<!doctype html>
 	          lines.push("• Ran shell_command");
 	        }
 	        if (pick.length > 0) {
-	          const p0 = wrapTreeContent(pick[0], 74);
+	          const p0 = wrapTreeContent(normalizeTreeLine(pick[0]), 74);
 	          if (p0.length > 0) {
 	            lines.push(`  └ ${p0[0]}`);
 	            for (let j = 1; j < p0.length; j++) lines.push(`     ${p0[j]}`);
@@ -888,7 +928,7 @@ _UI_HTML = """<!doctype html>
 	            lines.push("  └ (no output)");
 	          }
 	          for (let i = 1; i < pick.length; i++) {
-	            const ps = wrapTreeContent(pick[i], 74);
+	            const ps = wrapTreeContent(normalizeTreeLine(pick[i]), 74);
 	            for (const seg of ps) lines.push(`     ${seg}`);
 	          }
 	        } else if (exitCode !== null && exitCode !== 0) {
@@ -930,7 +970,7 @@ _UI_HTML = """<!doctype html>
 	          out.push("  └ (no output)");
 	          return out.join("\\n");
 	        }
-	        const p0 = wrapTreeContent(pick[0], 74);
+	        const p0 = wrapTreeContent(normalizeTreeLine(pick[0]), 74);
 	        if (p0.length > 0) {
 	          out.push(`  └ ${p0[0]}`);
 	          for (let j = 1; j < p0.length; j++) out.push(`     ${p0[j]}`);
@@ -938,7 +978,7 @@ _UI_HTML = """<!doctype html>
 	          out.push("  └ (no output)");
 	        }
 	        for (let i = 1; i < pick.length; i++) {
-	          const ps = wrapTreeContent(pick[i], 74);
+	          const ps = wrapTreeContent(normalizeTreeLine(pick[i]), 74);
 	          for (const seg of ps) out.push(`     ${seg}`);
 	        }
 	        return out.join("\\n");
@@ -1292,53 +1332,54 @@ _UI_HTML = """<!doctype html>
 		          const outputRaw = parsed.outputRaw || "";
 		          const meta = callId ? callIndex.get(callId) : null;
 		          const toolName = meta && meta.tool_name ? String(meta.tool_name) : "";
-		          const exitCode = extractExitCode(outputRaw);
-		          const outputBody = extractOutputBody(outputRaw);
-		          const cmdFull = (meta && meta.args_obj && toolName === "shell_command") ? String(meta.args_obj.command || "") : "";
-		          const argsRaw = (meta && meta.args_raw) ? String(meta.args_raw || "") : "";
+			          const exitCode = extractExitCode(outputRaw);
+			          const outputBody = extractOutputBody(outputRaw);
+			          const cmdFull = (meta && meta.args_obj && toolName === "shell_command") ? String(meta.args_obj.command || "") : "";
+			          const argsRaw = (meta && meta.args_raw) ? String(meta.args_raw || "") : "";
 		          const detailsId = ("tool_" + safeDomId((msg.id || callId || "") + "_details"));
+		          const summaryId = ("tool_" + safeDomId((msg.id || callId || "") + "_summary"));
 
-		          let runShort = "";
-		          let runLong = "";
-		          const detailsParts = [];
+			          let runShort = "";
+			          let expandedText = "";
 
-		          if (toolName === "shell_command" && cmdFull) {
-		            runShort = formatShellRun(cmdFull, outputBody, exitCode);
-		            runLong = formatShellRunExpanded(cmdFull, outputBody, exitCode);
-		            if (cmdFull.trim()) detailsParts.push(`<pre class="code">${escapeHtml(cmdFull)}</pre>`);
-		            if (runLong && runLong !== runShort) detailsParts.push(`<pre class="code">${escapeHtml(runLong)}</pre>`);
-		          } else if (toolName === "apply_patch") {
-		            runShort = formatApplyPatchRun(argsRaw, outputBody, 8);
-		            runLong = formatApplyPatchRun(argsRaw, outputBody, 120);
-		            if (argsRaw.trim()) detailsParts.push(`<pre class="code">${escapeHtml(argsRaw)}</pre>`);
-		            if (runLong && runLong !== runShort) detailsParts.push(`<pre class="code">${escapeHtml(runLong)}</pre>`);
-		          } else if (toolName === "view_image") {
-		            const p = (meta && meta.args_obj) ? String(meta.args_obj.path || "") : "";
-		            const base = (p.split(/[\\\\/]/).pop() || "").trim();
-		            const first = firstMeaningfulLine(outputBody) || "attached local image";
-		            runShort = `• ${first}${base ? `: ${base}` : ``}`;
-		          } else {
-		            const header = `• ${toolName || "tool_output"}`;
-		            const lines = normalizeNonEmptyLines(outputBody);
-		            runShort = formatOutputTree(header, lines, 10);
-		            runLong = formatOutputTree(header, lines, 120);
-		            if (runLong && runLong !== runShort) detailsParts.push(`<pre class="code">${escapeHtml(runLong)}</pre>`);
-		          }
+			          if (toolName === "shell_command" && cmdFull) {
+			            runShort = formatShellRun(cmdFull, outputBody, exitCode);
+			            const runLong = formatShellRunExpanded(cmdFull, outputBody, exitCode);
+			            if (runLong && runLong !== runShort) expandedText = runLong;
+			          } else if (toolName === "apply_patch") {
+			            runShort = formatApplyPatchRun(argsRaw, outputBody, 8);
+			            const runLong = formatApplyPatchRun(argsRaw, outputBody, 120);
+			            const parts = [];
+			            if (argsRaw.trim()) parts.push(argsRaw.trim());
+			            if (runLong && runLong.trim()) parts.push(runLong.trim());
+			            expandedText = parts.join("\\n\\n");
+			          } else if (toolName === "view_image") {
+			            const p = (meta && meta.args_obj) ? String(meta.args_obj.path || "") : "";
+			            const base = (p.split(/[\\\\/]/).pop() || "").trim();
+			            const first = firstMeaningfulLine(outputBody) || "attached local image";
+			            runShort = `• ${first}${base ? `: ${base}` : ``}`;
+			          } else {
+			            const header = `• ${toolName || "tool_output"}`;
+			            const lines = normalizeNonEmptyLines(outputBody);
+			            runShort = formatOutputTree(header, lines, 10);
+			            const runLong = formatOutputTree(header, lines, 120);
+			            if (runLong && runLong !== runShort) expandedText = runLong;
+			          }
 
 		          if (!String(runShort || "").trim()) {
 		            const header = `• ${toolName || "tool_output"}`;
 		            runShort = formatOutputTree(header, normalizeNonEmptyLines(outputBody), 10);
 		          }
 
-		          const hasDetails = detailsParts.filter(x => String(x || "").trim()).length > 0;
-		          const detailsHtml = hasDetails ? `<div id="${escapeHtml(detailsId)}" class="tool-details hidden">${detailsParts.join("\\n")}</div>` : ``;
-		          if (hasDetails) metaRightExtra = `<button class="tool-toggle" type="button" data-target="${escapeHtml(detailsId)}">详情</button>`;
-		          body = `
-		            <div class="tool-card">
-		              ${runShort ? `<pre class="code">${escapeHtml(runShort)}</pre>` : ``}
-		              ${detailsHtml}
-		            </div>
-		          `;
+			          const hasDetails = !!String(expandedText || "").trim();
+			          const detailsHtml = hasDetails ? `<pre id="${escapeHtml(detailsId)}" class="code hidden">${escapeHtml(expandedText)}</pre>` : ``;
+			          if (hasDetails) metaRightExtra = `<button class="tool-toggle" type="button" data-target="${escapeHtml(detailsId)}" data-swap="${escapeHtml(summaryId)}">详情</button>`;
+			          body = `
+			            <div class="tool-card">
+			              ${runShort ? `<pre id="${escapeHtml(summaryId)}" class="code">${escapeHtml(runShort)}</pre>` : ``}
+			              ${detailsHtml}
+			            </div>
+			          `;
 			        } else if (kind === "tool_call") {
 		          const parsed = parseToolCallText(msg.text || "");
 		          const toolName = parsed.toolName || "tool_call";

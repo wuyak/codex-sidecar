@@ -33,6 +33,8 @@
 - 优化：`shell_command` 的 `tool_output` 默认直接展示终端风格块（`• Ran ...` + `│/└` 树形摘要），并在“详情”中展示完整命令与更多输出。
 - 优化：隐藏 `shell_command/view_image` 的 `tool_call` 行，避免与 `tool_output` 重复；并调整树形缩进/`|| true` 换行，更贴近终端样式。
 - 优化：`tool_output` 的“详情”按钮移动到时间戳行（更省空间），点击后直接展开完整详情（不再二次折叠）。
+- 优化：`tool_output` 的“详情/收起”改为摘要与完整内容互斥切换（避免展开后出现两条重复块）。
+- 优化：命令摘要换行优先在 `|` / `&&` / `||` 处分段，避免参数被孤立到单独一行导致观感割裂。
 - 优化：隐藏 `apply_patch` 的 `tool_call` 行；`apply_patch` 的 `tool_output` 改为终端风格摘要，并在“详情”中提供补丁内容可复制。
 - 优化：`update_plan` 不再折叠展示，按“计划→说明”输出并使用 Markdown 排版，移除原始参数与工具元信息。
 - 优化：回答内容（assistant_message）改为 Markdown 渲染。
