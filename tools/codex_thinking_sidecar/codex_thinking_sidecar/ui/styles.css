@@ -41,8 +41,10 @@
       .icon-btn:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
       .icon-btn.danger { background:#fff; border-color:#fecaca; }
       .icon-btn.danger:hover { background:#fff1f2; }
-      .grid { display:grid; grid-template-columns: 160px 1fr; gap: 6px 10px; align-items:center; margin-top: 10px; }
+      .grid { display:grid; grid-template-columns: 140px 1fr; gap: 6px 10px; align-items:center; margin-top: 10px; }
+      .grid.grid-compact { grid-template-columns: 110px 1fr; gap: 6px 8px; margin-top: 8px; }
       .grid input, .grid select { width: 100%; padding: 6px 8px; border: 1px solid #e2e8f0; border-radius: 10px; background:#fff; }
+      .grid.grid-compact input, .grid.grid-compact select { padding: 5px 8px; border-radius: 10px; }
       .grid input:focus, .grid select:focus { outline: none; border-color: #93c5fd; box-shadow: 0 0 0 3px rgba(59,130,246,.12); }
       .btns { display:flex; gap: 8px; flex-wrap:wrap; margin-top: 10px; }
       button { border: 1px solid #ddd; background:#fff; padding: 7px 10px; border-radius: 8px; cursor:pointer; }
@@ -52,7 +54,7 @@
 			      .float-nav { position: fixed; left: 16px; right: auto; bottom: 16px; display:flex; flex-direction:column; gap:8px; z-index: 1000; }
 			      .float-nav button { width: 40px; height: 40px; padding: 0; border-radius: 999px; box-shadow: 0 6px 20px rgba(0,0,0,.08); font-size: 16px; }
 		      .drawer-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.18); z-index: 900; }
-			      .drawer { position: fixed; top: 16px; right: 16px; bottom: 16px; width: 480px; max-width: calc(100vw - 32px); background:#fff; border: 1px solid #ddd; border-radius: 12px; padding: 12px; overflow: auto; z-index: 910; box-shadow: 0 12px 40px rgba(0,0,0,.12); }
+			      .drawer { position: fixed; top: 16px; right: 16px; bottom: 16px; width: 440px; max-width: calc(100vw - 32px); background:#fff; border: 1px solid #ddd; border-radius: 12px; padding: 12px; overflow: auto; z-index: 910; box-shadow: 0 12px 40px rgba(0,0,0,.12); }
 		      .drawer-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
 		      .drawer-head .title { font-weight: 700; }
 			      .drawer-close { border:1px solid #e2e8f0; background:#fff; border-radius: 10px; width: 34px; height: 34px; padding: 0; font-size: 18px; line-height: 1; cursor:pointer; }
@@ -63,7 +65,7 @@
 		      .tool-card { background:#f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; margin-top: 8px; }
 		      .tool-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
 		      .tool-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-		      .tool-toggle { border: 1px solid #e2e8f0; background:#fff; padding: 2px 8px; border-radius: 999px; cursor:pointer; font-size: 12px; color:#334155; }
+      .tool-toggle { border: 1px solid #e2e8f0; background:#fff; padding: 2px 8px; border-radius: 999px; cursor:pointer; font-size: 12px; color:#334155; }
 	      .tool-toggle:hover { background:#f1f5f9; }
 	      .tool-details { margin-top: 8px; }
 	      .hidden { display: none; }
@@ -87,5 +89,10 @@
 		      .md ol { margin: 6px 0 6px 20px; padding: 0; }
 		      .md li { margin: 2px 0; }
 		      .md code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; background:#f1f5f9; padding: 1px 6px; border-radius: 6px; }
-		      .md pre code { background: transparent; padding: 0; }
+	      .md pre code { background: transparent; padding: 0; }
 	      .think-split { margin-top: 10px; padding-top: 10px; border-top: 1px solid #e2e8f0; }
+	      .profile-row { display:flex; gap: 6px; align-items:center; }
+	      .mini-btn { width: 30px; height: 30px; padding: 0; border-radius: 10px; border: 1px solid #e2e8f0; background:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 14px; line-height: 1; }
+	      .mini-btn:hover { background:#f1f5f9; }
+	      .mini-btn.danger { border-color:#fecaca; }
+	      .mini-btn.danger:hover { background:#fff1f2; }

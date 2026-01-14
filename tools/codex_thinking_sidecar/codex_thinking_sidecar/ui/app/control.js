@@ -1,4 +1,4 @@
-import { fmtErr, safeJsonParse } from "./utils.js";
+import { fmtErr } from "./utils.js";
 import { showShutdownScreen } from "./shutdown.js";
 
 export function setStatus(dom, s) {
@@ -37,6 +37,9 @@ function showHttpFields(dom, show) {
     el.disabled = !show;
     el.style.opacity = show ? "1" : "0.5";
   }
+  try {
+    if (dom.httpBlock) dom.httpBlock.style.display = show ? "" : "none";
+  } catch (_) {}
 }
 
 function normalizeHttpProfiles(tc) {
@@ -501,4 +504,3 @@ export function wireControlEvents(dom, state, helpers) {
     }
   });
 }
-

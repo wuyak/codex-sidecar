@@ -17,6 +17,7 @@ export function getDom() {
     scanInterval: byId("scanInterval"),
 
     translatorSel: byId("translator"),
+    httpBlock: byId("httpBlock"),
     httpProfile: byId("httpProfile"),
     httpProfileAddBtn: byId("httpProfileAddBtn"),
     httpProfileRenameBtn: byId("httpProfileRenameBtn"),
@@ -45,4 +46,3 @@ export function getDom() {
     list: byId("list"),
   };
 }
-

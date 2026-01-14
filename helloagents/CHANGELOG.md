@@ -60,3 +60,4 @@
 - 优化：复制按钮缩小并移出代码块顶部避免遮挡；思考分隔线仅在双语同显时出现。
 - 优化：顶栏 `/api/messages` 与 `/api/threads` 改为可点击链接，便于快速自检数据源。
 - 重构：UI JavaScript 拆分为 ES Modules（解析/格式化/渲染/控制解耦），服务端支持按需静态加载 `/ui/*` 资源。
+- 优化：配置抽屉更极简（常用项优先；HTTP Profiles 操作改为图标按钮；非 HTTP Provider 时隐藏 HTTP 配置块）。
