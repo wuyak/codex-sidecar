@@ -1,4 +1,5 @@
 import json
+import os
 import queue
 import threading
 import time
@@ -172,7 +173,7 @@ class _Handler(BaseHTTPRequestHandler):
         qs = parse_qs(u.query or "")
 
         if path == "/health":
-            self._send_json(HTTPStatus.OK, {"ok": True})
+            self._send_json(HTTPStatus.OK, {"ok": True, "pid": os.getpid()})
             return
 
         if path == "/api/messages":

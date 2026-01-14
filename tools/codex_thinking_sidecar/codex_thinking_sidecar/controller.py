@@ -257,6 +257,7 @@ class SidecarController:
             env_hint = {}
         return {
             "ok": True,
+            "pid": os.getpid(),
             "running": running,
             "started_at": started_at,
             "last_error": last_error or ws.get("last_error") or "",

@@ -72,55 +72,60 @@ function wireHoldCopy(el, opts) {
 
   let startX = 0;
   let startY = 0;
+  let startAt = 0;
   let moved = false;
-  let timer = 0;
   let longFired = false;
-
-  const clear = () => {
-    try { if (timer) clearTimeout(timer); } catch (_) {}
-    timer = 0;
-  };
 
   const onDown = (e) => {
     try {
       // Only left click / primary touch.
       if (e && typeof e.button === "number" && e.button !== 0) return;
     } catch (_) {}
+    try {
+      if (opts && opts.ignoreSelector && e && e.target && e.target.closest) {
+        if (e.target.closest(String(opts.ignoreSelector))) return;
+      }
+    } catch (_) {}
     moved = false;
     longFired = false;
     startX = Number(e && e.clientX) || 0;
     startY = Number(e && e.clientY) || 0;
-    clear();
-    timer = setTimeout(async () => {
-      timer = 0;
-      if (moved) return;
-      longFired = true;
-      try {
-        const txt = (opts && typeof opts.getText === "function") ? opts.getText() : (el.textContent || "");
-        const ok = await copyToClipboard(txt || "");
-        if (ok) {
-          flashCopiedAt(startX, startY, !!(opts && opts.toastIsLight));
-          try { el.classList.add("copied"); } catch (_) {}
-          setTimeout(() => { try { el.classList.remove("copied"); } catch (_) {} }, 750);
-        }
-      } catch (_) {}
-    }, 420);
+    startAt = Date.now();
   };
 
   const onMove = (e) => {
-    if (!timer) return;
+    if (!startAt) return;
     const x = Number(e && e.clientX) || 0;
     const y = Number(e && e.clientY) || 0;
     const dx = x - startX;
     const dy = y - startY;
     if ((dx * dx + dy * dy) > (6 * 6)) {
       moved = true;
-      clear();
     }
   };
 
-  const onUp = () => { clear(); };
-  const onCancel = () => { clear(); };
+  const onUp = async () => {
+    if (!startAt) return;
+    const dt = Date.now() - startAt;
+    startAt = 0;
+    if (moved) return;
+    if (dt < 420) return;
+    if (hasActiveSelection()) return;
+    longFired = true;
+    try {
+      const txt = (opts && typeof opts.getText === "function") ? opts.getText() : (el.textContent || "");
+      const ok = await copyToClipboard(txt || "");
+      if (ok) {
+        flashCopiedAt(startX, startY, !!(opts && opts.toastIsLight));
+        try { el.classList.add("copied"); } catch (_) {}
+        setTimeout(() => { try { el.classList.remove("copied"); } catch (_) {} }, 750);
+      }
+    } catch (_) {}
+  };
+
+  const onCancel = () => {
+    startAt = 0;
+  };
 
   el.addEventListener("pointerdown", onDown);
   el.addEventListener("pointermove", onMove);
@@ -136,6 +141,41 @@ function wireHoldCopy(el, opts) {
       if (opts && typeof opts.onTap === "function") opts.onTap(e);
     } catch (_) {}
   });
+}
+
+function decorateToolCards(root) {
+  if (!root || !root.querySelectorAll) return;
+  const cards = root.querySelectorAll("div.tool-card");
+  for (const card of cards) {
+    try {
+      if (!card) continue;
+      try {
+        wireHoldCopy(card, {
+          ignoreSelector: "pre,div.md,button,a,input,textarea,select,summary",
+          toastIsLight: true,
+          getText: () => {
+            const parts = [];
+            const nodes = card.querySelectorAll("pre.code, div.md, pre");
+            for (const el of nodes) {
+              try {
+                if (!el) continue;
+                if (el.closest && el.closest(".hidden")) continue;
+                if (el.tagName === "DIV" && el.classList && el.classList.contains("md")) {
+                  const t = String(el.innerText || el.textContent || "").trim();
+                  if (t) parts.push(t);
+                } else if (el.tagName === "PRE") {
+                  const t = String(el.textContent || "").trimEnd();
+                  if (t) parts.push(t);
+                }
+              } catch (_) {}
+            }
+            return parts.join("\n\n").trim();
+          },
+          onTap: null,
+        });
+      } catch (_) {}
+    } catch (_) {}
+  }
 }
 
 function decoratePreBlocks(root) {
@@ -221,52 +261,6 @@ function wireToolToggles(root) {
   }
 }
 
-function wireMetaCopy(root) {
-  if (!root || !root.querySelectorAll) return;
-  const btns = root.querySelectorAll("button.meta-copy");
-  for (const btn of btns) {
-    try {
-      if (btn.__wired) continue;
-      btn.__wired = true;
-      btn.onclick = async (e) => {
-        try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
-        const row = btn.closest ? btn.closest(".row") : null;
-        if (!row) return;
-        // Copy visible body blocks in DOM order.
-        const parts = [];
-        const nodes = row.querySelectorAll("pre.code, div.md, pre");
-        for (const el of nodes) {
-          try {
-            if (!el) continue;
-            if (el.closest && el.closest(".hidden")) continue;
-            if (el.classList && el.classList.contains("meta")) continue;
-            if (el.tagName === "DIV" && el.classList && el.classList.contains("md")) {
-              const t = String(el.innerText || el.textContent || "").trim();
-              if (t) parts.push(t);
-            } else if (el.tagName === "PRE") {
-              const t = String(el.textContent || "").trimEnd();
-              if (t) parts.push(t);
-            }
-          } catch (_) {}
-        }
-        const text = parts.join("\n\n").trim();
-        const ok = await copyToClipboard(text || "");
-        try {
-          const icon = "⧉";
-          btn.textContent = ok ? "✓" : "!";
-          setTimeout(() => { btn.textContent = icon; }, 650);
-        } catch (_) {}
-        if (ok) {
-          try {
-            const r = btn.getBoundingClientRect();
-            flashCopiedAt(r.right, r.top + (r.height / 2), true);
-          } catch (_) {}
-        }
-      };
-    } catch (_) {}
-  }
-}
-
 export function decorateRow(row) {
   // cleanup legacy per-block copy buttons if any existed (older UI versions)
   try {
@@ -275,6 +269,6 @@ export function decorateRow(row) {
   } catch (_) {}
   decoratePreBlocks(row);
   decorateMdBlocks(row);
+  decorateToolCards(row);
   wireToolToggles(row);
-  wireMetaCopy(row);
 }

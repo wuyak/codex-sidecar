@@ -228,6 +228,8 @@ export async function loadControl(dom, state) {
   try {
     const st = await fetch(`/api/status?t=${ts}`, { cache: "no-store" }).then(r => r.json());
     let hint = "";
+    const sidecarPid = (st && (st.pid !== undefined) && (st.pid !== null)) ? String(st.pid) : "";
+    const sidecarSuffix = sidecarPid ? ` | sidecar:${sidecarPid}` : "";
     if (st.env && st.env.auth_env) {
       hint = st.env.auth_env_set ? `（已检测到 ${st.env.auth_env}）` : `（未设置环境变量 ${st.env.auth_env}）`;
     }
@@ -242,10 +244,10 @@ export async function loadControl(dom, state) {
     else if (mode === "fallback") detail = detected && pids ? `（fallback | pid:${pids}）` : "（fallback）";
     else if (mode) detail = `(${mode})`;
     if (st.running) {
-      if (cur) setStatus(dom, `运行中：${cur} ${detail} ${hint}`.trim());
-      else setStatus(dom, `运行中：${detail} ${hint}`.trim());
+      if (cur) setStatus(dom, `运行中：${cur} ${detail} ${hint}${sidecarSuffix}`.trim());
+      else setStatus(dom, `运行中：${detail} ${hint}${sidecarSuffix}`.trim());
     } else {
-      setStatus(dom, `未运行 ${hint}`.trim());
+      setStatus(dom, `未运行 ${hint}${sidecarSuffix}`.trim());
     }
     try {
       if (dom.startBtn) dom.startBtn.disabled = !!st.running;
@@ -379,38 +381,62 @@ export async function stopWatch(dom, state) {
   setStatus(dom, r.running ? "停止监听失败" : "已停止监听");
 }
 
-async function waitForRestartCycleThen(fn) {
+async function healthPid() {
+  try {
+    const r = await fetch(`/health?t=${Date.now()}`, { cache: "no-store" });
+    if (!r || !r.ok) return null;
+    const j = await r.json();
+    const p = Number(j && j.pid);
+    return Number.isFinite(p) ? p : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function waitForRestartCycle(beforePid) {
   const deadline = Date.now() + 15000;
   let sawDown = false;
+  let afterPid = null;
+
   // Give restart a moment to actually begin.
-  await new Promise((res) => setTimeout(res, 220));
+  await new Promise((res) => setTimeout(res, 180));
   while (Date.now() < deadline) {
-    try {
-      const r = await fetch(`/health?t=${Date.now()}`, { cache: "no-store" });
-      if (r && r.ok) {
-        if (sawDown) break;
-      } else {
-        sawDown = true;
-      }
-    } catch (e) {
+    const p = await healthPid();
+    if (p !== null) {
+      afterPid = p;
+      // Ideal: new PID.
+      if (beforePid && p !== beforePid) break;
+      // If we don't know the old PID, any healthy response is enough.
+      if (!beforePid) break;
+      // If PID didn't change but we observed downtime, assume in-place restart happened.
+      if (beforePid && p === beforePid && sawDown) break;
+    } else {
       sawDown = true;
     }
-    await new Promise((res) => setTimeout(res, 160));
+    await new Promise((res) => setTimeout(res, 140));
   }
-  try { await fn(); } catch (e) {}
+  return { beforePid: beforePid || null, afterPid, sawDown };
 }
 
 export async function restartProcess(dom, state) {
   if (!confirm("确定要重启 sidecar 进程？（将杀死并重新拉起服务）")) return;
-  setStatus(dom, "正在重启 sidecar…");
+  const beforePid = await healthPid();
+  setStatus(dom, beforePid ? `正在重启 sidecar…（pid:${beforePid}）` : "正在重启 sidecar…");
   try { if (state.uiEventSource) state.uiEventSource.close(); } catch (_) {}
   closeDrawer(dom);
   try { await api("POST", "/api/control/restart_process", {}); } catch (e) {}
-  // The current request completes before restart; then we poll until the service is back.
-  await waitForRestartCycleThen(async () => {
-    try { await api("POST", "/api/control/start"); } catch (e) {}
-    try { window.location.reload(); } catch (_) {}
-  });
+  const r = await waitForRestartCycle(beforePid);
+  if (r.afterPid && r.beforePid && r.afterPid !== r.beforePid) {
+    setStatus(dom, `重启完成（pid:${r.beforePid}→${r.afterPid}）`);
+  } else if (r.afterPid && r.beforePid && r.afterPid === r.beforePid) {
+    setStatus(dom, `重启完成（pid:${r.afterPid}，未变化）`);
+  } else if (r.afterPid) {
+    setStatus(dom, `重启完成（pid:${r.afterPid}）`);
+  } else {
+    setStatus(dom, "重启可能未完成（未获取到 /health）");
+  }
+  try { await api("POST", "/api/control/start"); } catch (e) {}
+  try { window.location.reload(); } catch (_) {}
 }
 
 export async function clearView(dom, state, refreshList) {
