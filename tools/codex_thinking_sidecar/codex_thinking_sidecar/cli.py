@@ -134,9 +134,11 @@ def main(argv=None) -> int:
             print(f"[sidecar] WARN: 本地服务未就绪：{health_url}", file=sys.stderr)
 
     stop_event = threading.Event()
+    restart_event = threading.Event()
     if controller is not None:
         try:
             controller.set_process_stop_event(stop_event)
+            controller.set_process_restart_event(restart_event)
         except Exception:
             pass
 
@@ -216,5 +218,13 @@ def main(argv=None) -> int:
                 lock_fh.close()
             except Exception:
                 pass
+        if restart_event.is_set():
+            # Full process restart (dev-friendly): re-exec self after graceful shutdown.
+            cmd = [sys.executable, "-m", "codex_thinking_sidecar"] + raw_argv
+            try:
+                print(f"[sidecar] RESTART: {' '.join(cmd)}", file=sys.stderr)
+            except Exception:
+                pass
+            os.execv(cmd[0], cmd)
 
     return 0

@@ -360,6 +360,21 @@ class _Handler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.OK, self._controller.stop())
             return
 
+        if self.path == "/api/control/restart_process":
+            # Respond first, then restart asynchronously; otherwise the process may re-exec/exit
+            # before the response body is fully written.
+            self._send_json(HTTPStatus.OK, {"ok": True})
+
+            def _restart_later() -> None:
+                time.sleep(0.06)
+                try:
+                    self._controller.request_restart()
+                except Exception:
+                    return
+
+            threading.Thread(target=_restart_later, name="sidecar-restart", daemon=True).start()
+            return
+
         if self.path == "/api/control/clear":
             self._controller.clear_messages()
             self._send_json(HTTPStatus.OK, {"ok": True})
@@ -462,5 +477,8 @@ class SidecarServer:
     def shutdown(self) -> None:
         try:
             self._httpd.shutdown()
+            self._httpd.server_close()
+            if self._thread is not None and self._thread.is_alive():
+                self._thread.join(timeout=0.5)
         except Exception:
             return

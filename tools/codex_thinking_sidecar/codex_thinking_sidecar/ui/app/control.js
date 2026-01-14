@@ -250,7 +250,7 @@ export async function loadControl(dom, state) {
     try {
       if (dom.startBtn) dom.startBtn.disabled = !!st.running;
       if (dom.stopBtn) dom.stopBtn.disabled = !st.running;
-      if (dom.restartBtn) dom.restartBtn.disabled = !st.running;
+      if (dom.restartBtn) dom.restartBtn.disabled = false;
     } catch (_) {}
   } catch (e) {
     debugLines.push(`[warn] /api/status: ${fmtErr(e)}`);
@@ -379,12 +379,29 @@ export async function stopWatch(dom, state) {
   setStatus(dom, r.running ? "停止监听失败" : "已停止监听");
 }
 
-export async function restartWatch(dom, state) {
-  setStatus(dom, "正在重启监听…");
-  try { await api("POST", "/api/control/stop"); } catch (e) {}
-  const r = await api("POST", "/api/control/start");
-  await loadControl(dom, state);
-  setStatus(dom, r.running ? "已重启监听" : "重启监听失败");
+async function waitForHealthThen(dom, fn) {
+  const deadline = Date.now() + 12000;
+  while (Date.now() < deadline) {
+    try {
+      const r = await fetch(`/health?t=${Date.now()}`, { cache: "no-store" });
+      if (r && r.ok) break;
+    } catch (e) {}
+    await new Promise((res) => setTimeout(res, 160));
+  }
+  try { await fn(); } catch (e) {}
+}
+
+export async function restartProcess(dom, state) {
+  if (!confirm("确定要重启 sidecar 进程？（将杀死并重新拉起服务）")) return;
+  setStatus(dom, "正在重启 sidecar…");
+  try { if (state.uiEventSource) state.uiEventSource.close(); } catch (_) {}
+  closeDrawer(dom);
+  try { await api("POST", "/api/control/restart_process", {}); } catch (e) {}
+  // The current request completes before restart; then we poll until the service is back.
+  await waitForHealthThen(dom, async () => {
+    try { await api("POST", "/api/control/start"); } catch (e) {}
+    try { window.location.reload(); } catch (_) {}
+  });
 }
 
 export async function clearView(dom, state, refreshList) {
@@ -447,7 +464,7 @@ export function wireControlEvents(dom, state, helpers) {
   if (dom.recoverBtn) dom.recoverBtn.addEventListener("click", async () => { await recoverConfig(dom, state); });
   if (dom.startBtn) dom.startBtn.addEventListener("click", async () => { await startWatch(dom, state); });
   if (dom.stopBtn) dom.stopBtn.addEventListener("click", async () => { await stopWatch(dom, state); });
-  if (dom.restartBtn) dom.restartBtn.addEventListener("click", async () => { await restartWatch(dom, state); });
+  if (dom.restartBtn) dom.restartBtn.addEventListener("click", async () => { await restartProcess(dom, state); });
   if (dom.clearBtn) dom.clearBtn.addEventListener("click", async () => { await clearView(dom, state, refreshList); });
 
   if (dom.shutdownBtn) dom.shutdownBtn.addEventListener("click", async () => {

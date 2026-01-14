@@ -48,6 +48,7 @@ class SidecarController:
         self._stop_event: Optional[threading.Event] = None
         self._watcher: Optional[RolloutWatcher] = None
         self._process_stop_event: Optional[threading.Event] = None
+        self._process_restart_event: Optional[threading.Event] = None
         self._last_error: str = ""
         self._started_at: float = 0.0
 
@@ -57,6 +58,13 @@ class SidecarController:
         """
         with self._lock:
             self._process_stop_event = stop_event
+
+    def set_process_restart_event(self, restart_event: threading.Event) -> None:
+        """
+        Inject a restart_event so HTTP handlers can request a full process restart.
+        """
+        with self._lock:
+            self._process_restart_event = restart_event
 
     def translators(self) -> Dict[str, Any]:
         return {"translators": [t.__dict__ for t in TRANSLATORS]}
@@ -270,6 +278,25 @@ class SidecarController:
             ev = self._process_stop_event
         if ev is not None:
             ev.set()
+        return {"ok": True}
+
+    def request_restart(self) -> Dict[str, Any]:
+        """
+        Stop the watcher (if running) and request the whole sidecar process to restart.
+        """
+        try:
+            self.stop()
+        except Exception:
+            pass
+        stop_ev = None
+        restart_ev = None
+        with self._lock:
+            stop_ev = self._process_stop_event
+            restart_ev = self._process_restart_event
+        if restart_ev is not None:
+            restart_ev.set()
+        if stop_ev is not None:
+            stop_ev.set()
         return {"ok": True}
 
     def _build_translator(self, cfg: SidecarConfig) -> Translator:
