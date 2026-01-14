@@ -78,3 +78,6 @@
 - 修复：回放/切换文件/重复启动 watcher 时，服务端按消息 id 去重，避免历史消息重复追加。
 - 优化：复制交互统一：各内容块支持长按复制（pointerup 触发更稳定）；tool-card 空白区域也可长按复制；移除每条消息右上角复制按钮以减少遮挡。
 - 修复：tool_call（如 web_search_call）不再默认折叠，直接以 tool-card 代码块展示调用参数，避免“需要再点开一次”。
+- 优化：翻译请求去重：Watcher 先做 dedupe 再发起翻译，避免重复消息也重复请求翻译 API。
+- 优化：OpenAI/Responses 翻译器增加 LRU 缓存（默认 64 条），减少同内容重复翻译请求。
+- 优化：UI 选择 OpenAI Provider 时自动补齐默认 Base URL（right.codes）与默认模型（gpt-4o-mini），减少手动配置成本。

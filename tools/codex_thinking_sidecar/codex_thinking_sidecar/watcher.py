@@ -558,15 +558,6 @@ class RolloutWatcher:
         for item in extracted:
             kind = item["kind"]
             text = item["text"]
-            # Only translate "thinking" content; keep tool/user/assistant as-is.
-            if kind in ("reasoning_summary", "agent_reasoning"):
-                zh = self._translator.translate(text)
-                if text.strip() and not zh.strip() and not isinstance(self._translator, NoneTranslator):
-                    err = str(getattr(self._translator, "last_error", "") or "").strip()
-                    hint = err if err else "WARN: 翻译失败（返回空译文）"
-                    zh = f"⚠️ {hint}\n\n{text}"
-            else:
-                zh = ""
             # Dedup across replay expansions.
             #
             # - reasoning_summary: 通常每条是“最终摘要”，用 timestamp 参与 key 能更好地区分不同轮次
@@ -578,6 +569,17 @@ class RolloutWatcher:
                 hid = _sha1_hex(f"{file_path}:{kind}:{ts}:{text}")
             if self._dedupe(hid, kind=kind):
                 continue
+            # Only translate "thinking" content; keep tool/user/assistant as-is.
+            #
+            # NOTE: translate after dedupe to avoid wasting API calls on duplicates.
+            if kind in ("reasoning_summary", "agent_reasoning"):
+                zh = self._translator.translate(text)
+                if text.strip() and not zh.strip() and not isinstance(self._translator, NoneTranslator):
+                    err = str(getattr(self._translator, "last_error", "") or "").strip()
+                    hint = err if err else "WARN: 翻译失败（返回空译文）"
+                    zh = f"⚠️ {hint}\n\n{text}"
+            else:
+                zh = ""
             msg = {
                 "id": hid[:16],
                 "ts": ts,

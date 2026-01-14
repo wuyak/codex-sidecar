@@ -54,10 +54,28 @@ function showOpenAIFields(dom, show) {
   } catch (_) {}
 }
 
+function ensureOpenAIDefaults(dom) {
+  try {
+    if (dom.openaiBaseUrl && !String(dom.openaiBaseUrl.value || "").trim()) {
+      dom.openaiBaseUrl.value = "https://www.right.codes/codex/v1";
+    }
+    if (dom.openaiModel && !String(dom.openaiModel.value || "").trim()) {
+      dom.openaiModel.value = "gpt-4o-mini";
+    }
+    if (dom.openaiTimeout && (dom.openaiTimeout.value === "" || dom.openaiTimeout.value == null)) {
+      dom.openaiTimeout.value = 12;
+    }
+    if (dom.openaiAuthMode && !String(dom.openaiAuthMode.value || "").trim()) {
+      dom.openaiAuthMode.value = "authorization";
+    }
+  } catch (_) {}
+}
+
 function showProviderBlocks(dom, provider) {
   const p = String(provider || "").trim().toLowerCase();
   showHttpFields(dom, p === "http");
   showOpenAIFields(dom, p === "openai");
+  if (p === "openai") ensureOpenAIDefaults(dom);
 }
 
 function normalizeHttpProfiles(tc) {

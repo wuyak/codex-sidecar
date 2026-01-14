@@ -3,11 +3,13 @@ import os
 import re
 import sys
 import time
+import hashlib
 import urllib.parse
 import urllib.error
 import urllib.request
+from collections import OrderedDict
 from socket import timeout as _SocketTimeout
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol
 
 
@@ -150,10 +152,28 @@ class OpenAIResponsesTranslator:
     auth_prefix: str = "Bearer "
     reasoning_effort: str = ""
     last_error: str = ""
+    cache_size: int = 64
+    _cache: "OrderedDict[str, str]" = field(default_factory=OrderedDict, init=False, repr=False)
 
     def translate(self, text: str) -> str:
         if not text or not self.base_url:
             return ""
+
+        ck = ""
+        try:
+            ck = hashlib.sha1(text.encode("utf-8")).hexdigest()
+        except Exception:
+            ck = ""
+        if ck:
+            hit = self._cache.get(ck)
+            if isinstance(hit, str) and hit.strip():
+                # refresh LRU
+                try:
+                    self._cache.pop(ck, None)
+                    self._cache[ck] = hit
+                except Exception:
+                    pass
+                return hit
 
         base = _normalize_url(self.base_url).rstrip("/")
         endpoint = base if base.endswith("/responses") else (base + "/responses")
@@ -235,7 +255,15 @@ class OpenAIResponsesTranslator:
 
             out = _extract_openai_responses_text(obj)
             if isinstance(out, str) and out.strip():
-                return out.strip()
+                res = out.strip()
+                if ck:
+                    try:
+                        self._cache[ck] = res
+                        while len(self._cache) > int(self.cache_size or 0):
+                            self._cache.popitem(last=False)
+                    except Exception:
+                        pass
+                return res
             self.last_error = _log_openai_translate_error(endpoint, auth_token=token, detail="no_output_text")
             return ""
         except urllib.error.HTTPError as e:
