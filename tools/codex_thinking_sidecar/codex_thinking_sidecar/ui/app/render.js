@@ -172,6 +172,10 @@ export function renderMessage(dom, state, msg) {
         </div>
       `;
     }
+  } else if (kind === "tool_gate") {
+    metaLeftExtra = `<span class="pill">终端确认</span>`;
+    const txt = String(msg.text || "");
+    body = `<div class="md">${renderMarkdown(txt)}</div>`;
   } else if (kind === "user_message") {
     metaLeftExtra = `<span class="pill">用户输入</span>`;
     const txt = String(msg.text || "");

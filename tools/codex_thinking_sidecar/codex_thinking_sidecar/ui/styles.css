@@ -12,6 +12,7 @@
 	      .row.kind-user_message { border-left-color:#38bdf8; }
 	      .row.kind-assistant_message { border-left-color:#4ade80; }
 	      .row.kind-tool_call, .row.kind-tool_output { border-left-color:#fbbf24; }
+	      .row.kind-tool_gate { border-left-color:#f87171; }
 	      .row.kind-reasoning_summary, .row.kind-agent_reasoning { border-left-color:#c4b5fd; }
 	      .meta { color: #555; font-size: 12px; }
 	      .meta-link { color: #0ea5e9; text-decoration: none; }
