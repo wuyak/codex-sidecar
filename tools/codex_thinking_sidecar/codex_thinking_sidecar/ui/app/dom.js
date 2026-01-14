@@ -30,7 +30,6 @@ export function getDom() {
     saveBtn: byId("saveBtn"),
     recoverBtn: byId("recoverBtn"),
 
-    sidebarToggleBtn: byId("sidebarToggleBtn"),
     startBtn: byId("startBtn"),
     stopBtn: byId("stopBtn"),
     restartBtn: byId("restartBtn"),

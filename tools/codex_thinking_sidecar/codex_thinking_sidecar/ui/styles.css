@@ -6,12 +6,8 @@
 	      body.sidebar-auto #sidebar:focus-within,
 	      body.sidebar-auto #sidebarHotzone:hover + #sidebar { transform: translateX(0); }
 
-	      #main { margin: 16px 60px 16px 16px; }
-	      .sidebar-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
-	      .sidebar-toggle { border: 1px solid #e2e8f0; background:#fff; border-radius: 10px; width: 32px; height: 32px; padding: 0; cursor:pointer; font-size: 14px; line-height: 1; }
-	      .sidebar-toggle:hover { background:#f1f5f9; }
-	      body.sidebar-collapsed #sidebar { width: 44px; padding: 10px 6px; }
-	      body.sidebar-collapsed #sidebar .sidebar-head .meta { display:none; }
+		      #main { margin: 16px 60px 16px 16px; }
+		      .sidebar-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
 	      .row { border: 1px solid #ddd; border-left: 4px solid #e5e7eb; border-radius: 8px; padding: 12px; margin: 10px 0; }
 	      .row.kind-user_message { border-left-color:#38bdf8; }
 	      .row.kind-assistant_message { border-left-color:#4ade80; }
@@ -34,15 +30,8 @@
       .tab.active { background:#111827; color:#fff; border-color:#111827; }
       .tab small { opacity: .75; }
       .tab .tab-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .tab > small { margin-left: auto; }
-      .tab-dot { width: 10px; height: 10px; border-radius: 999px; display:inline-block; flex: 0 0 auto; }
-      body.sidebar-collapsed .tabs { gap: 8px; }
-      body.sidebar-collapsed .tab { width: 36px; height: 36px; padding: 0; border-radius: 999px; text-align:center; display:flex; align-items:center; justify-content:center; }
-      body.sidebar-collapsed .tab small, body.sidebar-collapsed .tab .tab-label { display:none; }
-      body.sidebar-collapsed .tab-dot { width: 14px; height: 14px; }
-      .tab-badge { position:absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background:#111827; color:#fff; font-size: 10px; line-height: 18px; text-align:center; box-shadow: 0 6px 16px rgba(0,0,0,.18); }
-      body.sidebar-collapsed .tab-badge { top: -5px; right: -5px; }
-      .tab.active .tab-badge { background: rgba(255,255,255,.92); color:#111827; }
+	      .tab > small { margin-left: auto; }
+	      .tab-dot { width: 10px; height: 10px; border-radius: 999px; display:inline-block; flex: 0 0 auto; }
       .top-title { font-size: 18px; font-weight: 800; letter-spacing: .2px; }
       .rightbar { position: fixed; top: 16px; right: 16px; display:flex; flex-direction:column; gap:8px; z-index: 850; }
       .icon-btn { width: 38px; height: 38px; padding: 0; border-radius: 999px; display:flex; align-items:center; justify-content:center; border: 1px solid #e2e8f0; background:#fff; cursor:pointer; box-shadow: 0 6px 20px rgba(0,0,0,.06); font-size: 16px; line-height: 1; }
@@ -116,7 +105,3 @@
 	      .mini-btn:hover { background:#f1f5f9; }
 	      .mini-btn.danger { border-color:#fecaca; }
 	      .mini-btn.danger:hover { background:#fff1f2; }
-	      .tab-tooltip { position: fixed; z-index: 1200; max-width: 340px; min-width: 220px; background: rgba(15,23,42,.96); color:#e2e8f0; border: 1px solid rgba(226,232,240,.15); border-radius: 12px; padding: 10px 12px; box-shadow: 0 16px 48px rgba(0,0,0,.28); pointer-events: none; }
-	      .tab-tooltip .tt-title { font-weight: 700; color: #fff; margin-bottom: 4px; }
-	      .tab-tooltip .tt-meta { font-size: 12px; color: rgba(226,232,240,.78); margin-bottom: 8px; }
-	      .tab-tooltip .tt-code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 11px; white-space: pre-wrap; word-break: break-word; margin: 0; color: rgba(226,232,240,.90); }

@@ -464,13 +464,6 @@ export async function maybeAutoStartOnce(dom, state) {
 
 export function wireControlEvents(dom, state, helpers) {
   const { refreshList, renderTabs } = helpers;
-  if (dom.sidebarToggleBtn) dom.sidebarToggleBtn.addEventListener("click", () => {
-    try {
-      document.body.classList.toggle("sidebar-collapsed");
-      dom.sidebarToggleBtn.textContent = document.body.classList.contains("sidebar-collapsed") ? "⟫" : "⟪";
-    } catch (_) {}
-    renderTabs();
-  });
 
   if (dom.translatorSel) dom.translatorSel.addEventListener("change", () => {
     showHttpFields(dom, ((dom.translatorSel.value || "") === "http"));

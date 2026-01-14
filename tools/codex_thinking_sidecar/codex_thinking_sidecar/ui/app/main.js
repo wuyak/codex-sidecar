@@ -4,14 +4,11 @@ import { loadControl, maybeAutoStartOnce, setStatus, wireControlEvents } from ".
 import { bootstrap, refreshList } from "./list.js";
 import { renderEmpty, renderMessage } from "./render.js";
 import { createState } from "./state.js";
-import { renderTabs, setSidebarCollapsed, upsertThread } from "./sidebar.js";
+import { renderTabs, upsertThread } from "./sidebar.js";
 
 export async function initApp() {
   const dom = getDom();
   const state = createState();
-
-  // 默认折叠侧栏（圆点模式），节省空间。
-  setSidebarCollapsed(dom, true);
 
   const onSelectKey = async (key) => {
     state.currentKey = key;
@@ -33,4 +30,3 @@ export async function initApp() {
   await bootstrap(dom, state, renderTabsWrapper, renderMessage, renderEmpty);
   connectEventStream(dom, state, upsertThread, renderTabsWrapper, renderMessage, setStatus);
 }
-
