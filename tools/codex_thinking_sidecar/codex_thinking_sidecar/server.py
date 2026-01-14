@@ -42,17 +42,43 @@ class _Broadcaster:
 class _State:
     def __init__(self, max_messages: int) -> None:
         self._lock = threading.Lock()
-        self._messages: Deque[dict] = deque(maxlen=max_messages)
+        self._max_messages = max(1, int(max_messages or 1000))
+        self._messages: Deque[dict] = deque()
+        self._ids = set()
         self._broadcaster = _Broadcaster()
 
     def add(self, msg: dict) -> None:
+        mid = ""
+        try:
+            mid = str(msg.get("id") or "")
+        except Exception:
+            mid = ""
+
+        added = False
         with self._lock:
-            self._messages.append(msg)
-        self._broadcaster.publish(msg)
+            if mid and mid in self._ids:
+                added = False
+            else:
+                # Enforce bounded history while keeping id-set in sync.
+                while len(self._messages) >= self._max_messages:
+                    old = self._messages.popleft()
+                    try:
+                        oid = str(old.get("id") or "")
+                        if oid:
+                            self._ids.discard(oid)
+                    except Exception:
+                        pass
+                self._messages.append(msg)
+                if mid:
+                    self._ids.add(mid)
+                added = True
+        if added:
+            self._broadcaster.publish(msg)
 
     def clear(self) -> None:
         with self._lock:
             self._messages.clear()
+            self._ids.clear()
 
     def list_messages(self) -> List[dict]:
         with self._lock:
