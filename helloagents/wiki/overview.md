@@ -7,4 +7,4 @@
 | 模块名称 | 职责 | 状态 | 文档 |
 |---------|------|------|------|
 | rollout_sidecar | 监听 rollout JSONL + UI 展示 + 翻译 Provider | 开发中 | modules/rollout_sidecar.md |
-| codex_sdk | 通过 Codex SDK 提供“浏览器输入 → 本机持续对话”的控制模式 | 📝规划中 | modules/codex_sdk.md |
+| codex_sdk | 通过 Codex SDK 提供“浏览器输入 → 本机持续对话”的控制模式 | 🚧开发中（MVP） | modules/codex_sdk.md |

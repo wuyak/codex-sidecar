@@ -35,9 +35,11 @@ export function renderEmpty(dom) {
   list.appendChild(row);
 }
 
-export function renderMessage(dom, state, msg) {
+export function renderMessage(dom, state, msg, opts = {}) {
   const list = dom.list;
   if (!list) return;
+  const insertBefore = (opts && typeof opts === "object") ? (opts.insertBefore || null) : null;
+  const replaceEl = (opts && typeof opts === "object") ? (opts.replaceEl || null) : null;
 
   const row = document.createElement("div");
   const t = formatTs(msg.ts || "");
@@ -210,7 +212,8 @@ export function renderMessage(dom, state, msg) {
     const zhRendered = (showZh && hasZhClean) ? renderMarkdown(zhClean) : "";
     const zhCls = enHtml ? "md think-split" : "md";
     const zhHtml = zhRendered ? `<div class="${zhCls}">${zhRendered}</div>` : "";
-    body = (enHtml || zhHtml) ? (`${enHtml}${zhHtml}`) : `<div class="meta">（空）</div>`;
+    const waiting = (showZh && !showEn && !hasZhClean);
+    body = (enHtml || zhHtml) ? (`${enHtml}${zhHtml}`) : (waiting ? `<div class="meta">（翻译中…）</div>` : `<div class="meta">（空）</div>`);
   } else {
     body = `<pre>${escapeHtml(msg.text || "")}</pre>`;
   }
@@ -228,6 +231,16 @@ export function renderMessage(dom, state, msg) {
     ${body}
   `;
   decorateRow(row);
-  list.appendChild(row);
+  const mid = (msg && typeof msg.id === "string") ? msg.id : "";
+  if (mid) {
+    row.dataset.msgId = mid;
+    try { row.id = `msg_${safeDomId(mid)}`; } catch (_) {}
+  }
+  if (replaceEl && replaceEl.parentNode === list) list.replaceChild(row, replaceEl);
+  else if (insertBefore) list.insertBefore(row, insertBefore);
+  else list.appendChild(row);
+  if (mid && state && state.rowIndex && typeof state.rowIndex.set === "function") {
+    try { state.rowIndex.set(mid, row); } catch (_) {}
+  }
   if (autoscroll) window.scrollTo(0, document.body.scrollHeight);
 }

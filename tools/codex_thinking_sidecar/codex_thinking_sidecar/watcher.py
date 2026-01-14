@@ -1,15 +1,17 @@
 import hashlib
 import json
 import os
+import queue
 import re
 import threading
 import sys
 import time
 import urllib.error
 import urllib.request
+from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Pattern, Set, Tuple
+from typing import Any, Deque, Dict, Iterable, List, Optional, Pattern, Set, Tuple
 
 from .translator import NoneTranslator, Translator
 
@@ -19,6 +21,68 @@ _ROLLOUT_RE = re.compile(
 )
 _PROC_ROOT = Path("/proc")
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+_TRANSLATE_BATCH_MAGIC = "<<<SIDECAR_TRANSLATE_BATCH_V1>>>"
+_TRANSLATE_BATCH_ITEM_RE = re.compile(r"^<<<SIDECAR_ITEM:([^>]+)>>>\\s*$")
+_TRANSLATE_BATCH_END = "<<<SIDECAR_END>>>"
+
+
+def _pack_translate_batch(items: List[Tuple[str, str]]) -> str:
+    """
+    Pack multiple items into a single translation request.
+
+    Format contract:
+    - Markers must remain verbatim (do NOT translate them).
+    - Translator should output the same markers and translated content between them.
+    """
+    lines = [
+        "请将下列内容翻译为中文。",
+        "要求：逐行原样保留所有形如 <<<SIDECAR_...>>> 的标记行（不要翻译、不要改动、不要增删）。",
+        "输出必须包含最后一行 <<<SIDECAR_END>>>。",
+        "",
+        _TRANSLATE_BATCH_MAGIC,
+    ]
+    for mid, text in items:
+        lines.append(f"<<<SIDECAR_ITEM:{mid}>>>")
+        lines.append(str(text or "").rstrip())
+    lines.append(_TRANSLATE_BATCH_END)
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _unpack_translate_batch(output: str, wanted_ids: Set[str]) -> Dict[str, str]:
+    """Extract per-item translations from a packed response."""
+    out: Dict[str, str] = {}
+    cur_id: Optional[str] = None
+    buf: List[str] = []
+
+    def _flush() -> None:
+        nonlocal cur_id, buf
+        if cur_id and cur_id in wanted_ids:
+            out[cur_id] = "\n".join(buf).strip()
+        cur_id = None
+        buf = []
+
+    for raw in str(output or "").splitlines():
+        line = raw.strip()
+        if not line:
+            if cur_id is not None:
+                buf.append("")
+            continue
+        if line == _TRANSLATE_BATCH_MAGIC:
+            continue
+        if line == _TRANSLATE_BATCH_END:
+            _flush()
+            break
+        m = _TRANSLATE_BATCH_ITEM_RE.match(line)
+        if m:
+            _flush()
+            cur_id = m.group(1).strip()
+            buf = []
+            continue
+        if cur_id is not None:
+            buf.append(raw)
+    _flush()
+    return out
 
 
 def _latest_rollout_file(codex_home: Path) -> Optional[Path]:
@@ -215,6 +279,13 @@ class RolloutWatcher:
         self._tui_gate_waiting: bool = False
         self._stop_event: Optional[threading.Event] = None
 
+        # Translation is decoupled from ingestion: watcher ingests EN first,
+        # then a background worker translates and patches via op=update.
+        self._translate_q: "queue.Queue[Dict[str, Any]]" = queue.Queue(maxsize=1000)
+        self._translate_pending: Deque[Dict[str, Any]] = deque()
+        self._translate_thread: Optional[threading.Thread] = None
+        self._translate_batch_size = 5
+
     def _stop_requested(self) -> bool:
         ev = self._stop_event
         if ev is None:
@@ -298,6 +369,7 @@ class RolloutWatcher:
     def run(self, stop_event) -> None:
         # Keep a reference so inner loops can react quickly (e.g. stop in the middle of large file reads).
         self._stop_event = stop_event
+        self._start_translation_worker(stop_event)
         # Initial pick
         self._switch_to_latest_if_needed(force=True)
         if self._current_file is None and not self._warned_missing:
@@ -329,6 +401,140 @@ class RolloutWatcher:
             self._poll_once()
             self._poll_tui_log()
             stop_event.wait(self._poll_interval_s)
+
+    def _start_translation_worker(self, stop_event) -> None:
+        if self._translate_thread is not None and self._translate_thread.is_alive():
+            return
+        if isinstance(self._translator, NoneTranslator):
+            return
+        try:
+            t = threading.Thread(
+                target=self._translate_worker,
+                args=(stop_event,),
+                name="sidecar-translate",
+                daemon=True,
+            )
+            self._translate_thread = t
+            t.start()
+        except Exception:
+            self._translate_thread = None
+
+    def _enqueue_translation(self, mid: str, text: str, thread_key: str, batchable: bool) -> None:
+        if isinstance(self._translator, NoneTranslator):
+            return
+        m = str(mid or "").strip()
+        if not m:
+            return
+        t = str(text or "")
+        if not t.strip():
+            return
+        item: Dict[str, Any] = {
+            "id": m,
+            "text": t,
+            "key": str(thread_key or ""),
+            "batchable": bool(batchable),
+        }
+        try:
+            self._translate_q.put_nowait(item)
+        except queue.Full:
+            # Backpressure: drop oldest to keep UI responsive.
+            try:
+                _ = self._translate_q.get_nowait()
+            except queue.Empty:
+                return
+            try:
+                self._translate_q.put_nowait(item)
+            except queue.Full:
+                return
+
+    def _normalize_translation(self, src: str, zh: str) -> str:
+        s = str(src or "")
+        z = str(zh or "")
+        if s.strip() and (not z.strip()) and not isinstance(self._translator, NoneTranslator):
+            err = str(getattr(self._translator, "last_error", "") or "").strip()
+            hint = err if err else "WARN: 翻译失败（返回空译文）"
+            return f"⚠️ {hint}\n\n{s}"
+        return z
+
+    def _translate_worker(self, stop_event) -> None:
+        pending = self._translate_pending
+        while not stop_event.is_set():
+            try:
+                if pending:
+                    item = pending.popleft()
+                else:
+                    item = self._translate_q.get(timeout=0.2)
+            except queue.Empty:
+                continue
+            except Exception:
+                continue
+
+            try:
+                mid = str(item.get("id") or "").strip()
+                text = str(item.get("text") or "")
+                key = str(item.get("key") or "")
+                batchable = bool(item.get("batchable"))
+            except Exception:
+                continue
+            if not mid or not text.strip():
+                continue
+
+            batch: List[Dict[str, Any]] = [item]
+            if batchable and key:
+                while len(batch) < int(self._translate_batch_size or 5):
+                    try:
+                        nxt = self._translate_q.get_nowait()
+                    except queue.Empty:
+                        break
+                    except Exception:
+                        break
+                    try:
+                        if bool(nxt.get("batchable")) and str(nxt.get("key") or "") == key:
+                            batch.append(nxt)
+                        else:
+                            pending.append(nxt)
+                    except Exception:
+                        pending.append(nxt)
+
+            # Translate.
+            try:
+                if len(batch) == 1:
+                    zh = self._normalize_translation(text, self._translator.translate(text))
+                    if stop_event.is_set():
+                        continue
+                    self._ingest.ingest({"op": "update", "id": mid, "zh": zh})
+                    continue
+
+                pairs: List[Tuple[str, str]] = []
+                wanted: Set[str] = set()
+                for it in batch:
+                    iid = str(it.get("id") or "").strip()
+                    itxt = str(it.get("text") or "")
+                    if not iid or not itxt.strip():
+                        continue
+                    pairs.append((iid, itxt))
+                    wanted.add(iid)
+                if len(pairs) <= 1:
+                    zh = self._normalize_translation(text, self._translator.translate(text))
+                    if stop_event.is_set():
+                        continue
+                    self._ingest.ingest({"op": "update", "id": mid, "zh": zh})
+                    continue
+
+                packed = _pack_translate_batch(pairs)
+                out = self._translator.translate(packed)
+                mapping = _unpack_translate_batch(out, wanted_ids=wanted)
+
+                for iid, itxt in pairs:
+                    if stop_event.is_set():
+                        break
+                    zh = mapping.get(iid)
+                    if zh is None:
+                        zh = self._translator.translate(itxt)
+                    zh = self._normalize_translation(itxt, zh)
+                    self._ingest.ingest({"op": "update", "id": iid, "zh": zh})
+            except Exception:
+                continue
 
     def _switch_to_latest_if_needed(self, force: bool) -> None:
         picked = self._pick_follow_file()
@@ -591,7 +797,7 @@ class RolloutWatcher:
             ingested = 0
             for bline in tail:
                 self._line_no += 1
-                ingested += self._handle_line(bline, file_path=path, line_no=self._line_no)
+                ingested += self._handle_line(bline, file_path=path, line_no=self._line_no, is_replay=True)
 
             total_ingested += ingested
             if total_ingested > 0 or replay_lines >= max_lines:
@@ -613,7 +819,7 @@ class RolloutWatcher:
                         break
                     self._offset = f.tell()
                     self._line_no += 1
-                    self._handle_line(bline.rstrip(b"\n"), file_path=path, line_no=self._line_no)
+                    self._handle_line(bline.rstrip(b"\n"), file_path=path, line_no=self._line_no, is_replay=False)
         except Exception:
             try:
                 self._last_error = "poll_failed"
@@ -621,7 +827,7 @@ class RolloutWatcher:
                 pass
             return
 
-    def _handle_line(self, bline: bytes, file_path: Path, line_no: int) -> int:
+    def _handle_line(self, bline: bytes, file_path: Path, line_no: int, is_replay: bool) -> int:
         # If user clicked “停止监听”, avoid ingesting more lines even if we're still finishing in-flight work.
         if self._stop_requested():
             return 0
@@ -733,31 +939,26 @@ class RolloutWatcher:
                 hid = _sha1_hex(f"{file_path}:{kind}:{ts}:{text}")
             if self._dedupe(hid, kind=kind):
                 continue
-            # Only translate "thinking" content; keep tool/user/assistant as-is.
-            #
-            # NOTE: translate after dedupe to avoid wasting API calls on duplicates.
-            if kind in ("reasoning_summary", "agent_reasoning"):
-                zh = self._translator.translate(text)
-                if text.strip() and not zh.strip() and not isinstance(self._translator, NoneTranslator):
-                    err = str(getattr(self._translator, "last_error", "") or "").strip()
-                    hint = err if err else "WARN: 翻译失败（返回空译文）"
-                    zh = f"⚠️ {hint}\n\n{text}"
-            else:
-                zh = ""
             if self._stop_requested():
                 return ingested
+            mid = hid[:16]
+            is_thinking = kind in ("reasoning_summary", "agent_reasoning")
             msg = {
-                "id": hid[:16],
+                "id": mid,
                 "ts": ts,
                 "kind": kind,
                 "text": text,
-                "zh": zh,
+                "zh": "",
                 "thread_id": self._thread_id or "",
                 "file": str(file_path),
                 "line": line_no,
             }
             if self._ingest.ingest(msg):
                 ingested += 1
+                if is_thinking and text.strip():
+                    # 翻译走后台支路：回放阶段可聚合，实时阶段按单条慢慢补齐。
+                    thread_key = (self._thread_id or "") or str(file_path)
+                    self._enqueue_translation(mid=mid, text=text, thread_key=thread_key, batchable=is_replay)
         return ingested
 
     def _poll_tui_log(self) -> None:

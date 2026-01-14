@@ -29,9 +29,9 @@ echo '{"threadId":"<threadId>","input":"Implement the fix"}' | node ./run_turn.m
 stdin JSON：
 - `threadId`（可选）：续聊用的 threadId
 - `input`：字符串，或 `[{type:"text",text:"..."},{type:"local_image",path:"..."}]`
+- `codexHome`（可选）：覆盖 `CODEX_HOME`（用于指定 sessions/log 的落盘目录）
 - `threadOptions`（可选）：如 `workingDirectory` / `sandboxMode` / `approvalPolicy` 等
 
 stdout JSON：
 - `{ ok: true, threadId, turn: { finalResponse, items, usage } }`
 - 或 `{ ok: false, error }`
-

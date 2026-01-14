@@ -13,3 +13,5 @@
 - 默认仅监听本地文件并在 `127.0.0.1` 提供服务。
 - 若使用翻译 Provider（如 `http`），请自行评估将文本发送到第三方服务的风险。
 - 若启用 SDK 控制模式：它等价于“在本机执行命令/修改文件”的入口，必须确保服务仅本机可访问，并启用 CSRF/token 等防护；切勿暴露到局域网/公网。
+  - 默认策略：仅 loopback 可用；`POST /api/sdk/turn/run` 需携带 `X-CSRF-Token`（由 `GET /api/sdk/status` 下发，仅驻内存）。
+  - 如需对外开放必须显式设置 `CODEX_SDK_ALLOW_REMOTE=1`（强烈不建议）。

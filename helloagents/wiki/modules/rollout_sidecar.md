@@ -39,12 +39,13 @@
 
 ## 关于“在页面内输入并让 Codex 执行”
 本 sidecar 的核心原则是**不修改 Codex、只读监听**（旁路查看/调试）。因此：
-- 纯旁路情况下，Web UI **无法可靠地把输入“注入”到正在运行的 Codex 会话**（缺少官方可写 API/IPC）。
-- 如果确实需要“在页面里输入并执行”，通常要么：
-  - **改 Codex CLI**：提供一个可写的本地 API/Socket（sidecar 再去调用）；或
-  - **启动独立 Codex 进程**：sidecar 自己拉起 `codex` 子进程并管理 stdin/stdout（会改变工作流，且需要更严格的安全隔离）。
+- 纯旁路情况下，Web UI **无法可靠地把输入“注入”到正在运行的 Codex TUI 会话**（缺少官方可写 API/IPC，且 pty 注入复杂/脆弱）。
+- 作为更稳妥的“可选控制模式”，项目新增 `codex_sdk`：
+  - 通过 **Codex SDK（`@openai/codex-sdk`）** 在本机启动/恢复 thread（每次 turn 调用一次 `codex exec`），实现“浏览器输入 → 本机持续对话”。
+  - 入口为 sidecar 的 `/api/sdk/*`，并把对话写回同一条 `/events` SSE 流，因此 UI 与旁路输出统一展示。
+  - 安全边界：默认仅 loopback 可用，并要求 CSRF token（`GET /api/sdk/status` 下发）。
 
-更“非侵入”的替代思路（更安全、也更贴合旁路定位）：
+更“非侵入”的替代思路（更安全、也更贴合旁路定位）仍然有价值：
 - UI 提供“导出为 .md/.txt”以便归档或回放，而不直接执行任何本机命令（避免 Web UI 变成远程执行入口）。
 
 ## 运行方式（WSL 示例）

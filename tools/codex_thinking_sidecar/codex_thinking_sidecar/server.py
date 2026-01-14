@@ -2,6 +2,7 @@ import json
 import os
 import queue
 import secrets
+import shutil
 import subprocess
 import threading
 import time
@@ -52,10 +53,20 @@ class _State:
         self._lock = threading.Lock()
         self._max_messages = max(1, int(max_messages or 1000))
         self._messages: Deque[dict] = deque()
-        self._ids = set()
+        self._by_id: Dict[str, dict] = {}
+        self._next_seq = 1
         self._broadcaster = _Broadcaster()
 
     def add(self, msg: dict) -> None:
+        op = ""
+        try:
+            op = str(msg.get("op") or "").strip().lower()
+        except Exception:
+            op = ""
+        if op == "update":
+            self.update(msg)
+            return
+
         mid = ""
         try:
             mid = str(msg.get("id") or "")
@@ -64,7 +75,7 @@ class _State:
 
         added = False
         with self._lock:
-            if mid and mid in self._ids:
+            if mid and mid in self._by_id:
                 added = False
             else:
                 # Enforce bounded history while keeping id-set in sync.
@@ -73,20 +84,57 @@ class _State:
                     try:
                         oid = str(old.get("id") or "")
                         if oid:
-                            self._ids.discard(oid)
+                            self._by_id.pop(oid, None)
+                    except Exception:
+                        pass
+                try:
+                    msg["seq"] = int(self._next_seq)
+                    self._next_seq += 1
+                except Exception:
+                    try:
+                        msg["seq"] = int(time.time() * 1000)
                     except Exception:
                         pass
                 self._messages.append(msg)
                 if mid:
-                    self._ids.add(mid)
+                    self._by_id[mid] = msg
                 added = True
         if added:
             self._broadcaster.publish(msg)
 
+    def update(self, patch: dict) -> None:
+        mid = ""
+        try:
+            mid = str(patch.get("id") or "")
+        except Exception:
+            mid = ""
+        if not mid:
+            return
+
+        out: Optional[dict] = None
+        with self._lock:
+            cur = self._by_id.get(mid)
+            if cur is None:
+                # If update arrives before initial add (shouldn't happen), ignore.
+                out = None
+            else:
+                seq = cur.get("seq")
+                for k, v in patch.items():
+                    if k in ("op", "id", "seq"):
+                        continue
+                    cur[k] = v
+                if seq is not None:
+                    cur["seq"] = seq
+                out = dict(cur)
+                out["op"] = "update"
+
+        if out is not None:
+            self._broadcaster.publish(out)
+
     def clear(self) -> None:
         with self._lock:
             self._messages.clear()
-            self._ids.clear()
+            self._by_id.clear()
 
     def list_messages(self) -> List[dict]:
         with self._lock:
@@ -107,6 +155,7 @@ class _State:
                     "file": file_path,
                     "count": 0,
                     "last_ts": "",
+                    "last_seq": 0,
                     "kinds": {},
                 }
             a = agg[key]
@@ -114,11 +163,17 @@ class _State:
             ts = str(m.get("ts") or "")
             if ts and (not a["last_ts"] or ts > a["last_ts"]):
                 a["last_ts"] = ts
+            try:
+                seq = int(m.get("seq") or 0)
+            except Exception:
+                seq = 0
+            if seq and seq > int(a.get("last_seq") or 0):
+                a["last_seq"] = seq
             kind = str(m.get("kind") or "")
             if kind:
                 a["kinds"][kind] = int(a["kinds"].get(kind, 0)) + 1
         items = list(agg.values())
-        items.sort(key=lambda x: x.get("last_ts") or "", reverse=True)
+        items.sort(key=lambda x: (int(x.get("last_seq") or 0), x.get("last_ts") or ""), reverse=True)
         return items
 
     def subscribe(self) -> "queue.Queue[dict]":
@@ -239,6 +294,13 @@ class _Handler(BaseHTTPRequestHandler):
         except Exception:
             cfg = {}
         codex_home = str((cfg.get("watch_codex_home") if isinstance(cfg, dict) else "") or "").strip()
+        if not codex_home:
+            codex_home = str(os.environ.get("CODEX_HOME") or "").strip()
+        if not codex_home:
+            try:
+                codex_home = str((Path.home() / ".codex").resolve())
+            except Exception:
+                codex_home = str(Path.home() / ".codex")
 
         # 确保 codex_home 结构存在（Codex 需要能创建 sessions/log 等目录）
         if codex_home:
@@ -323,12 +385,51 @@ class _Handler(BaseHTTPRequestHandler):
             if not self._sdk_allowed():
                 self._send_json(HTTPStatus.FORBIDDEN, {"ok": False, "error": "sdk_disabled_on_non_loopback"})
                 return
+            # 额外状态信息（用于 UI 更快定位“依赖/权限”问题）
+            runner = _sdk_runner_path()
+            sdk_dir = _sdk_dir()
+            deps_installed = (sdk_dir / "node_modules").exists()
+
+            try:
+                cfg = self._controller.get_config() if self._controller is not None else {}
+            except Exception:
+                cfg = {}
+            codex_home = str((cfg.get("watch_codex_home") if isinstance(cfg, dict) else "") or "").strip()
+            if not codex_home:
+                codex_home = str(os.environ.get("CODEX_HOME") or "").strip()
+            if not codex_home:
+                try:
+                    codex_home = str((Path.home() / ".codex").resolve())
+                except Exception:
+                    codex_home = str(Path.home() / ".codex")
+
+            codex_home_exists = False
+            codex_home_writable = False
+            codex_home_creatable = False
+            if codex_home:
+                try:
+                    p = Path(codex_home).expanduser()
+                    codex_home_exists = p.exists()
+                    if codex_home_exists:
+                        codex_home_writable = os.access(str(p), os.W_OK)
+                    else:
+                        codex_home_creatable = os.access(str(p.parent), os.W_OK)
+                except Exception:
+                    pass
+
             self._send_json(
                 HTTPStatus.OK,
                 {
                     "ok": True,
-                    "available": _sdk_runner_path().exists(),
+                    "available": runner.exists(),
                     "csrf_token": self._sdk_csrf_token,
+                    "runner": str(runner),
+                    "deps_installed": deps_installed,
+                    "node": bool(shutil.which("node")),
+                    "codex_home": codex_home,
+                    "codex_home_exists": codex_home_exists,
+                    "codex_home_writable": codex_home_writable,
+                    "codex_home_creatable": codex_home_creatable,
                 },
             )
             return
@@ -621,13 +722,22 @@ class _Handler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "invalid_payload"})
             return
 
-        # Minimal validation.
+        op = str(obj.get("op") or "").strip().lower()
+        if op == "update":
+            if "id" not in obj:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "missing_id"})
+                return
+            self._state.add(obj)
+            self._send_json(HTTPStatus.OK, {"ok": True, "op": "update"})
+            return
+
+        # Minimal validation for normal ingest.
         if "id" not in obj or "kind" not in obj or "text" not in obj:
             self._send_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "missing_fields"})
             return
 
         self._state.add(obj)
-        self._send_json(HTTPStatus.OK, {"ok": True})
+        self._send_json(HTTPStatus.OK, {"ok": True, "op": "add"})
 
 
 

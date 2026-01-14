@@ -18,6 +18,21 @@ WSL/Linux：
 在 UI 里设置“监视目录（CODEX_HOME）”、回放行数、是否采集 `agent_reasoning`、翻译 Provider 等；保存配置后点击“开始监听”。
 也可以启用“自动开始监听（UI）”，保存配置后会自动开始（无需手动点击）。
 
+## SDK 控制模式（可选：浏览器输入 → 本机持续对话）
+
+当你希望在浏览器里直接输入并驱动 Codex 执行时，可使用 `codex_sdk` 控制模式（不尝试向既有 TUI 进程注入 stdin/pty，而是通过 Codex SDK 按 turn 执行并复用 threadId 续聊）。
+
+准备工作：
+- 安装 Node 依赖：`cd src/codex-sdk && npm install`
+- 确保本机 Codex 已完成登录/鉴权，且 `CODEX_HOME` 可写
+
+使用方式：
+- 启动 `./ui.sh` 后，页面底部会出现 “SDK 控制” 输入栏（回车发送，Shift+Enter 换行）
+- `threadId` 可留空（自动新建），也可粘贴恢复；点击“使用”可把当前选中会话的 threadId 填入输入栏
+
+最小自测：
+- `tools/codex_thinking_sidecar/sdk_smoke_test.sh`
+
 ## 运行（兼容：启动即监听，命令行参数）
 
 ```bash

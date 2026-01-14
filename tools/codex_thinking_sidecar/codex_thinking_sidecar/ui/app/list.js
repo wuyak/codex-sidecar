@@ -15,10 +15,12 @@ export async function refreshList(dom, state, renderTabs, renderMessage, renderE
     const data = await resp.json();
     const msgs = (data.messages || []);
     state.callIndex.clear();
+    if (state.rowIndex) state.rowIndex.clear();
+    if (state.timeline && Array.isArray(state.timeline)) state.timeline.length = 0;
     if (dom.list) while (dom.list.firstChild) dom.list.removeChild(dom.list.firstChild);
     const filtered0 = state.currentKey === "all" ? msgs : msgs.filter(m => keyOf(m) === state.currentKey);
 
-    // Sort by timestamp to avoid “时间倒退”错觉（Codex JSONL 在极少数情况下可能乱序落盘/补写）。
+    // Sort by (timestamp, seq) to keep a stable timeline even when upstream is slightly out-of-order.
     const filtered = filtered0
       .map((m, i) => ({ m, i }))
       .sort((a, b) => {
@@ -30,6 +32,14 @@ export async function refreshList(dom, state, renderTabs, renderMessage, renderE
           if (ta !== tb) return ta - tb;
         } else if (fa) return -1;
         else if (fb) return 1;
+        const sa = Number.isFinite(Number(a.m && a.m.seq)) ? Number(a.m.seq) : NaN;
+        const sb = Number.isFinite(Number(b.m && b.m.seq)) ? Number(b.m.seq) : NaN;
+        const fsa = Number.isFinite(sa);
+        const fsb = Number.isFinite(sb);
+        if (fsa && fsb) {
+          if (sa !== sb) return sa - sb;
+        } else if (fsa) return -1;
+        else if (fsb) return 1;
         return a.i - b.i;
       })
       .map(x => x.m);
@@ -54,6 +64,11 @@ export async function refreshList(dom, state, renderTabs, renderMessage, renderE
       renderMessage(dom, state, m);
       const ms = tsToMs(m && m.ts);
       if (Number.isFinite(ms)) state.lastRenderedMs = ms;
+      const mid = (m && typeof m.id === "string") ? m.id : "";
+      if (mid && state.rowIndex && state.rowIndex.has(mid) && state.timeline && Array.isArray(state.timeline)) {
+        const seq = Number.isFinite(Number(m && m.seq)) ? Number(m.seq) : NaN;
+        state.timeline.push({ id: mid, ms, seq });
+      }
     }
   } catch (e) {
     if (dom.list) while (dom.list.firstChild) dom.list.removeChild(dom.list.firstChild);

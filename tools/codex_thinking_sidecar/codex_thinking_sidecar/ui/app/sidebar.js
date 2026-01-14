@@ -65,17 +65,24 @@ export function clearTabs(dom) {
 
 export function upsertThread(state, msg) {
   const key = keyOf(msg);
-  const prev = state.threadIndex.get(key) || { key, thread_id: msg.thread_id || "", file: msg.file || "", count: 0, last_ts: "" };
+  const prev = state.threadIndex.get(key) || { key, thread_id: msg.thread_id || "", file: msg.file || "", count: 0, last_ts: "", last_seq: 0 };
   prev.count = (prev.count || 0) + 1;
   const ts = msg.ts || "";
   if (ts && (!prev.last_ts || ts > prev.last_ts)) prev.last_ts = ts;
+  const seq = Number.isFinite(Number(msg && msg.seq)) ? Number(msg.seq) : 0;
+  if (seq && (!prev.last_seq || seq > prev.last_seq)) prev.last_seq = seq;
   state.threadIndex.set(key, prev);
 }
 
 export function renderTabs(dom, state, onSelectKey) {
   const tabs = dom.tabs;
   if (!tabs) return;
-  const items = Array.from(state.threadIndex.values()).sort((a, b) => (b.last_ts || "").localeCompare(a.last_ts || ""));
+  const items = Array.from(state.threadIndex.values()).sort((a, b) => {
+    const sa = Number(a && a.last_seq) || 0;
+    const sb = Number(b && b.last_seq) || 0;
+    if (sa !== sb) return sb - sa;
+    return String(b.last_ts || "").localeCompare(String(a.last_ts || ""));
+  });
   clearTabs(dom);
 
   const allBtn = document.createElement("button");

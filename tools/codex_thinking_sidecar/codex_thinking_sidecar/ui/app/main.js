@@ -5,6 +5,7 @@ import { bootstrap, refreshList } from "./list.js";
 import { renderEmpty, renderMessage } from "./render.js";
 import { createState } from "./state.js";
 import { renderTabs, upsertThread } from "./sidebar.js";
+import { initSdkComposer, syncSdkSelection } from "./sdk.js";
 
 export async function initApp() {
   const dom = getDom();
@@ -12,6 +13,7 @@ export async function initApp() {
 
   const onSelectKey = async (key) => {
     state.currentKey = key;
+    syncSdkSelection(dom, state);
     // When multiple Codex sessions exist, auto-follow may jump between rollout files.
     // Selecting a session in the sidebar pins the watcher to that thread/file so the
     // visible log keeps updating for the chosen session.
@@ -49,5 +51,6 @@ export async function initApp() {
   await loadControl(dom, state);
 
   await bootstrap(dom, state, renderTabsWrapper, renderMessage, renderEmpty);
+  initSdkComposer(dom, state, setStatus).catch(() => {});
   connectEventStream(dom, state, upsertThread, renderTabsWrapper, renderMessage, setStatus, refreshListWrapper);
 }
