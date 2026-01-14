@@ -33,6 +33,7 @@ export function getDom() {
     sidebarToggleBtn: byId("sidebarToggleBtn"),
     startBtn: byId("startBtn"),
     stopBtn: byId("stopBtn"),
+    restartBtn: byId("restartBtn"),
     clearBtn: byId("clearBtn"),
     configToggleBtn: byId("configToggleBtn"),
     drawerOverlay: byId("drawerOverlay"),

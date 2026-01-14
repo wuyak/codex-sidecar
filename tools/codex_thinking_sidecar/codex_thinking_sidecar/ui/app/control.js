@@ -250,6 +250,7 @@ export async function loadControl(dom, state) {
     try {
       if (dom.startBtn) dom.startBtn.disabled = !!st.running;
       if (dom.stopBtn) dom.stopBtn.disabled = !st.running;
+      if (dom.restartBtn) dom.restartBtn.disabled = !st.running;
     } catch (_) {}
   } catch (e) {
     debugLines.push(`[warn] /api/status: ${fmtErr(e)}`);
@@ -378,6 +379,14 @@ export async function stopWatch(dom, state) {
   setStatus(dom, r.running ? "停止监听失败" : "已停止监听");
 }
 
+export async function restartWatch(dom, state) {
+  setStatus(dom, "正在重启监听…");
+  try { await api("POST", "/api/control/stop"); } catch (e) {}
+  const r = await api("POST", "/api/control/start");
+  await loadControl(dom, state);
+  setStatus(dom, r.running ? "已重启监听" : "重启监听失败");
+}
+
 export async function clearView(dom, state, refreshList) {
   await api("POST", "/api/control/clear");
   state.threadIndex.clear();
@@ -438,6 +447,7 @@ export function wireControlEvents(dom, state, helpers) {
   if (dom.recoverBtn) dom.recoverBtn.addEventListener("click", async () => { await recoverConfig(dom, state); });
   if (dom.startBtn) dom.startBtn.addEventListener("click", async () => { await startWatch(dom, state); });
   if (dom.stopBtn) dom.stopBtn.addEventListener("click", async () => { await stopWatch(dom, state); });
+  if (dom.restartBtn) dom.restartBtn.addEventListener("click", async () => { await restartWatch(dom, state); });
   if (dom.clearBtn) dom.clearBtn.addEventListener("click", async () => { await clearView(dom, state, refreshList); });
 
   if (dom.shutdownBtn) dom.shutdownBtn.addEventListener("click", async () => {

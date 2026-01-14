@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Pattern, Set, Tuple
 
-from .translator import Translator
+from .translator import NoneTranslator, Translator
 
 
 _ROLLOUT_RE = re.compile(
@@ -561,6 +561,10 @@ class RolloutWatcher:
             # Only translate "thinking" content; keep tool/user/assistant as-is.
             if kind in ("reasoning_summary", "agent_reasoning"):
                 zh = self._translator.translate(text)
+                if text.strip() and not zh.strip() and not isinstance(self._translator, NoneTranslator):
+                    err = str(getattr(self._translator, "last_error", "") or "").strip()
+                    hint = err if err else "WARN: 翻译失败（返回空译文）"
+                    zh = f"⚠️ {hint}\n\n{text}"
             else:
                 zh = ""
             # Dedup across replay expansions.

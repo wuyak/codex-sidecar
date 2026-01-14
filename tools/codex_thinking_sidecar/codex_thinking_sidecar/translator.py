@@ -43,6 +43,7 @@ class HttpTranslator:
     auth_token: str = ""
     auth_header: str = "Authorization"
     auth_prefix: str = "Bearer "
+    last_error: str = ""
 
     def translate(self, text: str) -> str:
         if not text or not self.url:
@@ -107,7 +108,7 @@ class HttpTranslator:
                             return txt
                 except Exception:
                     pass
-                _log_http_translate_error(url=url, auth_token=self.auth_token)
+                self.last_error = _log_http_translate_error(url=url, auth_token=self.auth_token)
                 return ""
 
             # Best-effort extraction across common shapes.
@@ -149,7 +150,7 @@ class HttpTranslator:
                         detail = f"code={obj.get('code')}"
             except Exception:
                 detail = ""
-            _log_http_translate_error(url=url, auth_token=self.auth_token, detail=detail)
+            self.last_error = _log_http_translate_error(url=url, auth_token=self.auth_token, detail=detail)
             return ""
         except urllib.error.HTTPError as e:
             detail = f"http_status={getattr(e, 'code', '')}"
@@ -160,18 +161,30 @@ class HttpTranslator:
                     detail += f" body={body.decode('utf-8', errors='replace')}"
             except Exception:
                 pass
-            _log_http_translate_error(url=url, auth_token=self.auth_token, detail=detail)
+            self.last_error = _log_http_translate_error(url=url, auth_token=self.auth_token, detail=detail)
             return ""
         except (TimeoutError, _SocketTimeout):
-            _log_http_translate_error(url=url, auth_token=self.auth_token, detail=f"timeout_s={self.timeout_s}")
+            self.last_error = _log_http_translate_error(
+                url=url,
+                auth_token=self.auth_token,
+                detail=f"timeout_s={self.timeout_s}",
+            )
             return ""
         except urllib.error.URLError as e:
             reason = getattr(e, "reason", None)
             rname = type(reason).__name__ if reason is not None else "URLError"
-            _log_http_translate_error(url=url, auth_token=self.auth_token, detail=f"url_error={rname}")
+            self.last_error = _log_http_translate_error(
+                url=url,
+                auth_token=self.auth_token,
+                detail=f"url_error={rname}",
+            )
             return ""
         except Exception as e:
-            _log_http_translate_error(url=url, auth_token=self.auth_token, detail=f"error={type(e).__name__}")
+            self.last_error = _log_http_translate_error(
+                url=url,
+                auth_token=self.auth_token,
+                detail=f"error={type(e).__name__}",
+            )
             return ""
 
 
@@ -212,13 +225,18 @@ def _sanitize_url(url: str, auth_token: str) -> str:
     except Exception:
         return "<url>"
 
-
-def _log_http_translate_error(url: str, auth_token: str, detail: str = "") -> None:
-    global _LAST_HTTP_ERR_TS
-    now = time.time()
-    if now - _LAST_HTTP_ERR_TS < 5.0:
-        return
-    _LAST_HTTP_ERR_TS = now
+def _format_http_translate_error(url: str, auth_token: str, detail: str = "") -> str:
     safe = _sanitize_url(url, auth_token)
     suffix = f" ({detail})" if detail else ""
-    print(f"[sidecar] WARN: HTTP 翻译失败（返回空译文）：{safe}{suffix}", file=sys.stderr)
+    return f"WARN: HTTP 翻译失败（返回空译文）：{safe}{suffix}"
+
+
+def _log_http_translate_error(url: str, auth_token: str, detail: str = "") -> str:
+    global _LAST_HTTP_ERR_TS
+    msg = _format_http_translate_error(url, auth_token, detail=detail)
+    now = time.time()
+    if now - _LAST_HTTP_ERR_TS < 5.0:
+        return msg
+    _LAST_HTTP_ERR_TS = now
+    print(f"[sidecar] {msg}", file=sys.stderr)
+    return msg
