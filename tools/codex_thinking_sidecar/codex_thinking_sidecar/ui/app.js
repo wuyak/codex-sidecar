@@ -31,9 +31,6 @@ const statusText = document.getElementById("statusText");
 	      const drawer = document.getElementById("drawer");
 	      const drawerCloseBtn = document.getElementById("drawerCloseBtn");
 	      const shutdownBtn = document.getElementById("shutdownBtn");
-	      const draftText = document.getElementById("draftText");
-	      const draftCopyBtn = document.getElementById("draftCopyBtn");
-	      const draftClearBtn = document.getElementById("draftClearBtn");
 	      const scrollTopBtn = document.getElementById("scrollTopBtn");
 	      const scrollBottomBtn = document.getElementById("scrollBottomBtn");
 
@@ -972,7 +969,7 @@ const statusText = document.getElementById("statusText");
         clearTabs();
         const allBtn = document.createElement("button");
         allBtn.className = "tab" + (currentKey === "all" ? " active" : "");
-        allBtn.textContent = collapsed ? "全" : "全部";
+        allBtn.textContent = collapsed ? "≡" : "全部";
         allBtn.title = "全部";
         allBtn.onclick = async () => { currentKey = "all"; await refreshList(); };
         tabs.appendChild(allBtn);
@@ -982,7 +979,7 @@ const statusText = document.getElementById("statusText");
           btn.className = "tab" + (currentKey === t.key ? " active" : "");
           const label = threadLabel(t);
           if (collapsed) {
-            btn.textContent = "•";
+            btn.textContent = "●";
             const full = t.thread_id || t.file || t.key || "";
             btn.title = `${label} (${t.count || 0})${full ? "\n" + full : ""}`;
           } else {
@@ -1453,15 +1450,19 @@ ${st}` : msg;
           else if (mode === "process") detail = pids ? `（process | pid:${pids}）` : "（process）";
           else if (mode === "fallback") detail = detected && pids ? `（fallback | pid:${pids}）` : "（fallback）";
           else if (mode) detail = `(${mode})`;
-          if (st.running) {
-            if (cur) setStatus(`运行中：${cur} ${detail} ${hint}`.trim());
-            else setStatus(`运行中：${detail} ${hint}`.trim());
-          } else {
-            setStatus(`未运行 ${hint}`.trim());
-          }
-        } catch (e) {
-          debugLines.push(`[warn] /api/status: ${fmtErr(e)}`);
-        }
+	          if (st.running) {
+	            if (cur) setStatus(`运行中：${cur} ${detail} ${hint}`.trim());
+	            else setStatus(`运行中：${detail} ${hint}`.trim());
+	          } else {
+	            setStatus(`未运行 ${hint}`.trim());
+	          }
+	          try {
+	            if (startBtn) startBtn.disabled = !!st.running;
+	            if (stopBtn) stopBtn.disabled = !st.running;
+	          } catch (_) {}
+	        } catch (e) {
+	          debugLines.push(`[warn] /api/status: ${fmtErr(e)}`);
+	        }
 
 	        // 5) Debug summary（不打印 token/url）
 	        try {
@@ -1731,14 +1732,6 @@ ${st}` : msg;
 		        try { await api("POST", "/api/control/shutdown", {}); } catch (e) {}
 		        closeDrawer();
 		        setStatus("已发送退出请求（服务将停止）。");
-		      });
-		      if (draftCopyBtn && draftText) draftCopyBtn.addEventListener("click", async () => {
-		        const ok = await copyToClipboard(draftText.value || "");
-		        setStatus(ok ? "已复制草稿" : "复制失败");
-		      });
-		      if (draftClearBtn && draftText) draftClearBtn.addEventListener("click", () => {
-		        draftText.value = "";
-		        setStatus("已清空草稿");
 		      });
 		      if (scrollTopBtn) scrollTopBtn.addEventListener("click", () => { window.scrollTo({ top: 0, behavior: "smooth" }); });
 		      if (scrollBottomBtn) scrollBottomBtn.addEventListener("click", () => { window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }); });

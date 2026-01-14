@@ -21,8 +21,9 @@
 - 可选：WSL2/Linux 下支持“进程优先定位”当前会话文件
   - 扫描 `/proc/<pid>/fd`，优先锁定匹配到的 Codex 进程（及其子进程）正在写入的 `sessions/**/rollout-*.jsonl`
   - 并保留 sessions 扫描作为回退（用于进程已启动但文件尚未被发现的窗口期）
-- UI 顶栏：开始/停止监听、清空显示、打开“配置”侧栏
-- UI 配置侧栏：保存配置、恢复配置、退出 Sidecar（手动关闭进程）
+- UI 顶栏：标题与运行状态
+- UI 右侧工具栏：⚙️ 配置、▶️ 开始监听、⏹️ 停止监听、🧹 清空显示、⏻ 退出 Sidecar
+- UI 配置抽屉：保存配置、恢复配置
 - UI 会话切换：会话列表固定在左侧 sidebar，支持折叠为“圆点模式”以压缩占用空间（hover 显示会话信息）
 - 翻译 Provider 可插拔并可在 UI 中切换：`stub/none/http`
 - `--include-agent-reasoning` 说明：
@@ -44,13 +45,12 @@
   - **启动独立 Codex 进程**：sidecar 自己拉起 `codex` 子进程并管理 stdin/stdout（会改变工作流，且需要更严格的安全隔离）。
 
 更“非侵入”的替代思路（更安全、也更贴合旁路定位）：
-- UI 提供一个“输入草稿/模板化输出”区域（在右侧“配置”侧栏内）：一键复制 Prompt/命令/`tool_call` 模板到剪贴板，再手动粘贴到终端的 Codex。
 - UI 提供“导出为 .md/.txt”以便归档或回放，而不直接执行任何本机命令（避免 Web UI 变成远程执行入口）。
 
 ## 运行方式（WSL 示例）
 - 推荐（短命令，先开 UI 再开始监听）：
   - `cd ~/src/codex-thinking-sidecar-zh && ./ui.sh`
-  - 打开 `http://127.0.0.1:8787/ui`，点“配置”打开侧栏保存配置，再点击顶栏“开始监听”
+  - 打开 `http://127.0.0.1:8787/ui`，点右侧工具栏 ⚙️ 保存配置，再点 ▶️ 开始监听
 
 - 兼容（启动即监听，命令行参数方式）：
   - `cd ~/src/codex-thinking-sidecar-zh && ./run.sh --codex-home "$HOME/.codex" --port 8787 --replay-last-lines 5000 --include-agent-reasoning`
