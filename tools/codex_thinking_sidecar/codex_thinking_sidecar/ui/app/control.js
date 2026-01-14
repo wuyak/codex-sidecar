@@ -42,6 +42,24 @@ function showHttpFields(dom, show) {
   } catch (_) {}
 }
 
+function showOpenAIFields(dom, show) {
+  const els = [dom.openaiBaseUrl, dom.openaiModel, dom.openaiApiKey, dom.openaiAuthMode, dom.openaiAuthEnv, dom.openaiReasoning, dom.openaiTimeout];
+  for (const el of els) {
+    if (!el) continue;
+    el.disabled = !show;
+    el.style.opacity = show ? "1" : "0.5";
+  }
+  try {
+    if (dom.openaiBlock) dom.openaiBlock.style.display = show ? "" : "none";
+  } catch (_) {}
+}
+
+function showProviderBlocks(dom, provider) {
+  const p = String(provider || "").trim().toLowerCase();
+  showHttpFields(dom, p === "http");
+  showOpenAIFields(dom, p === "openai");
+}
+
 function normalizeHttpProfiles(tc) {
   const profiles = Array.isArray(tc.profiles) ? tc.profiles.filter(p => p && typeof p === "object") : [];
   let selected = (typeof tc.selected === "string") ? tc.selected : "";
@@ -136,6 +154,7 @@ export async function loadControl(dom, state) {
   let translators = [
     { id: "stub", label: "Stub（占位）" },
     { id: "none", label: "None（不翻译）" },
+    { id: "openai", label: "GPT（Responses API 兼容）" },
     { id: "http", label: "HTTP（通用适配器）" },
   ];
   try {
@@ -198,12 +217,27 @@ export async function loadControl(dom, state) {
       if (dom.translatorSel.value !== want) dom.translatorSel.value = "stub";
     }
     const tc = cfg.translator_config || {};
-    const normalized = normalizeHttpProfiles(tc || {});
+    const tcObj = (tc && typeof tc === "object") ? tc : {};
+    const httpTc = (tcObj.http && typeof tcObj.http === "object") ? tcObj.http : tcObj;
+    const openaiTc = (tcObj.openai && typeof tcObj.openai === "object") ? tcObj.openai : tcObj;
+    const normalized = normalizeHttpProfiles(httpTc || {});
     state.httpProfiles = normalized.profiles;
     state.httpSelected = normalized.selected;
     refreshHttpProfileSelect(dom, state);
     if (state.httpSelected) applyProfileToInputs(dom, state, state.httpSelected);
-    showHttpFields(dom, ((dom.translatorSel && dom.translatorSel.value) || "") === "http");
+    // openai provider fields
+    try {
+      const oh = openaiTc || {};
+      if (dom.openaiBaseUrl) dom.openaiBaseUrl.value = oh.base_url || "";
+      if (dom.openaiModel) dom.openaiModel.value = oh.model || "";
+      if (dom.openaiApiKey) dom.openaiApiKey.value = oh.api_key || "";
+      if (dom.openaiAuthEnv) dom.openaiAuthEnv.value = oh.auth_env || "";
+      if (dom.openaiTimeout) dom.openaiTimeout.value = oh.timeout_s ?? 12;
+      const ah = String(oh.auth_header || "Authorization").toLowerCase();
+      if (dom.openaiAuthMode) dom.openaiAuthMode.value = (ah === "x-api-key") ? "x-api-key" : "authorization";
+      if (dom.openaiReasoning) dom.openaiReasoning.value = oh.reasoning_effort || "";
+    } catch (_) {}
+    showProviderBlocks(dom, (dom.translatorSel && dom.translatorSel.value) ? dom.translatorSel.value : "");
   } catch (e) {
     debugLines.push(`[error] apply config: ${fmtErr(e)}`);
   }
@@ -260,6 +294,7 @@ export async function loadControl(dom, state) {
 
   // 5) Debug summary（不打印 token/url）
   try {
+    const provider = String(cfg.translator_provider || "");
     const profNames = (state.httpProfiles || []).map(p => (p && p.name) ? String(p.name) : "").filter(Boolean);
     const cfgHomePath = String(cfg.config_home || "").replace(/\/+$/, "");
     const cfgFile = cfgHomePath ? `${cfgHomePath}/config.json` : "";
@@ -270,10 +305,18 @@ export async function loadControl(dom, state) {
       `watch_codex_home: ${cfg.watch_codex_home || ""}`,
       `config_file: ${cfgFile}`,
       `recovery_available: ${rAvail}${rSrc ? " (" + rSrc + ")" : ""}`,
-      `translator_provider: ${cfg.translator_provider || ""}`,
+      `translator_provider: ${provider}`,
       `http_profiles: ${profNames.length}${profNames.length ? " (" + profNames.join(", ") + ")" : ""}`,
       `http_selected: ${state.httpSelected || ""}`,
     );
+    if (provider.toLowerCase() === "openai") {
+      const tc = cfg.translator_config || {};
+      const tcObj = (tc && typeof tc === "object") ? tc : {};
+      const openaiTc = (tcObj.openai && typeof tcObj.openai === "object") ? tcObj.openai : tcObj;
+      const base = String(openaiTc.base_url || "");
+      const model = String(openaiTc.model || "");
+      debugLines.splice(5, 0, `openai_base_url: ${base}`, `openai_model: ${model}`);
+    }
   } catch (e) {
     debugLines.push(`[warn] debug: ${fmtErr(e)}`);
   }
@@ -328,7 +371,33 @@ export async function saveConfig(dom, state) {
     translator_provider: provider,
   };
   if (provider === "http") {
-    patch.translator_config = { profiles: state.httpProfiles, selected: state.httpSelected };
+    patch.translator_config = { http: { profiles: state.httpProfiles, selected: state.httpSelected } };
+  }
+  if (provider === "openai") {
+    const base = (dom.openaiBaseUrl && dom.openaiBaseUrl.value) ? dom.openaiBaseUrl.value.trim() : "";
+    const model = (dom.openaiModel && dom.openaiModel.value) ? dom.openaiModel.value.trim() : "";
+    const apiKey = (dom.openaiApiKey && dom.openaiApiKey.value) ? dom.openaiApiKey.value.trim() : "";
+    const authEnv = (dom.openaiAuthEnv && dom.openaiAuthEnv.value) ? dom.openaiAuthEnv.value.trim() : "";
+    const mode = (dom.openaiAuthMode && dom.openaiAuthMode.value) ? dom.openaiAuthMode.value : "authorization";
+    const reasoning = (dom.openaiReasoning && dom.openaiReasoning.value) ? dom.openaiReasoning.value.trim() : "";
+    const timeout = Number((dom.openaiTimeout && dom.openaiTimeout.value) ? dom.openaiTimeout.value : 12);
+    if (!base) { alert("请填写 Base URL（例如 https://www.right.codes/codex/v1）"); return; }
+    if (!model) { alert("请填写 Model（例如 gpt-4.1-mini / gpt-4o-mini）"); return; }
+    if (!apiKey && !authEnv) { alert("请填写 API Key，或填写 Auth ENV 并在环境变量中提供 Key"); return; }
+    const auth_header = (mode === "x-api-key") ? "x-api-key" : "Authorization";
+    const auth_prefix = (mode === "x-api-key") ? "" : "Bearer ";
+    patch.translator_config = {
+      openai: {
+        base_url: base,
+        model,
+        api_key: apiKey,
+        auth_env: authEnv,
+        timeout_s: timeout,
+        auth_header,
+        auth_prefix,
+        reasoning_effort: reasoning,
+      },
+    };
   }
   const saved = await api("POST", "/api/config", patch);
   if (saved && saved.ok === false) {
@@ -466,7 +535,7 @@ export function wireControlEvents(dom, state, helpers) {
   const { refreshList, renderTabs } = helpers;
 
   if (dom.translatorSel) dom.translatorSel.addEventListener("change", () => {
-    showHttpFields(dom, ((dom.translatorSel.value || "") === "http"));
+    showProviderBlocks(dom, (dom.translatorSel.value || ""));
   });
 
   if (dom.configToggleBtn) dom.configToggleBtn.addEventListener("click", () => {

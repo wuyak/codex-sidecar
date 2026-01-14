@@ -3,7 +3,8 @@
 ## [Unreleased]
 - 新增：UI 控制面（保存配置、开始/停止监听、清空显示）+ 短命令 `./ui.sh`。
 - 优化：`./ui.sh` 当端口已有健康服务时直接打开已有 UI 并退出，避免端口占用反复报错。
-- 新增：翻译 Provider 预留与 UI 切换（stub/none/http）。
+- 新增：翻译 Provider 预留与 UI 切换（stub/none/http/openai）。
+- 新增：GPT（Responses API 兼容）翻译 Provider（支持 OpenAI/兼容中转站如 right.codes；鉴权支持 Authorization/x-api-key；可选 reasoning_effort）。
 - 新增：HTTP Profiles（可保存多个翻译 API 配置并手动切换）。
 - 调整：`./run.sh` 默认沿用已保存配置（未显式传参时不再用默认值覆盖）。
 - 新增：HTTP Token 字段（可用于 Header 鉴权或替换 URL 中 `{token}`，方便对接 DeepLX）。
@@ -14,6 +15,7 @@
 - 优化：控制面板接口请求增加 cache-bust，API 响应标记为 no-store，避免浏览器缓存导致配置不刷新。
 - 优化：控制面板新增“调试信息”面板，显示配置来源/Profiles 概览与加载失败原因（不展示 token/url）。
 - 修复：保存配置时不再在 Provider≠HTTP 的情况下清空已保存的 HTTP Profiles，避免误操作导致配置丢失。
+- 调整：translator_config 支持按 Provider 分区保存（`http/openai`）并在保存时合并，避免切换 Provider 覆盖其它配置。
 - 调整：配置持久化迁移到 XDG（`~/.config/codex-thinking-sidecar/config.json`），备份机制简化为单文件 `config.json.bak`；Profiles 为空时 UI 提示一键恢复，后端拒绝保存空 Profiles 以防误覆盖。
 - 诊断：HTTP 翻译失败时输出去敏后的告警日志（终端可见）。
 - 新增：HTTP 适配 `translate.json`（硅基流动 translate.js 形式，表单提交）。

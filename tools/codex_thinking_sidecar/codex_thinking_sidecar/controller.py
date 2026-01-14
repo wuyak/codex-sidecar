@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from .config import SidecarConfig, find_recoverable_translator_snapshot, load_config, save_config
-from .translator import HttpTranslator, NoneTranslator, StubTranslator, Translator
+from .translator import HttpTranslator, NoneTranslator, OpenAIResponsesTranslator, StubTranslator, Translator
 from .watcher import HttpIngestClient, RolloutWatcher
 
 
@@ -20,6 +20,20 @@ class TranslatorSpec:
 TRANSLATORS = [
     TranslatorSpec(id="stub", label="Stub（占位）", fields={}),
     TranslatorSpec(id="none", label="None（不翻译）", fields={}),
+    TranslatorSpec(
+        id="openai",
+        label="GPT（Responses API 兼容）",
+        fields={
+            "base_url": {"type": "string", "label": "Base URL", "placeholder": "https://www.right.codes/codex/v1"},
+            "model": {"type": "string", "label": "Model", "placeholder": "gpt-4.1-mini"},
+            "api_key": {"type": "string", "label": "API Key", "placeholder": "可留空并改用 Auth ENV"},
+            "timeout_s": {"type": "number", "label": "超时（秒）", "default": 12},
+            "auth_env": {"type": "string", "label": "认证环境变量名（可选）", "placeholder": "CODEX_TRANSLATE_TOKEN"},
+            "auth_header": {"type": "string", "label": "认证 Header", "default": "Authorization"},
+            "auth_prefix": {"type": "string", "label": "认证前缀", "default": "Bearer "},
+            "reasoning_effort": {"type": "string", "label": "Reasoning effort（可选）", "default": "minimal"},
+        },
+    ),
     TranslatorSpec(
         id="http",
         label="HTTP（通用适配器）",
@@ -110,7 +124,11 @@ class SidecarController:
             if not isinstance(tc, dict):
                 tc = {}
             cur["translator_provider"] = provider
-            cur["translator_config"] = tc
+            # Preserve other provider configs while restoring HTTP profiles.
+            prev = cur.get("translator_config")
+            merged = dict(prev) if isinstance(prev, dict) else {}
+            merged["http"] = tc
+            cur["translator_config"] = merged
             # config_home is immutable (controls where the config is stored)
             cur["config_home"] = str(self._config_home)
             self._cfg = SidecarConfig.from_dict(cur)
@@ -121,6 +139,9 @@ class SidecarController:
     def _count_valid_http_profiles(tc: Any) -> int:
         if not isinstance(tc, dict):
             return 0
+        # New format: translator_config = {http:{profiles:[...], selected:"..."}, openai:{...}}
+        if isinstance(tc.get("http"), dict):
+            tc = tc.get("http") or {}
         profiles = tc.get("profiles")
         if isinstance(profiles, list):
             score = 0
@@ -148,7 +169,15 @@ class SidecarController:
             for k, v in patch.items():
                 if k == "translator_config":
                     if isinstance(v, dict):
-                        cur[k] = v
+                        # One-level merge to preserve other provider configs (e.g. keep http profiles
+                        # when saving openai config, and vice versa).
+                        prev = cur.get(k)
+                        if isinstance(prev, dict):
+                            merged = dict(prev)
+                            merged.update(v)
+                            cur[k] = merged
+                        else:
+                            cur[k] = v
                     continue
                 cur[k] = v
             # config_home is immutable (controls where the config is stored)
@@ -246,11 +275,16 @@ class SidecarController:
         ws = watcher.status() if watcher is not None else {}
         env_hint = {}
         try:
-            if (cfg.get("translator_provider") or "") == "http":
+            provider = str(cfg.get("translator_provider") or "")
+            if provider in ("http", "openai"):
                 auth_env = ""
                 tc = cfg.get("translator_config") or {}
                 if isinstance(tc, dict):
-                    auth_env = str(self._select_http_profile(tc).get("auth_env") or "").strip()
+                    if provider == "http":
+                        auth_env = str(self._select_http_profile(tc).get("auth_env") or "").strip()
+                    else:
+                        oc = tc.get("openai") if isinstance(tc.get("openai"), dict) else tc
+                        auth_env = str((oc or {}).get("auth_env") or "").strip()
                 if auth_env:
                     env_hint = {"auth_env": auth_env, "auth_env_set": bool(os.environ.get(auth_env))}
         except Exception:
@@ -304,6 +338,29 @@ class SidecarController:
         provider = (cfg.translator_provider or "stub").strip().lower()
         if provider == "none":
             return NoneTranslator()
+        if provider == "openai":
+            tc = cfg.translator_config or {}
+            tc = tc if isinstance(tc, dict) else {}
+            if isinstance(tc.get("openai"), dict):
+                tc = tc.get("openai") or {}
+            base_url = str(tc.get("base_url") or "").strip()
+            model = str(tc.get("model") or "").strip()
+            api_key = str(tc.get("api_key") or "").strip()
+            timeout_s = float(tc.get("timeout_s") or 12.0)
+            auth_env = str(tc.get("auth_env") or "").strip()
+            auth_header = str(tc.get("auth_header") or "Authorization").strip() or "Authorization"
+            auth_prefix = str(tc.get("auth_prefix") or "Bearer ").strip()
+            reasoning_effort = str(tc.get("reasoning_effort") or "").strip()
+            return OpenAIResponsesTranslator(
+                base_url=base_url,
+                model=model,
+                api_key=api_key,
+                timeout_s=timeout_s,
+                auth_env=auth_env,
+                auth_header=auth_header,
+                auth_prefix=auth_prefix,
+                reasoning_effort=reasoning_effort,
+            )
         if provider == "http":
             tc = cfg.translator_config or {}
             selected = self._select_http_profile(tc if isinstance(tc, dict) else {})
@@ -331,6 +388,8 @@ class SidecarController:
         1) 旧版：translator_config = {url, timeout_s, auth_env, ...}
         2) 多 profile：translator_config = {profiles:[{name,url,...},...], selected:"name"}
         """
+        if isinstance(tc.get("http"), dict):
+            tc = tc.get("http") or {}
         try:
             profiles = tc.get("profiles")
             selected = str(tc.get("selected") or "").strip()

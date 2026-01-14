@@ -44,13 +44,13 @@
 			          <div class="meta">监视目录</div><div><input id="watchHome" placeholder="/home/kino/.codex 或 /mnt/c/Users/.../.codex" /></div>
 			        </div>
 			      </details>
-			      <details class="drawer-sec" open>
-			        <summary>翻译</summary>
-			        <div class="grid grid-compact">
-			          <div class="meta">Provider</div><div><select id="translator"></select></div>
-			        </div>
-			        <div id="httpBlock" class="http-block">
-			          <div class="grid grid-compact">
+				      <details class="drawer-sec" open>
+				        <summary>翻译</summary>
+				        <div class="grid grid-compact">
+				          <div class="meta">Provider</div><div><select id="translator"></select></div>
+				        </div>
+				        <div id="httpBlock" class="http-block">
+				          <div class="grid grid-compact">
 			            <div class="meta">Profiles</div>
 			            <div class="profile-row">
 			              <select id="httpProfile" style="flex:1;"></select>
@@ -62,9 +62,39 @@
 			            <div class="meta">Token</div><div><input id="httpToken" placeholder="可用于 Authorization 或替换 URL 中的 {token}" /></div>
 			            <div class="meta">超时（秒）</div><div><input id="httpTimeout" type="number" min="0.5" step="0.5" /></div>
 			            <div class="meta">Auth ENV</div><div><input id="httpAuthEnv" placeholder="CODEX_TRANSLATE_TOKEN" /></div>
-			          </div>
-			        </div>
-			      </details>
+				          </div>
+				        </div>
+				        <div id="openaiBlock" class="http-block">
+				          <div class="grid grid-compact">
+				            <div class="meta">Base URL</div><div><input id="openaiBaseUrl" placeholder="https://www.right.codes/codex/v1（或…/responses）" /></div>
+				            <div class="meta">Model</div><div><input id="openaiModel" placeholder="gpt-4.1-mini / gpt-4o-mini / gpt-5.2 ..." /></div>
+				            <div class="meta">API Key</div><div><input id="openaiApiKey" placeholder="sk-...（可留空并使用 Auth ENV）" /></div>
+				            <div class="meta">Auth Header</div>
+				            <div>
+				              <select id="openaiAuthMode">
+				                <option value="authorization">Authorization: Bearer</option>
+				                <option value="x-api-key">x-api-key</option>
+				              </select>
+				            </div>
+				            <div class="meta">Auth ENV</div><div><input id="openaiAuthEnv" placeholder="CODEX_TRANSLATE_TOKEN" /></div>
+				            <div class="meta">Reasoning</div>
+				            <div>
+				              <select id="openaiReasoning">
+				                <option value="">不启用/自动</option>
+				                <option value="none">none</option>
+				                <option value="minimal">minimal</option>
+				                <option value="low">low</option>
+				                <option value="medium">medium</option>
+				                <option value="high">high</option>
+				              </select>
+				            </div>
+				            <div class="meta">超时（秒）</div><div><input id="openaiTimeout" type="number" min="0.5" step="0.5" /></div>
+				          </div>
+				          <div class="meta" style="margin-top:6px;">
+				            提示：某些 Codex 网关会忽略 system prompt；sidecar 已把翻译指令放在 user 内容里以增强兼容性。
+				          </div>
+				        </div>
+				      </details>
 			      <details class="drawer-sec">
 			        <summary>高级</summary>
 			        <div class="grid grid-compact">

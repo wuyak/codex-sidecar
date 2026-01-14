@@ -35,6 +35,232 @@ class NoneTranslator:
         return ""
 
 
+def _model_supports_reasoning(model: str) -> bool:
+    m = (model or "").strip().lower()
+    if m.startswith("gpt-5"):
+        return True
+    # o-series reasoning models (o1/o3/o4-mini etc)
+    if m.startswith("o"):
+        return True
+    return False
+
+
+def _build_zh_translation_prompt(text: str) -> str:
+    """
+    Build a robust translation prompt without relying on system instructions.
+
+    Notes:
+    - Some proxies may override system prompts (e.g. Codex gateways). We keep the whole
+      instruction in the user message to be more portable.
+    """
+    sentinel_a = "<<<SIDE_CAR_TEXT>>>"
+    sentinel_b = "<<<END_SIDE_CAR_TEXT>>>"
+    return (
+        "你是一个高质量的翻译引擎。请把下面内容翻译成【简体中文】。\n\n"
+        "要求：\n"
+        "- 只输出译文，不要添加任何解释/前缀/引号。\n"
+        "- 尽量保持原有 Markdown 结构（标题/列表/空行/缩进）。\n"
+        "- 代码块、命令行、路径、变量名、JSON 等“看起来像代码”的片段保持原样，不要翻译。\n"
+        "- 专有名词如 API/HTTP/JSON/Codex/Sidecar 保持原样。\n"
+        "- 如果原文已经是中文为主，则原样返回。\n\n"
+        f"{sentinel_a}\n{text}\n{sentinel_b}\n"
+    )
+
+
+def _extract_openai_responses_text(obj) -> str:
+    """
+    Best-effort extraction for OpenAI Responses API (and compatible gateways).
+    """
+    if not isinstance(obj, dict):
+        return ""
+    v = obj.get("output_text")
+    if isinstance(v, str) and v.strip():
+        return v
+    out = obj.get("output")
+    if isinstance(out, list):
+        for item in out:
+            if not isinstance(item, dict):
+                continue
+            # Common shape: {"type":"message","role":"assistant","content":[{"type":"output_text","text":"..."}]}
+            content = item.get("content")
+            if isinstance(content, list):
+                for part in content:
+                    if not isinstance(part, dict):
+                        continue
+                    ptype = str(part.get("type") or "").strip()
+                    if ptype in ("output_text", "text"):
+                        txt = part.get("text")
+                        if isinstance(txt, str) and txt.strip():
+                            return txt
+                    if isinstance(part.get("text"), str) and str(part.get("text") or "").strip():
+                        return str(part.get("text") or "")
+            # Fallbacks (gateways)
+            t = item.get("text")
+            if isinstance(t, str) and t.strip():
+                return t
+    # ChatCompletions-like fallback: {"choices":[{"message":{"content":"..."}}]}
+    choices = obj.get("choices")
+    if isinstance(choices, list) and choices:
+        first = choices[0]
+        if isinstance(first, dict):
+            msg = first.get("message")
+            if isinstance(msg, dict):
+                c = msg.get("content")
+                if isinstance(c, str) and c.strip():
+                    return c
+            c = first.get("text")
+            if isinstance(c, str) and c.strip():
+                return c
+    return ""
+
+
+def _format_openai_translate_error(url: str, auth_token: str, detail: str = "") -> str:
+    safe = _sanitize_url(url, auth_token)
+    suffix = f" ({detail})" if detail else ""
+    return f"WARN: GPT 翻译失败（返回空译文）：{safe}{suffix}"
+
+
+def _log_openai_translate_error(url: str, auth_token: str, detail: str = "") -> str:
+    global _LAST_HTTP_ERR_TS
+    msg = _format_openai_translate_error(url, auth_token, detail=detail)
+    now = time.time()
+    if now - _LAST_HTTP_ERR_TS < 5.0:
+        return msg
+    _LAST_HTTP_ERR_TS = now
+    print(f"[sidecar] {msg}", file=sys.stderr)
+    return msg
+
+
+@dataclass
+class OpenAIResponsesTranslator:
+    """
+    OpenAI Responses API compatible translator.
+
+    Typical proxy base url:
+      - https://www.right.codes/codex/v1
+    (sidecar will POST to {base_url}/responses)
+    """
+
+    base_url: str
+    model: str = ""
+    timeout_s: float = 12.0
+    auth_env: str = ""
+    api_key: str = ""
+    auth_header: str = "Authorization"
+    auth_prefix: str = "Bearer "
+    reasoning_effort: str = ""
+    last_error: str = ""
+
+    def translate(self, text: str) -> str:
+        if not text or not self.base_url:
+            return ""
+
+        base = _normalize_url(self.base_url).rstrip("/")
+        endpoint = base if base.endswith("/responses") else (base + "/responses")
+
+        token = (self.api_key or "").strip()
+        if not token and self.auth_env:
+            token = (os.environ.get(self.auth_env) or "").strip()
+        if not token:
+            self.last_error = _log_openai_translate_error(endpoint, auth_token="", detail="missing_api_key")
+            return ""
+
+        prompt = _build_zh_translation_prompt(text)
+        payload = {
+            "model": (self.model or "").strip() or "gpt-4.1-mini",
+            "input": [
+                {
+                    "type": "message",
+                    "role": "user",
+                    "content": [
+                        {"type": "input_text", "text": prompt},
+                    ],
+                }
+            ],
+            "stream": False,
+        }
+        effort = (self.reasoning_effort or "").strip()
+        if effort and _model_supports_reasoning(payload["model"]):
+            payload["reasoning"] = {"effort": effort}
+
+        data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        req = urllib.request.Request(endpoint, data=data, method="POST")
+        req.add_header("Content-Type", "application/json; charset=utf-8")
+
+        # Auth header compatible with common gateways:
+        # - Authorization: Bearer {key}
+        # - x-api-key: {key}
+        ah = (self.auth_header or "Authorization").strip()
+        if ah.lower() == "x-api-key":
+            req.add_header("x-api-key", token)
+        else:
+            req.add_header(ah, f"{self.auth_prefix}{token}")
+
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:
+                raw = resp.read()
+                ctype = str(resp.headers.get("Content-Type") or "")
+            try:
+                obj = json.loads(raw.decode("utf-8", errors="replace"))
+            except ValueError:
+                # If server returns plain text (non-JSON), try to use it.
+                try:
+                    if "application/json" not in (ctype or "").lower():
+                        txt = raw.decode("utf-8", errors="replace").strip()
+                        if txt and not txt.lstrip().startswith("<"):
+                            return txt
+                except Exception:
+                    pass
+                self.last_error = _log_openai_translate_error(endpoint, auth_token=token)
+                return ""
+
+            # Error shapes:
+            if isinstance(obj, dict):
+                if isinstance(obj.get("error"), str) and str(obj.get("error") or "").strip():
+                    self.last_error = _log_openai_translate_error(endpoint, auth_token=token, detail=str(obj.get("error"))[:200])
+                    return ""
+                if isinstance(obj.get("error"), dict):
+                    e = obj.get("error") or {}
+                    msg = ""
+                    try:
+                        for k in ("message", "error", "detail", "type"):
+                            v = e.get(k)
+                            if isinstance(v, str) and v.strip():
+                                msg = v
+                                break
+                    except Exception:
+                        msg = ""
+                    self.last_error = _log_openai_translate_error(endpoint, auth_token=token, detail=msg[:200] if msg else "api_error")
+                    return ""
+
+            out = _extract_openai_responses_text(obj)
+            if isinstance(out, str) and out.strip():
+                return out.strip()
+            self.last_error = _log_openai_translate_error(endpoint, auth_token=token, detail="no_output_text")
+            return ""
+        except urllib.error.HTTPError as e:
+            detail = f"http_status={getattr(e, 'code', '')}"
+            try:
+                body = (e.read() or b"")[:240]
+                if body and not body.lstrip().startswith(b"<"):
+                    detail += f" body={body.decode('utf-8', errors='replace')}"
+            except Exception:
+                pass
+            self.last_error = _log_openai_translate_error(endpoint, auth_token=token, detail=detail)
+            return ""
+        except (TimeoutError, _SocketTimeout):
+            self.last_error = _log_openai_translate_error(endpoint, auth_token=token, detail=f"timeout_s={self.timeout_s}")
+            return ""
+        except urllib.error.URLError as e:
+            reason = getattr(e, "reason", None)
+            rname = type(reason).__name__ if reason is not None else "URLError"
+            self.last_error = _log_openai_translate_error(endpoint, auth_token=token, detail=f"url_error={rname}")
+            return ""
+        except Exception as e:
+            self.last_error = _log_openai_translate_error(endpoint, auth_token=token, detail=f"error={type(e).__name__}")
+            return ""
+
+
 @dataclass
 class HttpTranslator:
     url: str

@@ -33,7 +33,7 @@ class SidecarConfig:
     # 默认开启以避免 Codex 未运行时误切到历史会话文件。
     only_follow_when_process: bool = True
 
-    translator_provider: str = "stub"  # stub | none | http
+    translator_provider: str = "stub"  # stub | none | http | openai
     translator_config: Dict[str, Any] = None  # provider-specific
 
     def to_dict(self) -> Dict[str, Any]:
@@ -115,6 +115,8 @@ def _score_http_profiles(translator_config: Dict[str, Any]) -> int:
     - New format: {profiles:[{name,url,...},...], selected:"..."} => count valid profiles
     - Old format: {url:"http(s)://..."} => 1
     """
+    if isinstance(translator_config.get("http"), dict):
+        translator_config = translator_config.get("http") or {}
     try:
         profiles = translator_config.get("profiles")
         if isinstance(profiles, list):
@@ -221,9 +223,10 @@ def find_recoverable_translator_snapshot(
                 continue
             if score > best_score:
                 best_score = score
+                http_tc = tc.get("http") if isinstance(tc.get("http"), dict) else tc
                 best = {
-                    "translator_provider": str(obj.get("translator_provider") or "http"),
-                    "translator_config": tc,
+                    "translator_provider": "http",
+                    "translator_config": http_tc if isinstance(http_tc, dict) else {},
                 }
                 best_path = str(path)
         except Exception:

@@ -22,10 +22,10 @@
   - 扫描 `/proc/<pid>/fd`，优先锁定匹配到的 Codex 进程（及其子进程）正在写入的 `sessions/**/rollout-*.jsonl`
   - 并保留 sessions 扫描作为回退（用于进程已启动但文件尚未被发现的窗口期）
 - UI 顶栏：标题与运行状态
-- UI 右侧工具栏：⚙️ 配置、▶️ 开始监听、⏹️ 停止监听、🧹 清空显示、⏻ 退出 Sidecar
+- UI 右侧工具栏：⚙️ 配置、▶️ 开始监听、⏹️ 停止监听、🔄 重启 Sidecar、🧹 清空显示、⏻ 退出 Sidecar
 - UI 配置抽屉：保存配置、恢复配置
-- UI 会话切换：会话列表固定在左侧 sidebar，支持折叠为“圆点模式”以压缩占用空间（hover 显示会话信息）
-- 翻译 Provider 可插拔并可在 UI 中切换：`stub/none/http`
+- UI 会话切换：会话列表固定在左侧 sidebar（默认自动隐藏，鼠标移到最左侧热区浮现），支持会话自定义标签（右键/双击会话项设置）
+- 翻译 Provider 可插拔并可在 UI 中切换：`stub/none/http/openai`
 - `--include-agent-reasoning` 说明：
   - 该类型通常是“流式推理文本”，同一段内容可能重复出现（模型/客户端实现差异）。
   - sidecar 会对 `agent_reasoning` 做更激进的去重（不依赖 timestamp），但仍建议仅在需要更实时内容时开启。
@@ -35,7 +35,7 @@
 - 翻译策略：仅对“思考内容”（`reasoning_summary` / 可选 `agent_reasoning`）进行翻译；工具输出与最终回答不翻译。
 - 展示顺序：列表按时间从上到下（新内容在底部）；工具输出默认折叠展示。
 - tool_call/tool_output 会做友好格式化（例如 `update_plan` 计划分行、`shell_command` 命令块展示）；原始参数/输出仍可展开查看，便于排障。
-- UI 辅助：左下角悬浮“↑ 顶部 / ↓ 底部”按钮，便于快速跳转。
+- UI 辅助：右下角悬浮“↑ 顶部 / ↓ 底部”按钮，便于快速跳转。
 
 ## 关于“在页面内输入并让 Codex 执行”
 本 sidecar 的核心原则是**不修改 Codex、只读监听**（旁路查看/调试）。因此：
@@ -71,6 +71,18 @@
 
 ## UI 显示模式
 UI 支持三种显示模式：`中英文对照 / 仅中文 / 仅英文`（保存在浏览器 localStorage，不写入配置文件）。
+
+## GPT（Responses API 兼容）配置（right.codes 中转站）
+当翻译 Provider 选择 `GPT（Responses API 兼容）`（`openai`）时，sidecar 会按 OpenAI Responses API 兼容格式发起翻译请求。
+
+推荐配置（right.codes 示例）：
+- `Base URL`：`https://www.right.codes/codex/v1`（sidecar 会自动 POST 到 `${Base URL}/responses`）
+- `Auth Header`：支持 `Authorization: Bearer` 或 `x-api-key`（二选一）
+- `Model`：可先用 `gpt-4o-mini`（更省）或 `gpt-4.1-mini`（更稳）
+- `Reasoning`：翻译通常不需要；仅当使用 `gpt-5*` / `o*` 推理模型时才建议设置为 `minimal/none`
+
+配置保存策略（避免互相覆盖）：
+- sidecar 会把不同 Provider 的配置分区保存到 `translator_config.http` / `translator_config.openai`，切换 Provider 不会覆盖另一边的配置。
 
 ## 配置生效提示
 sidecar 的监听线程启动时会读取一次配置；若在“已开始监听”状态下修改翻译配置，需重启监听后才会生效（UI 会提示是否重启）。
