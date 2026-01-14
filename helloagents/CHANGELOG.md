@@ -81,3 +81,4 @@
 - 优化：翻译请求去重：Watcher 先做 dedupe 再发起翻译，避免重复消息也重复请求翻译 API。
 - 优化：OpenAI/Responses 翻译器增加 LRU 缓存（默认 64 条），减少同内容重复翻译请求。
 - 优化：UI 选择 OpenAI Provider 时自动补齐默认 Base URL（right.codes）与默认模型（gpt-4o-mini），减少手动配置成本。
+- 重构：翻译实现拆分为 `codex_thinking_sidecar/translators/*`，`translator.py` 仅作为向后兼容的 facade。

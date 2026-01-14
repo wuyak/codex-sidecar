@@ -84,6 +84,11 @@ UI 支持三种显示模式：`中英文对照 / 仅中文 / 仅英文`（保存
 配置保存策略（避免互相覆盖）：
 - sidecar 会把不同 Provider 的配置分区保存到 `translator_config.http` / `translator_config.openai`，切换 Provider 不会覆盖另一边的配置。
 
+性能与请求量（避免“翻译 API 占用太多请求”）：
+- sidecar 会先对消息做去重，再进行翻译请求（重复内容不会反复打到翻译 API）。
+- `openai` Provider 内置小型 LRU 缓存（默认 64 条），同一段文本多次出现时会复用译文。
+- UI 选择 `openai` Provider 时会自动补齐默认 `Base URL`（right.codes）与默认 `Model`（`gpt-4o-mini`），减少手动输入。
+
 ## 配置生效提示
 sidecar 的监听线程启动时会读取一次配置；若在“已开始监听”状态下修改翻译配置，需重启监听后才会生效（UI 会提示是否重启）。
 
