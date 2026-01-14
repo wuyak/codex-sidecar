@@ -1,5 +1,104 @@
 import { copyToClipboard } from "./utils.js";
 
+function hasActiveSelection() {
+  try {
+    const sel = window.getSelection && window.getSelection();
+    if (!sel) return false;
+    if (sel.type === "Range") return true;
+    const s = String(sel.toString() || "").trim();
+    return !!s;
+  } catch (_) {
+    return false;
+  }
+}
+
+function toggleToolDetailsFromPre(pre) {
+  try {
+    const card = pre && pre.closest ? pre.closest(".tool-card") : null;
+    if (!card || !card.querySelector) return false;
+    const btn = card.querySelector("button.tool-toggle[data-target]");
+    if (!btn) return false;
+    btn.click();
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+function wirePreClickAndLongPress(pre) {
+  if (!pre || pre.__wiredPress) return;
+  try {
+    // 仅对“代码块”启用点击展开/长按复制，避免影响普通 <pre> 文本。
+    if (!pre.classList || !pre.classList.contains("code")) return;
+  } catch (_) {}
+  pre.__wiredPress = true;
+
+  let startX = 0;
+  let startY = 0;
+  let moved = false;
+  let timer = 0;
+  let longFired = false;
+
+  const clear = () => {
+    try { if (timer) clearTimeout(timer); } catch (_) {}
+    timer = 0;
+  };
+
+  const onDown = (e) => {
+    try {
+      // Only left click / primary touch.
+      if (e && typeof e.button === "number" && e.button !== 0) return;
+    } catch (_) {}
+    moved = false;
+    longFired = false;
+    startX = Number(e && e.clientX) || 0;
+    startY = Number(e && e.clientY) || 0;
+    clear();
+    timer = setTimeout(async () => {
+      timer = 0;
+      if (moved) return;
+      longFired = true;
+      try {
+        const ok = await copyToClipboard(pre.textContent || "");
+        if (ok) {
+          pre.classList.add("copied");
+          setTimeout(() => { try { pre.classList.remove("copied"); } catch (_) {} }, 450);
+        }
+      } catch (_) {}
+    }, 420);
+  };
+
+  const onMove = (e) => {
+    if (!timer) return;
+    const x = Number(e && e.clientX) || 0;
+    const y = Number(e && e.clientY) || 0;
+    const dx = x - startX;
+    const dy = y - startY;
+    if ((dx * dx + dy * dy) > (6 * 6)) {
+      moved = true;
+      clear();
+    }
+  };
+
+  const onUp = () => { clear(); };
+  const onCancel = () => { clear(); };
+
+  pre.addEventListener("pointerdown", onDown);
+  pre.addEventListener("pointermove", onMove);
+  pre.addEventListener("pointerup", onUp);
+  pre.addEventListener("pointercancel", onCancel);
+  pre.addEventListener("pointerleave", onCancel);
+
+  pre.addEventListener("click", (e) => {
+    try {
+      if (longFired) { longFired = false; e.preventDefault(); e.stopPropagation(); return; }
+      if (moved) return;
+      if (hasActiveSelection()) return;
+      toggleToolDetailsFromPre(pre);
+    } catch (_) {}
+  });
+}
+
 function decoratePreBlocks(root) {
   if (!root || !root.querySelectorAll) return;
   const pres = root.querySelectorAll("pre");
@@ -31,6 +130,7 @@ function decoratePreBlocks(root) {
       pre.parentNode.insertBefore(wrap, pre);
       wrap.appendChild(btn);
       wrap.appendChild(pre);
+      wirePreClickAndLongPress(pre);
     } catch (_) {}
   }
 }

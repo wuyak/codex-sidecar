@@ -45,10 +45,6 @@ export function renderMessage(dom, state, msg) {
   const kind = msg.kind || "";
   const kindClass = String(kind || "").replace(/[^a-z0-9_-]/gi, "-");
   row.className = "row" + (kindClass ? ` kind-${kindClass}` : "");
-  try {
-    const fullId = msg.thread_id || msg.file || "";
-    row.title = fullId ? `${kind} ${fullId}` : String(kind || "");
-  } catch (e) {}
 
   const mode = (dom.displayMode && dom.displayMode.value) ? dom.displayMode.value : "both";
   const isThinking = (kind === "reasoning_summary" || kind === "agent_reasoning");

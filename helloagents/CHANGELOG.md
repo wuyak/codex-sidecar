@@ -65,3 +65,4 @@
 - 修复：tool_output “详情/收起”切换时同步隐藏复制按钮容器，避免出现空白占位/看似重复两条的问题。
 - 修复：`apply_patch` 的 Add File/Update File 也提供“详情”展开（显示完整 patch 内容并做 diff 高亮）。
 - 优化：用户输入（user_message）检测到前缀为日志/代码时自动拆分为“代码块 + 正文 Markdown”，避免换行被合并导致难以阅读。
+- 优化：移除消息正文区域的 hover title（避免出现 `tool_output ...` 这类无意义悬浮提示）；并支持代码块“单击切换详情 / 长按复制”。
