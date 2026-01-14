@@ -287,6 +287,14 @@ class _Handler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.OK, {"ok": True})
             return
 
+        if self.path == "/api/control/shutdown":
+            try:
+                r = self._controller.request_shutdown()
+            except Exception:
+                r = {"ok": True}
+            self._send_json(HTTPStatus.OK, r if isinstance(r, dict) else {"ok": True})
+            return
+
         if self.path != "/ingest":
             self._send_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": "not_found"})
             return

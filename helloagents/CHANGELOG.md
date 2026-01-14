@@ -47,3 +47,8 @@
 - 新增：所有消息的文本块/代码块右上角增加“复制”按钮。
 - 优化：思考块（`reasoning_summary`/`agent_reasoning`）改为 Markdown 渲染，并将“思考（EN/ZH）”移到时间戳同行。
 - 调整：↑ 顶部 / ↓ 底部悬浮按钮移动到左侧。
+- 重构：UI HTML 从 `server.py` 抽离到 `tools/codex_thinking_sidecar/codex_thinking_sidecar/ui/index.html`，便于后续分层与迭代。
+- 修复：UI Markdown 渲染支持有序列表（`1.` / `1)`），避免回答分点在 UI 中丢失。
+- 优化：配置区从主页面移到右侧“配置”抽屉；主页面首行仅保留快捷控制（配置/开始/停止/清空）。
+- 新增：手动退出 Sidecar（`/api/control/shutdown` + UI 按钮），便于无需手动 kill PID 的情况下关闭进程。
+- 优化：Codex 的改动摘要不再额外展示“原始文本”二次折叠层，减少冗余。

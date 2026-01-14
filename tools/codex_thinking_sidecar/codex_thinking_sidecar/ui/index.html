@@ -33,13 +33,18 @@
       button { border: 1px solid #ddd; background:#fff; padding: 7px 10px; border-radius: 8px; cursor:pointer; }
       button.primary { background:#111827; color:#fff; border-color:#111827; }
 	      button.danger { background:#fee2e2; border-color:#fecaca; }
-	      .muted { opacity: .8; }
-	      .float-nav { position: fixed; left: 16px; right: auto; bottom: 16px; display:flex; flex-direction:column; gap:8px; z-index: 1000; }
-	      .float-nav button { padding: 8px 10px; border-radius: 999px; box-shadow: 0 6px 20px rgba(0,0,0,.08); }
-	      .tool-card { background:#f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; margin-top: 8px; }
-	      .tool-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
-	      .tool-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-	      .tool-toggle { border: 1px solid #e2e8f0; background:#fff; padding: 2px 8px; border-radius: 999px; cursor:pointer; font-size: 12px; color:#334155; }
+		      .muted { opacity: .8; }
+		      .float-nav { position: fixed; left: 16px; right: auto; bottom: 16px; display:flex; flex-direction:column; gap:8px; z-index: 1000; }
+		      .float-nav button { padding: 8px 10px; border-radius: 999px; box-shadow: 0 6px 20px rgba(0,0,0,.08); }
+		      .drawer-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.18); z-index: 900; }
+		      .drawer { position: fixed; top: 16px; right: 16px; bottom: 16px; width: 520px; max-width: calc(100vw - 32px); background:#fff; border: 1px solid #ddd; border-radius: 12px; padding: 12px; overflow: auto; z-index: 910; box-shadow: 0 12px 40px rgba(0,0,0,.12); }
+		      .drawer-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+		      .drawer-head .title { font-weight: 700; }
+		      .drawer-close { border:1px solid #e2e8f0; background:#fff; border-radius: 10px; width: 34px; height: 34px; padding: 0; font-size: 18px; line-height: 1; cursor:pointer; }
+		      .tool-card { background:#f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; margin-top: 8px; }
+		      .tool-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+		      .tool-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+		      .tool-toggle { border: 1px solid #e2e8f0; background:#fff; padding: 2px 8px; border-radius: 999px; cursor:pointer; font-size: 12px; color:#334155; }
 	      .tool-toggle:hover { background:#f1f5f9; }
 	      .tool-details { margin-top: 8px; }
 	      .hidden { display: none; }
@@ -58,62 +63,77 @@
 	      .change-head { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
 	      .md { font-size: 13px; line-height: 1.6; }
 	      .md h1, .md h2, .md h3 { margin: 10px 0 6px; line-height: 1.25; }
-	      .md p { margin: 6px 0; }
-	      .md ul { margin: 6px 0 6px 18px; padding: 0; }
-	      .md li { margin: 2px 0; }
-	      .md code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; background:#f1f5f9; padding: 1px 6px; border-radius: 6px; }
-	      .md pre code { background: transparent; padding: 0; }
+		      .md p { margin: 6px 0; }
+		      .md ul { margin: 6px 0 6px 18px; padding: 0; }
+		      .md ol { margin: 6px 0 6px 20px; padding: 0; }
+		      .md li { margin: 2px 0; }
+		      .md code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; background:#f1f5f9; padding: 1px 6px; border-radius: 6px; }
+		      .md pre code { background: transparent; padding: 0; }
 	      .think-split { margin-top: 10px; padding-top: 10px; border-top: 1px solid #e2e8f0; }
 	    </style>
-	  </head>
-	  <body>
-    <div id="sidebar">
-      <div class="meta"><b>会话切换</b></div>
-      <div id="tabs" class="tabs"></div>
-    </div>
-    <div id="main">
-      <h2>Codex Thinking Sidecar（旁路思考摘要）</h2>
-      <p class="meta">实时订阅：<code>/events</code>（SSE），最近数据：<code>/api/messages</code>，会话列表：<code>/api/threads</code></p>
-      <div class="row" id="control">
-        <div class="meta"><b>控制面板</b> <span class="muted">（可选：启用“自动开始监听”，则无需手动点“开始监听”）</span></div>
-        <div class="grid">
-          <div class="meta">配置目录（只读）</div><div><input id="cfgHome" readonly /></div>
-          <div class="meta">监视目录（CODEX_HOME）</div><div><input id="watchHome" placeholder="/home/kino/.codex 或 /mnt/c/Users/.../.codex" /></div>
-          <div class="meta">自动开始监听（UI）</div><div><select id="autoStart"><option value="0">否</option><option value="1">是</option></select></div>
-          <div class="meta">基于 Codex 进程定位</div><div><select id="followProc"><option value="0">否</option><option value="1">是</option></select></div>
-          <div class="meta">仅在检测到进程时跟随</div><div><select id="onlyWhenProc"><option value="1">是</option><option value="0">否</option></select></div>
-          <div class="meta">Codex 进程匹配（regex）</div><div><input id="procRegex" placeholder="codex" /></div>
-          <div class="meta">回放行数</div><div><input id="replayLines" type="number" min="0" step="1" /></div>
-          <div class="meta">采集 agent_reasoning</div><div><select id="includeAgent"><option value="0">否</option><option value="1">是</option></select></div>
-          <div class="meta">显示模式</div><div><select id="displayMode"><option value="both">中英文对照</option><option value="zh">仅中文</option><option value="en">仅英文</option></select></div>
-          <div class="meta">poll_interval（秒）</div><div><input id="pollInterval" type="number" min="0.05" step="0.05" /></div>
-          <div class="meta">file_scan_interval（秒）</div><div><input id="scanInterval" type="number" min="0.2" step="0.1" /></div>
-          <div class="meta">翻译 Provider</div><div><select id="translator"></select></div>
-          <div class="meta">HTTP Profiles</div><div style="display:flex; gap:8px; align-items:center;"><select id="httpProfile" style="flex:1;"></select><button id="httpProfileAddBtn" type="button">新增</button><button id="httpProfileRenameBtn" type="button">重命名</button><button id="httpProfileDelBtn" type="button">删除</button></div>
-          <div class="meta">HTTP URL（仅 http/https）</div><div><input id="httpUrl" placeholder="https://api.deeplx.org/{token}/translate 或 http://127.0.0.1:9000/translate" /></div>
-          <div class="meta">HTTP Token（可选）</div><div><input id="httpToken" placeholder="可用于 Authorization 或替换 URL 中的 {token}" /></div>
-          <div class="meta">HTTP 超时（秒）</div><div><input id="httpTimeout" type="number" min="0.5" step="0.5" /></div>
-          <div class="meta">Auth ENV（可选）</div><div><input id="httpAuthEnv" placeholder="CODEX_TRANSLATE_TOKEN" /></div>
-        </div>
-        <div class="btns">
-          <button class="primary" id="saveBtn">保存配置</button>
-          <button id="recoverBtn">恢复配置</button>
-          <button class="primary" id="startBtn">开始监听</button>
-          <button id="stopBtn">停止监听</button>
-          <button class="danger" id="clearBtn">清空显示</button>
-          <span class="meta" id="statusText"></span>
-        </div>
-        <details id="debugDetails" style="margin-top:8px;">
-          <summary class="meta">调试信息（配置加载/缓存排查）</summary>
-          <pre id="debugText" class="meta" style="white-space:pre-wrap; user-select:text;"></pre>
-        </details>
+		  </head>
+		  <body>
+	    <div id="sidebar">
+	      <div class="meta"><b>会话切换</b></div>
+	      <div id="tabs" class="tabs"></div>
+	    </div>
+	    <div id="main">
+	      <div class="row" id="topbar">
+	        <div style="display:flex; align-items:flex-start; gap:12px; flex-wrap:wrap;">
+	          <div style="flex:1; min-width: 280px;">
+	            <div style="font-size:18px; font-weight:700;">Codex Thinking Sidecar（旁路思考摘要）</div>
+	            <div class="meta">实时订阅：<code>/events</code>（SSE），最近数据：<code>/api/messages</code>，会话列表：<code>/api/threads</code></div>
+	          </div>
+	          <div class="btns" style="margin-top:0;">
+	            <button id="configToggleBtn" type="button">配置</button>
+	            <button class="primary" id="startBtn" type="button">开始监听</button>
+	            <button id="stopBtn" type="button">停止监听</button>
+	            <button class="danger" id="clearBtn" type="button">清空显示</button>
+	          </div>
+	        </div>
+	        <div class="meta" id="statusText"></div>
 	      </div>
-	      <div id="list"></div>
-	    </div>
-	    <div class="float-nav" aria-label="scroll">
-	      <button id="scrollTopBtn" type="button" title="回到页面顶部">↑ 顶部</button>
-	      <button id="scrollBottomBtn" type="button" title="回到页面底部">↓ 底部</button>
-	    </div>
+		      <div id="list"></div>
+		    </div>
+		    <div id="drawerOverlay" class="drawer-overlay hidden"></div>
+		    <div id="drawer" class="drawer hidden" role="dialog" aria-modal="true" aria-label="配置">
+		      <div class="drawer-head">
+		        <div class="title">配置</div>
+		        <button id="drawerCloseBtn" class="drawer-close" type="button" title="关闭">×</button>
+		      </div>
+		      <div class="grid" style="margin-top: 10px;">
+		        <div class="meta">配置目录（只读）</div><div><input id="cfgHome" readonly /></div>
+		        <div class="meta">监视目录（CODEX_HOME）</div><div><input id="watchHome" placeholder="/home/kino/.codex 或 /mnt/c/Users/.../.codex" /></div>
+		        <div class="meta">自动开始监听（UI）</div><div><select id="autoStart"><option value="0">否</option><option value="1">是</option></select></div>
+		        <div class="meta">基于 Codex 进程定位</div><div><select id="followProc"><option value="0">否</option><option value="1">是</option></select></div>
+		        <div class="meta">仅在检测到进程时跟随</div><div><select id="onlyWhenProc"><option value="1">是</option><option value="0">否</option></select></div>
+		        <div class="meta">Codex 进程匹配（regex）</div><div><input id="procRegex" placeholder="codex" /></div>
+		        <div class="meta">回放行数</div><div><input id="replayLines" type="number" min="0" step="1" /></div>
+		        <div class="meta">采集 agent_reasoning</div><div><select id="includeAgent"><option value="0">否</option><option value="1">是</option></select></div>
+		        <div class="meta">显示模式</div><div><select id="displayMode"><option value="both">中英文对照</option><option value="zh">仅中文</option><option value="en">仅英文</option></select></div>
+		        <div class="meta">poll_interval（秒）</div><div><input id="pollInterval" type="number" min="0.05" step="0.05" /></div>
+		        <div class="meta">file_scan_interval（秒）</div><div><input id="scanInterval" type="number" min="0.2" step="0.1" /></div>
+		        <div class="meta">翻译 Provider</div><div><select id="translator"></select></div>
+		        <div class="meta">HTTP Profiles</div><div style="display:flex; gap:8px; align-items:center;"><select id="httpProfile" style="flex:1;"></select><button id="httpProfileAddBtn" type="button">新增</button><button id="httpProfileRenameBtn" type="button">重命名</button><button id="httpProfileDelBtn" type="button">删除</button></div>
+		        <div class="meta">HTTP URL（仅 http/https）</div><div><input id="httpUrl" placeholder="https://api.deeplx.org/{token}/translate 或 http://127.0.0.1:9000/translate" /></div>
+		        <div class="meta">HTTP Token（可选）</div><div><input id="httpToken" placeholder="可用于 Authorization 或替换 URL 中的 {token}" /></div>
+		        <div class="meta">HTTP 超时（秒）</div><div><input id="httpTimeout" type="number" min="0.5" step="0.5" /></div>
+		        <div class="meta">Auth ENV（可选）</div><div><input id="httpAuthEnv" placeholder="CODEX_TRANSLATE_TOKEN" /></div>
+		      </div>
+		      <div class="btns">
+		        <button class="primary" id="saveBtn" type="button">保存配置</button>
+		        <button id="recoverBtn" type="button">恢复配置</button>
+		        <button class="danger" id="shutdownBtn" type="button">退出 Sidecar</button>
+		      </div>
+		      <details id="debugDetails" style="margin-top:8px;">
+		        <summary class="meta">调试信息（配置加载/缓存排查）</summary>
+		        <pre id="debugText" class="meta" style="white-space:pre-wrap; user-select:text;"></pre>
+		      </details>
+		    </div>
+		    <div class="float-nav" aria-label="scroll">
+		      <button id="scrollTopBtn" type="button" title="回到页面顶部">↑ 顶部</button>
+		      <button id="scrollBottomBtn" type="button" title="回到页面底部">↓ 底部</button>
+		    </div>
 	    <script>
       const statusText = document.getElementById("statusText");
       const debugText = document.getElementById("debugText");
@@ -142,6 +162,11 @@
 	      const startBtn = document.getElementById("startBtn");
 	      const stopBtn = document.getElementById("stopBtn");
 	      const clearBtn = document.getElementById("clearBtn");
+	      const configToggleBtn = document.getElementById("configToggleBtn");
+	      const drawerOverlay = document.getElementById("drawerOverlay");
+	      const drawer = document.getElementById("drawer");
+	      const drawerCloseBtn = document.getElementById("drawerCloseBtn");
+	      const shutdownBtn = document.getElementById("shutdownBtn");
 	      const scrollTopBtn = document.getElementById("scrollTopBtn");
 	      const scrollBottomBtn = document.getElementById("scrollBottomBtn");
 
@@ -804,28 +829,28 @@
 	        return html.join("");
 	      }
 	
-	      function renderCodexEditSummary(text) {
-	        const sections = parseCodexEditSummary(text);
-	        if (!sections.length) return "";
-	        const blocks = [];
-	        for (const sec of sections) {
-	          const exJoined = joinWrappedExcerptLines(sec.excerpt);
-	          const exLines = normalizeNonEmptyLines(exJoined.join("\n"));
-	          const shown = excerptLines(exLines, 14).lines;
-	          const title = `${actionZh(sec.action)}: ${sec.path}`;
-	          blocks.push(`
-	            <details class="tool-card">
-	              <summary class="meta">改动（点击展开）: <code>${escapeHtml(title)}${sec.stats ? ` ${escapeHtml(sec.stats)}` : ``}</code></summary>
-	              <pre class="code">${renderDiffBlock(shown)}</pre>
-	              <details>
-	                <summary class="meta">原始文本</summary>
-	                <pre>${escapeHtml(text)}</pre>
-	              </details>
-	            </details>
-	          `);
-	        }
-	        return blocks.join("\n");
-	      }
+		      function renderCodexEditSummary(text) {
+		        const sections = parseCodexEditSummary(text);
+		        if (!sections.length) return "";
+		        const blocks = [];
+		        for (const sec of sections) {
+		          const exJoined = joinWrappedExcerptLines(sec.excerpt);
+		          const exLines = normalizeNonEmptyLines(exJoined.join("\n"));
+		          const shown = excerptLines(exLines, 14).lines;
+		          const actionLabel = actionZh(sec.action);
+		          blocks.push(`
+		            <div class="tool-card">
+		              <div class="change-head">
+		                <span class="pill">${escapeHtml(actionLabel)}</span>
+		                <code>${escapeHtml(sec.path)}</code>
+		                ${sec.stats ? `<span class="meta">${escapeHtml(sec.stats)}</span>` : ``}
+		              </div>
+		              <pre class="code">${renderDiffBlock(shown)}</pre>
+		            </div>
+		          `);
+		        }
+		        return blocks.join("\n");
+		      }
 
 	      function extractExitCode(outputRaw) {
 	        const lines = String(outputRaw ?? "").split("\n");
@@ -890,29 +915,30 @@
         return out.join("");
       }
 
-	      function renderMarkdown(md) {
-	        const src = String(md ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-	        const lines = src.split("\n");
-	        const blocks = [];
-	        let inCode = false;
-        let codeLines = [];
-        let para = [];
-        let listItems = null;
+		      function renderMarkdown(md) {
+		        const src = String(md ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+		        const lines = src.split("\n");
+		        const blocks = [];
+		        let inCode = false;
+	        let codeLines = [];
+	        let para = [];
+	        let list = null; // { type: "ul"|"ol", items: string[] }
 
-        const flushPara = () => {
-          if (!para.length) return;
-          const text = para.join(" ").replace(/\s+/g, " ").trim();
-          para = [];
-          if (!text) return;
-          blocks.push(`<p>${renderInlineMarkdown(text)}</p>`);
-        };
+	        const flushPara = () => {
+	          if (!para.length) return;
+	          const text = para.join(" ").replace(/\s+/g, " ").trim();
+	          para = [];
+	          if (!text) return;
+	          blocks.push(`<p>${renderInlineMarkdown(text)}</p>`);
+	        };
 
-        const flushList = () => {
-          if (!listItems || listItems.length === 0) { listItems = null; return; }
-          const lis = listItems.map((it) => `<li>${renderInlineMarkdown(it)}</li>`).join("");
-          blocks.push(`<ul>${lis}</ul>`);
-          listItems = null;
-        };
+	        const flushList = () => {
+	          if (!list || !Array.isArray(list.items) || list.items.length === 0) { list = null; return; }
+	          const tag = (list.type === "ol") ? "ol" : "ul";
+	          const lis = list.items.map((it) => `<li>${renderInlineMarkdown(it)}</li>`).join("");
+	          blocks.push(`<${tag}>${lis}</${tag}>`);
+	          list = null;
+	        };
 
         const flushCode = () => {
           const body = codeLines.join("\n").replace(/\n+$/g, "");
@@ -925,65 +951,73 @@
           const t = ln.trimEnd();
 
           const fence = t.match(/^\s*```/);
-          if (fence) {
-            if (inCode) {
-              flushCode();
-              inCode = false;
-            } else {
-              flushPara();
-              flushList();
-              inCode = true;
-            }
-            continue;
-          }
+	          if (fence) {
+	            if (inCode) {
+	              flushCode();
+	              inCode = false;
+	            } else {
+	              flushPara();
+	              flushList();
+	              inCode = true;
+	            }
+	            continue;
+	          }
 
           if (inCode) {
             codeLines.push(ln);
             continue;
           }
 
-          if (!t.trim()) {
-            flushPara();
-            flushList();
-            continue;
-          }
+	          if (!t.trim()) {
+	            flushPara();
+	            flushList();
+	            continue;
+	          }
 
-          const bh = t.match(/^\s*\*\*([^*]+)\*\*\s*$/);
-          if (bh) {
-            flushPara();
-            flushList();
-            const text = String(bh[1] ?? "").trim();
-            blocks.push(`<h3>${renderInlineMarkdown(text)}</h3>`);
-            continue;
-          }
+	          const bh = t.match(/^\s*\*\*([^*]+)\*\*\s*$/);
+	          if (bh) {
+	            flushPara();
+	            flushList();
+	            const text = String(bh[1] ?? "").trim();
+	            blocks.push(`<h3>${renderInlineMarkdown(text)}</h3>`);
+	            continue;
+	          }
 
-          const h = t.match(/^\s*(#{1,3})\s+(.*)$/);
-          if (h) {
-            flushPara();
-            flushList();
-            const level = Math.min(3, Math.max(1, (h[1] || "").length));
-            const text = String(h[2] ?? "").trim();
-            blocks.push(`<h${level}>${renderInlineMarkdown(text)}</h${level}>`);
-            continue;
-          }
+	          const h = t.match(/^\s*(#{1,3})\s+(.*)$/);
+	          if (h) {
+	            flushPara();
+	            flushList();
+	            const level = Math.min(3, Math.max(1, (h[1] || "").length));
+	            const text = String(h[2] ?? "").trim();
+	            blocks.push(`<h${level}>${renderInlineMarkdown(text)}</h${level}>`);
+	            continue;
+	          }
 
-          const li = t.match(/^\s*[-*]\s+(.*)$/);
-          if (li) {
-            flushPara();
-            if (!listItems) listItems = [];
-            listItems.push(String(li[1] ?? "").trim());
-            continue;
-          }
+	          const li = t.match(/^\s*[-*]\s+(.*)$/);
+	          if (li) {
+	            flushPara();
+	            if (!list || list.type !== "ul") { flushList(); list = { type: "ul", items: [] }; }
+	            list.items.push(String(li[1] ?? "").trim());
+	            continue;
+	          }
 
-          flushList();
-          para.push(t.trim());
-        }
+	          const oli = t.match(/^\s*\d+[.)]\s+(.*)$/);
+	          if (oli) {
+	            flushPara();
+	            if (!list || list.type !== "ol") { flushList(); list = { type: "ol", items: [] }; }
+	            list.items.push(String(oli[1] ?? "").trim());
+	            continue;
+	          }
 
-        if (inCode) flushCode();
-	        flushPara();
-	        flushList();
-	        return blocks.join("\n");
-	      }
+	          flushList();
+	          para.push(t.trim());
+	        }
+
+	        if (inCode) flushCode();
+		        flushPara();
+		        flushList();
+		        return blocks.join("\n");
+		      }
 
 	      function cleanThinkingText(md) {
 	        const src = String(md ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
@@ -1291,14 +1325,28 @@
         list.appendChild(row);
       }
 
-      function setStatus(s) {
-        statusText.textContent = s || "";
-      }
+	      function setStatus(s) {
+	        statusText.textContent = s || "";
+	      }
 
-      function setDebug(s) {
-        if (!debugText) return;
-        debugText.textContent = s || "";
-      }
+	      function openDrawer() {
+	        try {
+	          if (drawerOverlay) drawerOverlay.classList.remove("hidden");
+	          if (drawer) drawer.classList.remove("hidden");
+	        } catch (_) {}
+	      }
+
+	      function closeDrawer() {
+	        try {
+	          if (drawerOverlay) drawerOverlay.classList.add("hidden");
+	          if (drawer) drawer.classList.add("hidden");
+	        } catch (_) {}
+	      }
+
+	      function setDebug(s) {
+	        if (!debugText) return;
+	        debugText.textContent = s || "";
+	      }
 
       function fmtErr(e) {
         try {
@@ -1714,13 +1762,28 @@ ${st}` : msg;
           renderEmpty();
         }
       }
-      translatorSel.addEventListener("change", () => {
-        showHttpFields((translatorSel.value || "") === "http");
-      });
-      displayMode.addEventListener("change", async () => {
-        localStorage.setItem("codex_sidecar_display_mode", displayMode.value || "both");
-        await refreshList();
-      });
+	      translatorSel.addEventListener("change", () => {
+	        showHttpFields((translatorSel.value || "") === "http");
+	      });
+
+	      if (configToggleBtn) configToggleBtn.addEventListener("click", () => {
+	        try {
+	          if (drawer && !drawer.classList.contains("hidden")) closeDrawer();
+	          else openDrawer();
+	        } catch (_) { openDrawer(); }
+	      });
+	      if (drawerOverlay) drawerOverlay.addEventListener("click", () => { closeDrawer(); });
+	      if (drawerCloseBtn) drawerCloseBtn.addEventListener("click", () => { closeDrawer(); });
+	      window.addEventListener("keydown", (e) => {
+	        try {
+	          if (e && e.key === "Escape") closeDrawer();
+	        } catch (_) {}
+	      });
+
+	      displayMode.addEventListener("change", async () => {
+	        localStorage.setItem("codex_sidecar_display_mode", displayMode.value || "both");
+	        await refreshList();
+	      });
       httpProfile.addEventListener("change", () => {
         upsertSelectedProfileFromInputs();
         httpSelected = httpProfile.value || "";
@@ -1766,13 +1829,20 @@ ${st}` : msg;
           httpAuthEnv.value = "";
         }
       });
-	      saveBtn.addEventListener("click", async () => { await saveConfig(); });
-	      recoverBtn.addEventListener("click", async () => { await recoverConfig(); });
-	      startBtn.addEventListener("click", async () => { await startWatch(); });
-	      stopBtn.addEventListener("click", async () => { await stopWatch(); });
-	      clearBtn.addEventListener("click", async () => { await clearView(); });
-	      if (scrollTopBtn) scrollTopBtn.addEventListener("click", () => { window.scrollTo({ top: 0, behavior: "smooth" }); });
-	      if (scrollBottomBtn) scrollBottomBtn.addEventListener("click", () => { window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }); });
+		      saveBtn.addEventListener("click", async () => { await saveConfig(); });
+		      recoverBtn.addEventListener("click", async () => { await recoverConfig(); });
+		      startBtn.addEventListener("click", async () => { await startWatch(); });
+		      stopBtn.addEventListener("click", async () => { await stopWatch(); });
+		      clearBtn.addEventListener("click", async () => { await clearView(); });
+		      if (shutdownBtn) shutdownBtn.addEventListener("click", async () => {
+		        if (!confirm("确定要退出 sidecar 进程？（将停止监听并关闭服务）")) return;
+		        setStatus("正在退出 sidecar…");
+		        try { await api("POST", "/api/control/shutdown", {}); } catch (e) {}
+		        closeDrawer();
+		        setStatus("已发送退出请求（服务将停止）。");
+		      });
+		      if (scrollTopBtn) scrollTopBtn.addEventListener("click", () => { window.scrollTo({ top: 0, behavior: "smooth" }); });
+		      if (scrollBottomBtn) scrollBottomBtn.addEventListener("click", () => { window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }); });
 
       let bootAutoStarted = false;
       async function maybeAutoStartOnce() {

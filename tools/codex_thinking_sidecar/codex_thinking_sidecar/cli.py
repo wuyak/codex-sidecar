@@ -134,6 +134,11 @@ def main(argv=None) -> int:
             print(f"[sidecar] WARN: 本地服务未就绪：{health_url}", file=sys.stderr)
 
     stop_event = threading.Event()
+    if controller is not None:
+        try:
+            controller.set_process_stop_event(stop_event)
+        except Exception:
+            pass
 
     def _handle_sigint(_sig, _frame):
         stop_event.set()

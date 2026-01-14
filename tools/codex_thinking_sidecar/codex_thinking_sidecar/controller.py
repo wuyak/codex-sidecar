@@ -47,8 +47,16 @@ class SidecarController:
         self._thread: Optional[threading.Thread] = None
         self._stop_event: Optional[threading.Event] = None
         self._watcher: Optional[RolloutWatcher] = None
+        self._process_stop_event: Optional[threading.Event] = None
         self._last_error: str = ""
         self._started_at: float = 0.0
+
+    def set_process_stop_event(self, stop_event: threading.Event) -> None:
+        """
+        Inject the main process stop_event so HTTP handlers can request a graceful exit.
+        """
+        with self._lock:
+            self._process_stop_event = stop_event
 
     def translators(self) -> Dict[str, Any]:
         return {"translators": [t.__dict__ for t in TRANSLATORS]}
@@ -248,6 +256,21 @@ class SidecarController:
             "config": cfg,
             "env": env_hint,
         }
+
+    def request_shutdown(self) -> Dict[str, Any]:
+        """
+        Stop the watcher (if running) and request the whole sidecar process to exit.
+        """
+        try:
+            self.stop()
+        except Exception:
+            pass
+        ev = None
+        with self._lock:
+            ev = self._process_stop_event
+        if ev is not None:
+            ev.set()
+        return {"ok": True}
 
     def _build_translator(self, cfg: SidecarConfig) -> Translator:
         provider = (cfg.translator_provider or "stub").strip().lower()
