@@ -190,8 +190,58 @@ class _Handler(BaseHTTPRequestHandler):
             # Avoid stale UI HTML due to browser caching when iterating locally.
             self._send_text(
                 HTTPStatus.OK,
-                _load_ui_html(),
+                _load_ui_text(
+                    _UI_INDEX_PATH,
+                    (
+                        "<!doctype html><meta charset=\"utf-8\"/>"
+                        "<title>Codex Thinking Sidecar</title>"
+                        "<pre>UI file missing: {}\n".format(_UI_INDEX_PATH) + "</pre>"
+                    ),
+                ),
                 content_type="text/html; charset=utf-8",
+                extra_headers={
+                    "Cache-Control": "no-store, max-age=0",
+                    "Pragma": "no-cache",
+                },
+            )
+            return
+
+        if path == "/ui/" or path == "/ui/index.html":
+            self._send_text(
+                HTTPStatus.OK,
+                _load_ui_text(
+                    _UI_INDEX_PATH,
+                    (
+                        "<!doctype html><meta charset=\"utf-8\"/>"
+                        "<title>Codex Thinking Sidecar</title>"
+                        "<pre>UI file missing: {}\n".format(_UI_INDEX_PATH) + "</pre>"
+                    ),
+                ),
+                content_type="text/html; charset=utf-8",
+                extra_headers={
+                    "Cache-Control": "no-store, max-age=0",
+                    "Pragma": "no-cache",
+                },
+            )
+            return
+
+        if path == "/ui/styles.css":
+            self._send_text(
+                HTTPStatus.OK,
+                _load_ui_text(_UI_CSS_PATH, f"/* UI file missing: {_UI_CSS_PATH} */\n"),
+                content_type="text/css; charset=utf-8",
+                extra_headers={
+                    "Cache-Control": "no-store, max-age=0",
+                    "Pragma": "no-cache",
+                },
+            )
+            return
+
+        if path == "/ui/app.js":
+            self._send_text(
+                HTTPStatus.OK,
+                _load_ui_text(_UI_JS_PATH, f"console.warn('UI file missing: {_UI_JS_PATH}');\n"),
+                content_type="application/javascript; charset=utf-8",
                 extra_headers={
                     "Cache-Control": "no-store, max-age=0",
                     "Pragma": "no-cache",
@@ -325,17 +375,16 @@ class _Handler(BaseHTTPRequestHandler):
 
 
 
-_UI_INDEX_PATH = Path(__file__).with_name("ui") / "index.html"
+_UI_DIR = Path(__file__).with_name("ui")
+_UI_INDEX_PATH = _UI_DIR / "index.html"
+_UI_CSS_PATH = _UI_DIR / "styles.css"
+_UI_JS_PATH = _UI_DIR / "app.js"
 
-def _load_ui_html() -> str:
+def _load_ui_text(path: Path, fallback: str) -> str:
     try:
-        return _UI_INDEX_PATH.read_text(encoding="utf-8")
+        return path.read_text(encoding="utf-8")
     except Exception:
-        return (
-            "<!doctype html><meta charset=\"utf-8\"/>"
-            "<title>Codex Thinking Sidecar</title>"
-            "<pre>UI file missing: {}\n".format(_UI_INDEX_PATH) + "</pre>"
-        )
+        return fallback
 
 
 class SidecarServer:
