@@ -1,6 +1,8 @@
 import json
 import os
 import queue
+import secrets
+import subprocess
 import threading
 import time
 from collections import deque
@@ -130,6 +132,24 @@ def _json_bytes(obj: dict) -> bytes:
     return json.dumps(obj, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
 
 
+def _is_loopback_host(host: str) -> bool:
+    h = (host or "").strip().lower()
+    return h in ("127.0.0.1", "localhost", "::1", "[::1]")
+
+
+def _repo_root() -> Path:
+    # tools/codex_thinking_sidecar/codex_thinking_sidecar/server.py -> repo root
+    return Path(__file__).resolve().parents[3]
+
+
+def _sdk_dir() -> Path:
+    return _repo_root() / "src" / "codex-sdk"
+
+
+def _sdk_runner_path() -> Path:
+    return _sdk_dir() / "run_turn.mjs"
+
+
 class _Handler(BaseHTTPRequestHandler):
     server_version = "codex-thinking-sidecar/0.1"
 
@@ -140,6 +160,10 @@ class _Handler(BaseHTTPRequestHandler):
     @property
     def _controller(self):
         return self.server.controller  # type: ignore[attr-defined]
+
+    @property
+    def _sdk_csrf_token(self) -> str:
+        return str(getattr(self.server, "sdk_csrf_token", "") or "")  # type: ignore[attr-defined]
 
     def log_message(self, _format: str, *_args) -> None:
         # Silence default logging.
@@ -172,6 +196,96 @@ class _Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _sdk_allowed(self) -> bool:
+        """
+        安全保护：默认仅允许在 loopback 绑定下启用 SDK 控制能力。
+
+        如确需对外开放（非常危险），需显式设置环境变量：
+        - CODEX_SDK_ALLOW_REMOTE=1
+        """
+        try:
+            host = str(getattr(self.server, "server_address", ("", 0))[0] or "")
+        except Exception:
+            host = ""
+        if _is_loopback_host(host):
+            return True
+        return str(os.environ.get("CODEX_SDK_ALLOW_REMOTE") or "").strip() == "1"
+
+    def _sdk_check_csrf(self) -> bool:
+        want = self._sdk_csrf_token
+        if not want:
+            return False
+        got = str(self.headers.get("X-CSRF-Token") or "").strip()
+        return bool(got) and got == want
+
+    def _sdk_run_turn(self, req: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        调用 src/codex-sdk/run_turn.mjs 执行一次 turn（支持 threadId 续聊）。
+
+        约定：
+        - runner 读取 stdin JSON
+        - runner 输出 stdout JSON（单行）
+        """
+        runner = _sdk_runner_path()
+        sdk_dir = _sdk_dir()
+        if not runner.exists():
+            return {"ok": False, "error": f"sdk_runner_missing: {runner}"}
+        if not (sdk_dir / "node_modules").exists():
+            return {"ok": False, "error": "sdk_deps_missing: 请先在 src/codex-sdk 执行 npm install"}
+
+        # 默认使用当前 sidecar 配置的 watch_codex_home 作为 CODEX_HOME
+        try:
+            cfg = self._controller.get_config() if self._controller is not None else {}
+        except Exception:
+            cfg = {}
+        codex_home = str((cfg.get("watch_codex_home") if isinstance(cfg, dict) else "") or "").strip()
+
+        # 确保 codex_home 结构存在（Codex 需要能创建 sessions/log 等目录）
+        if codex_home:
+            try:
+                p = Path(codex_home).expanduser()
+                (p / "sessions").mkdir(parents=True, exist_ok=True)
+                (p / "log").mkdir(parents=True, exist_ok=True)
+            except Exception:
+                pass
+
+        payload = dict(req) if isinstance(req, dict) else {}
+        if codex_home and not payload.get("codexHome"):
+            payload["codexHome"] = codex_home
+
+        raw_in = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+
+        try:
+            proc = subprocess.run(
+                ["node", str(runner)],
+                input=raw_in,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                cwd=str(sdk_dir),
+                timeout=float(os.environ.get("CODEX_SDK_TURN_TIMEOUT_S") or "900"),
+            )
+        except subprocess.TimeoutExpired:
+            return {"ok": False, "error": "sdk_timeout"}
+        except FileNotFoundError:
+            return {"ok": False, "error": "node_not_found"}
+        except Exception as e:
+            return {"ok": False, "error": f"sdk_spawn_failed: {e}"}
+
+        out = (proc.stdout or b"").decode("utf-8", errors="replace").strip()
+        if not out:
+            err = (proc.stderr or b"").decode("utf-8", errors="replace").strip()
+            return {"ok": False, "error": f"sdk_no_output: {err}"}
+        try:
+            obj = json.loads(out)
+        except Exception:
+            err = (proc.stderr or b"").decode("utf-8", errors="replace").strip()
+            return {"ok": False, "error": f"sdk_invalid_json: {out[:200]}", "stderr": err[:200]}
+        if not isinstance(obj, dict):
+            return {"ok": False, "error": "sdk_invalid_payload"}
+        if not obj.get("ok"):
+            return {"ok": False, "error": obj.get("error") or "sdk_error"}
+        return obj
+
     def do_GET(self) -> None:
         u = urlparse(self.path)
         path = u.path
@@ -203,6 +317,20 @@ class _Handler(BaseHTTPRequestHandler):
 
         if path == "/api/status":
             self._send_json(HTTPStatus.OK, self._controller.status())
+            return
+
+        if path == "/api/sdk/status":
+            if not self._sdk_allowed():
+                self._send_json(HTTPStatus.FORBIDDEN, {"ok": False, "error": "sdk_disabled_on_non_loopback"})
+                return
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "ok": True,
+                    "available": _sdk_runner_path().exists(),
+                    "csrf_token": self._sdk_csrf_token,
+                },
+            )
             return
 
         if path == "/api/translators":
@@ -324,6 +452,62 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         # Control plane (JSON).
+        if self.path == "/api/sdk/turn/run":
+            if not self._sdk_allowed():
+                self._send_json(HTTPStatus.FORBIDDEN, {"ok": False, "error": "sdk_disabled_on_non_loopback"})
+                return
+            if not self._sdk_check_csrf():
+                self._send_json(HTTPStatus.FORBIDDEN, {"ok": False, "error": "bad_csrf"})
+                return
+
+            length = int(self.headers.get("Content-Length") or "0")
+            raw = self.rfile.read(length) if length > 0 else b"{}"
+            try:
+                obj = json.loads(raw.decode("utf-8", errors="replace"))
+            except Exception:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "invalid_json"})
+                return
+            if not isinstance(obj, dict):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "invalid_payload"})
+                return
+
+            text = str(obj.get("text") or "").strip()
+            thread_id = str(obj.get("thread_id") or obj.get("threadId") or "").strip()
+            if not text:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "empty_text"})
+                return
+
+            sdk_req: Dict[str, Any] = {"threadId": thread_id, "input": text}
+            sdk_resp = self._sdk_run_turn(sdk_req)
+            if not isinstance(sdk_resp, dict) or not sdk_resp.get("ok"):
+                err = sdk_resp.get("error") if isinstance(sdk_resp, dict) else "sdk_error"
+                self._send_json(HTTPStatus.BAD_GATEWAY, {"ok": False, "error": err})
+                return
+
+            new_thread_id = str(sdk_resp.get("threadId") or thread_id or "").strip()
+            turn = sdk_resp.get("turn") if isinstance(sdk_resp.get("turn"), dict) else {}
+            final = str((turn.get("finalResponse") if isinstance(turn, dict) else "") or "")
+
+            # 将 SDK 对话写入同一消息流（/events），以便 UI 与旁路输出统一展示。
+            now = time.time()
+            ts = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(now)) + "Z"
+
+            def _mkid(suffix: str) -> str:
+                return f"sdk:{int(now*1000)}:{suffix}:{secrets.token_hex(4)}"
+
+            try:
+                self._state.add({"id": _mkid("user"), "kind": "user_message", "text": text, "thread_id": new_thread_id, "ts": ts})
+            except Exception:
+                pass
+            try:
+                if final:
+                    self._state.add({"id": _mkid("assistant"), "kind": "assistant_message", "text": final, "thread_id": new_thread_id, "ts": ts})
+            except Exception:
+                pass
+
+            self._send_json(HTTPStatus.OK, {"ok": True, "thread_id": new_thread_id, "final": final})
+            return
+
         if self.path == "/api/config/recover":
             r = self._controller.recover_translator_config()
             if not isinstance(r, dict) or not r.get("ok"):
@@ -480,6 +664,8 @@ class SidecarServer:
         # Attach state to server instance for handler access.
         self._httpd.state = self._state  # type: ignore[attr-defined]
         self._httpd.controller = controller  # type: ignore[attr-defined]
+        # SDK 控制模式：CSRF token（仅驻内存，避免落盘）。
+        self._httpd.sdk_csrf_token = secrets.token_hex(16)  # type: ignore[attr-defined]
         self._thread: Optional[threading.Thread] = None
 
     @property

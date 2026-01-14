@@ -24,3 +24,11 @@ venv/
 # Build / dist
 dist/
 build/
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Local tool state / caches
+.codex-home/
+.npm-cache/

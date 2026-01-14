@@ -1,0 +1,16 @@
+{
+  "name": "codex-sdk-bridge",
+  "private": true,
+  "type": "module",
+  "version": "0.0.0",
+  "description": "Codex SDK bridge for codex-thinking-sidecar-zh",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@openai/codex-sdk": "^0.80.0"
+  },
+  "scripts": {
+    "turn": "node ./run_turn.mjs"
+  }
+}
