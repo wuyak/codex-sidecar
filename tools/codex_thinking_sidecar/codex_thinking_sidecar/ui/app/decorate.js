@@ -1,5 +1,20 @@
 import { copyToClipboard } from "./utils.js";
 
+function flashCopied(wrap, isLight = false) {
+  if (!wrap || !wrap.appendChild) return;
+  try {
+    const old = wrap.querySelector(".copy-toast");
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+  } catch (_) {}
+  const el = document.createElement("div");
+  el.className = "copy-toast" + (isLight ? " light" : "");
+  el.textContent = "已复制";
+  wrap.appendChild(el);
+  setTimeout(() => {
+    try { if (el && el.parentNode) el.parentNode.removeChild(el); } catch (_) {}
+  }, 1300);
+}
+
 function hasActiveSelection() {
   try {
     const sel = window.getSelection && window.getSelection();
@@ -14,9 +29,18 @@ function hasActiveSelection() {
 
 function toggleToolDetailsFromPre(pre) {
   try {
-    const card = pre && pre.closest ? pre.closest(".tool-card") : null;
-    if (!card || !card.querySelector) return false;
-    const btn = card.querySelector("button.tool-toggle[data-target]");
+    const row = pre && pre.closest ? pre.closest(".row") : null;
+    if (!row || !row.querySelector) return false;
+    const id = (pre && pre.getAttribute) ? String(pre.getAttribute("id") || "") : "";
+    let btn = null;
+    if (id) {
+      btn = row.querySelector(`button.tool-toggle[data-target="${id}"]`);
+      if (!btn) btn = row.querySelector(`button.tool-toggle[data-swap="${id}"]`);
+    }
+    if (!btn) {
+      const all = row.querySelectorAll("button.tool-toggle[data-target]");
+      if (all && all.length === 1) btn = all[0];
+    }
     if (!btn) return false;
     btn.click();
     return true;
@@ -61,8 +85,10 @@ function wirePreClickAndLongPress(pre) {
       try {
         const ok = await copyToClipboard(pre.textContent || "");
         if (ok) {
+          const wrap = (pre.closest && pre.closest(".pre-wrap")) ? pre.closest(".pre-wrap") : null;
+          flashCopied(wrap, false);
           pre.classList.add("copied");
-          setTimeout(() => { try { pre.classList.remove("copied"); } catch (_) {} }, 450);
+          setTimeout(() => { try { pre.classList.remove("copied"); } catch (_) {} }, 750);
         }
       } catch (_) {}
     }, 420);
@@ -124,6 +150,7 @@ function decoratePreBlocks(root) {
       btn.onclick = async (e) => {
         try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
         const ok = await copyToClipboard(pre.textContent || "");
+        if (ok) flashCopied(wrap, !isDark);
         btn.textContent = ok ? "✓" : "!";
         setTimeout(() => { btn.textContent = icon; }, 650);
       };
@@ -154,6 +181,7 @@ function decorateMdBlocks(root) {
       btn.onclick = async (e) => {
         try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
         const ok = await copyToClipboard(md.innerText || md.textContent || "");
+        if (ok) flashCopied(wrap, true);
         btn.textContent = ok ? "✓" : "!";
         setTimeout(() => { btn.textContent = icon; }, 650);
       };

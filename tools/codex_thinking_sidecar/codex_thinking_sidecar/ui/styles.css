@@ -80,7 +80,15 @@
 	      .copy-btn.light { background: rgba(255,255,255,.85); color:#0f172a; border-color:#e2e8f0; }
 	      .pre-wrap:hover .copy-btn { opacity: 1; }
 	      .copy-btn:active { transform: translateY(1px); }
-      pre.code { background:#0b1020; color:#e5e7eb; padding: 10px; border-radius: 10px; overflow:auto; white-space: pre; word-break: normal; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; line-height: 1.35; }
+	      @keyframes copyToastFade {
+	        0% { opacity: 0; transform: translateY(-6px) scale(.98); }
+	        12% { opacity: 1; transform: translateY(0) scale(1); }
+	        78% { opacity: 1; }
+	        100% { opacity: 0; transform: translateY(-8px) scale(.98); }
+	      }
+	      .copy-toast { position:absolute; top: -10px; right: 34px; padding: 4px 10px; border-radius: 999px; font-size: 12px; line-height: 1; background: rgba(15,23,42,.72); color:#e2e8f0; border: 1px solid rgba(148,163,184,.35); box-shadow: 0 10px 24px rgba(0,0,0,.14); pointer-events:none; animation: copyToastFade 1.2s ease forwards; }
+	      .copy-toast.light { background: rgba(255,255,255,.92); color:#0f172a; border-color:#e2e8f0; }
+	      pre.code { background:#0b1020; color:#e5e7eb; padding: 10px; border-radius: 10px; overflow:auto; white-space: pre; word-break: normal; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; line-height: 1.35; }
       pre.code { cursor: pointer; }
       pre.code.copied { outline: 2px solid rgba(34,197,94,.35); box-shadow: 0 0 0 4px rgba(34,197,94,.14); }
       pre.code .diff-line { display:block; padding: 0 6px; border-radius: 6px; }
