@@ -8,6 +8,6 @@ export function createState() {
     renderSeq: 0,
     bootAutoStarted: false,
     uiEventSource: null,
+    lastRenderedMs: NaN,
   };
 }
-

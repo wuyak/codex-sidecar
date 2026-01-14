@@ -24,6 +24,27 @@ export function formatTs(ts) {
   }
 }
 
+export function tsToMs(ts) {
+  if (!ts && ts !== 0) return NaN;
+  try {
+    const raw = ts;
+    let n = null;
+    if (typeof raw === "number") n = raw;
+    else {
+      const s = String(raw).trim();
+      if (/^\d+(\.\d+)?$/.test(s)) n = Number(s);
+    }
+    if (Number.isFinite(n)) {
+      const ms = (n < 1e12) ? Math.round(n * 1000) : Math.round(n);
+      return ms;
+    }
+    const ms = Date.parse(String(raw));
+    return Number.isFinite(ms) ? ms : NaN;
+  } catch (_) {
+    return NaN;
+  }
+}
+
 export function keyOf(msg) {
   return (msg.thread_id || msg.file || "unknown");
 }
@@ -126,4 +147,3 @@ export function fmtErr(e) {
     return "unknown";
   }
 }
-

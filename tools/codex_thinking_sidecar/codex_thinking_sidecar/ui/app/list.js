@@ -1,5 +1,5 @@
 import { inferToolName, parseToolCallText } from "./format.js";
-import { keyOf, safeJsonParse } from "./utils.js";
+import { keyOf, safeJsonParse, tsToMs } from "./utils.js";
 
 export async function refreshList(dom, state, renderTabs, renderMessage, renderEmpty) {
   try {
@@ -16,7 +16,23 @@ export async function refreshList(dom, state, renderTabs, renderMessage, renderE
     const msgs = (data.messages || []);
     state.callIndex.clear();
     if (dom.list) while (dom.list.firstChild) dom.list.removeChild(dom.list.firstChild);
-    const filtered = state.currentKey === "all" ? msgs : msgs.filter(m => keyOf(m) === state.currentKey);
+    const filtered0 = state.currentKey === "all" ? msgs : msgs.filter(m => keyOf(m) === state.currentKey);
+
+    // Sort by timestamp to avoid “时间倒退”错觉（Codex JSONL 在极少数情况下可能乱序落盘/补写）。
+    const filtered = filtered0
+      .map((m, i) => ({ m, i }))
+      .sort((a, b) => {
+        const ta = tsToMs(a.m && a.m.ts);
+        const tb = tsToMs(b.m && b.m.ts);
+        const fa = Number.isFinite(ta);
+        const fb = Number.isFinite(tb);
+        if (fa && fb) {
+          if (ta !== tb) return ta - tb;
+        } else if (fa) return -1;
+        else if (fb) return 1;
+        return a.i - b.i;
+      })
+      .map(x => x.m);
 
     // Pre-index tool_call so tool_output can always resolve tool_name even if order is odd.
     for (const m of filtered) {
@@ -32,8 +48,13 @@ export async function refreshList(dom, state, renderTabs, renderMessage, renderE
       } catch (_) {}
     }
 
+    state.lastRenderedMs = NaN;
     if (filtered.length === 0) renderEmpty(dom);
-    else for (const m of filtered) renderMessage(dom, state, m);
+    else for (const m of filtered) {
+      renderMessage(dom, state, m);
+      const ms = tsToMs(m && m.ts);
+      if (Number.isFinite(ms)) state.lastRenderedMs = ms;
+    }
   } catch (e) {
     if (dom.list) while (dom.list.firstChild) dom.list.removeChild(dom.list.firstChild);
     renderEmpty(dom);

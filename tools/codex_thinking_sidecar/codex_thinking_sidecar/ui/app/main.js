@@ -49,5 +49,5 @@ export async function initApp() {
   await loadControl(dom, state);
 
   await bootstrap(dom, state, renderTabsWrapper, renderMessage, renderEmpty);
-  connectEventStream(dom, state, upsertThread, renderTabsWrapper, renderMessage, setStatus);
+  connectEventStream(dom, state, upsertThread, renderTabsWrapper, renderMessage, setStatus, refreshListWrapper);
 }
