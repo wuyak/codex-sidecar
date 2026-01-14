@@ -11,6 +11,11 @@ from urllib.parse import parse_qs, urlparse, unquote
 from pathlib import Path
 
 
+class _ReuseHTTPServer(ThreadingHTTPServer):
+    # Allow quick restart during iterative development (avoid EADDRINUSE from TIME_WAIT).
+    allow_reuse_address = True
+
+
 class _Broadcaster:
     def __init__(self) -> None:
         self._lock = threading.Lock()
@@ -471,7 +476,7 @@ class SidecarServer:
         self._host = host
         self._port = port
         self._state = _State(max_messages=max_messages)
-        self._httpd = ThreadingHTTPServer((host, port), _Handler)
+        self._httpd = _ReuseHTTPServer((host, port), _Handler)
         # Attach state to server instance for handler access.
         self._httpd.state = self._state  # type: ignore[attr-defined]
         self._httpd.controller = controller  # type: ignore[attr-defined]

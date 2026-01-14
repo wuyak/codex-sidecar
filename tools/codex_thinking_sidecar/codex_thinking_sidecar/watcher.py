@@ -213,6 +213,16 @@ class RolloutWatcher:
         self._tui_buf = b""
         self._tui_last_toolcall: Optional[Dict[str, object]] = None
         self._tui_gate_waiting: bool = False
+        self._stop_event: Optional[threading.Event] = None
+
+    def _stop_requested(self) -> bool:
+        ev = self._stop_event
+        if ev is None:
+            return False
+        try:
+            return ev.is_set()
+        except Exception:
+            return False
 
     def status(self) -> Dict[str, str]:
         sel = "auto"
@@ -286,6 +296,8 @@ class RolloutWatcher:
             self._follow_dirty = True
 
     def run(self, stop_event) -> None:
+        # Keep a reference so inner loops can react quickly (e.g. stop in the middle of large file reads).
+        self._stop_event = stop_event
         # Initial pick
         self._switch_to_latest_if_needed(force=True)
         if self._current_file is None and not self._warned_missing:
@@ -594,6 +606,8 @@ class RolloutWatcher:
             with path.open("rb") as f:
                 f.seek(self._offset)
                 while True:
+                    if self._stop_requested():
+                        break
                     bline = f.readline()
                     if not bline:
                         break
@@ -608,6 +622,9 @@ class RolloutWatcher:
             return
 
     def _handle_line(self, bline: bytes, file_path: Path, line_no: int) -> int:
+        # If user clicked “停止监听”, avoid ingesting more lines even if we're still finishing in-flight work.
+        if self._stop_requested():
+            return 0
         if not bline:
             return 0
         try:
@@ -727,6 +744,8 @@ class RolloutWatcher:
                     zh = f"⚠️ {hint}\n\n{text}"
             else:
                 zh = ""
+            if self._stop_requested():
+                return ingested
             msg = {
                 "id": hid[:16],
                 "ts": ts,

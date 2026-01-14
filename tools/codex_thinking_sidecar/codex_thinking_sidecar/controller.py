@@ -315,6 +315,18 @@ class SidecarController:
 
     def status(self) -> Dict[str, Any]:
         with self._lock:
+            # Lazy cleanup: if a previous stop() timed out but the thread has since exited,
+            # clear references so UI buttons/status don't get stuck in a confusing state.
+            try:
+                if self._thread is not None and (not self._thread.is_alive()):
+                    self._thread = None
+                    self._stop_event = None
+                    self._watcher = None
+                    if self._last_error == "stop_timeout":
+                        self._last_error = ""
+            except Exception:
+                pass
+
             running = self._thread is not None and self._thread.is_alive()
             watcher = self._watcher
             last_error = self._last_error

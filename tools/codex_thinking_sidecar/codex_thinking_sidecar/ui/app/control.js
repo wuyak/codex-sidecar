@@ -479,9 +479,21 @@ export async function startWatch(dom, state) {
 }
 
 export async function stopWatch(dom, state) {
+  setStatus(dom, "正在停止监听…");
   const r = await api("POST", "/api/control/stop");
+  if (r && r.running) {
+    // Stop can be delayed by in-flight translation/network; poll until fully stopped.
+    const deadline = Date.now() + 15000;
+    while (Date.now() < deadline) {
+      try {
+        const st = await fetch(`/api/status?t=${Date.now()}`, { cache: "no-store" }).then(x => x.json());
+        if (st && st.running === false) break;
+      } catch (_) {}
+      await new Promise((res) => setTimeout(res, 180));
+    }
+  }
   await loadControl(dom, state);
-  setStatus(dom, r.running ? "停止监听失败" : "已停止监听");
+  setStatus(dom, r && r.running ? "停止中（等待后台任务结束）" : "已停止监听");
 }
 
 async function healthPid() {
