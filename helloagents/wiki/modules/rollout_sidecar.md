@@ -78,7 +78,7 @@ UI 支持三种显示模式：`中英文对照 / 仅中文 / 仅英文`（保存
 推荐配置（right.codes 示例）：
 - `Base URL`：`https://www.right.codes/codex/v1`（sidecar 会自动 POST 到 `${Base URL}/responses`）
 - `Auth Header`：支持 `Authorization: Bearer` 或 `x-api-key`（二选一）
-- `Model`：可先用 `gpt-4o-mini`（更省）或 `gpt-4.1-mini`（更稳）
+- `Model`：优先使用你在 `/codex/v1/models` 里看到“可用”的模型。部分 right.codes 的 **ChatGPT 账号**在 Codex 网关下可能不支持 `gpt-4o-mini`，可先用 `gpt-5.2` 作为保底。
 - `Reasoning`：翻译通常不需要；仅当使用 `gpt-5*` / `o*` 推理模型时才建议设置为 `minimal/none`
 
 配置保存策略（避免互相覆盖）：
@@ -87,7 +87,7 @@ UI 支持三种显示模式：`中英文对照 / 仅中文 / 仅英文`（保存
 性能与请求量（避免“翻译 API 占用太多请求”）：
 - sidecar 会先对消息做去重，再进行翻译请求（重复内容不会反复打到翻译 API）。
 - `openai` Provider 内置小型 LRU 缓存（默认 64 条），同一段文本多次出现时会复用译文。
-- UI 选择 `openai` Provider 时会自动补齐默认 `Base URL`（right.codes）与默认 `Model`（`gpt-4o-mini`），减少手动输入。
+- UI 选择 `openai` Provider 时会自动补齐默认 `Base URL`（right.codes）与默认 `Model`（right.codes 场景默认 `gpt-5.2`），减少手动输入。
 
 ## 配置生效提示
 sidecar 的监听线程启动时会读取一次配置；若在“已开始监听”状态下修改翻译配置，需重启监听后才会生效（UI 会提示是否重启）。

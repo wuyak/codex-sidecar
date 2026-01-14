@@ -60,7 +60,10 @@ function ensureOpenAIDefaults(dom) {
       dom.openaiBaseUrl.value = "https://www.right.codes/codex/v1";
     }
     if (dom.openaiModel && !String(dom.openaiModel.value || "").trim()) {
-      dom.openaiModel.value = "gpt-4o-mini";
+      const base = String(dom.openaiBaseUrl && dom.openaiBaseUrl.value ? dom.openaiBaseUrl.value : "").trim().toLowerCase();
+      // right.codes 的 Codex 网关在“ChatGPT 账号”场景下可能不支持部分常见模型（例如 gpt-4o-mini）。
+      // 给一个更稳妥的默认值，用户仍可按 /models 列表自行调整。
+      dom.openaiModel.value = (base.includes("right.codes") && base.includes("/codex/")) ? "gpt-5.2" : "gpt-4o-mini";
     }
     if (dom.openaiTimeout && (dom.openaiTimeout.value === "" || dom.openaiTimeout.value == null)) {
       dom.openaiTimeout.value = 12;
@@ -428,18 +431,12 @@ export async function saveConfig(dom, state) {
     return;
   }
   if (wasRunning) {
-    // Config changes only take effect on watcher restart; prompt to apply immediately.
-    if (confirm("已保存配置。需要重启监听使新配置生效吗？")) {
-      const stopped = await api("POST", "/api/control/stop");
-      if (stopped && stopped.running) {
-        // Watcher may still be stuck in a translate HTTP request; avoid spawning duplicates.
-        if (confirm("停止监听未能及时完成（可能仍在翻译请求中）。是否改用“重启 Sidecar”以确保新配置生效？")) {
-          await restartProcess(dom, state, { skipConfirm: true });
-          return;
-        }
-      } else {
-        await api("POST", "/api/control/start");
-      }
+    // Config changes only take effect on watcher restart. In practice, stopping a watcher
+    // can be delayed by in-flight translation requests. Reuse the existing “重启 Sidecar”
+    // logic to make the behavior deterministic.
+    if (confirm("已保存配置。需要重启 Sidecar 使新配置生效吗？")) {
+      await restartProcess(dom, state, { skipConfirm: true });
+      return;
     }
   }
   if (!wasRunning && patch.auto_start) {

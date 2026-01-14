@@ -83,4 +83,6 @@
 - 优化：UI 选择 OpenAI Provider 时自动补齐默认 Base URL（right.codes）与默认模型（gpt-4o-mini），减少手动配置成本。
 - 重构：翻译实现拆分为 `codex_thinking_sidecar/translators/*`，`translator.py` 仅作为向后兼容的 facade。
 - 修复：OpenAI/Responses 翻译鉴权头的 Bearer 前缀自动补空格，避免 `Authorization: Bearersk-...` 导致 401 “缺少 API Key”。
-- 修复：停止监听不再提前清空 watcher 线程引用，避免“停止未完成又启动”导致的重复监听/重复翻译请求；保存配置的“重启监听”在 stop 超时会提示改用“重启 Sidecar”。
+- 修复：停止监听不再提前清空 watcher 线程引用，避免“停止未完成又启动”导致的重复监听/重复翻译请求。
+- 调整：保存配置后的“立即生效”改为直接复用右侧 🔄 的“重启 Sidecar”逻辑（更确定，不受 in-flight 翻译请求影响）。
+- 调整：right.codes（Codex 网关）默认模型改为 `gpt-5.2`（避免部分 ChatGPT 账号不支持 `gpt-4o-mini` 导致 400）。
