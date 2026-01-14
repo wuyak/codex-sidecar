@@ -6,7 +6,7 @@ import urllib.request
 from dataclasses import dataclass
 from socket import timeout as _SocketTimeout
 
-from .utils import log_warn, normalize_url, sanitize_url
+from .utils import compose_auth_value, log_warn, normalize_url, sanitize_url
 
 
 def _format_http_translate_error(url: str, auth_token: str, detail: str = "") -> str:
@@ -77,7 +77,7 @@ class HttpTranslator:
         if not token and self.auth_env:
             token = (os.environ.get(self.auth_env) or "").strip()
         if token:
-            req.add_header(self.auth_header, f"{self.auth_prefix}{token}")
+            req.add_header(self.auth_header, compose_auth_value(self.auth_prefix, token))
         try:
             with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:
                 raw = resp.read()
@@ -171,4 +171,3 @@ class HttpTranslator:
                 detail=f"error={type(e).__name__}",
             )
             return ""
-

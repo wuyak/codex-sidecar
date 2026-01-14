@@ -7,7 +7,7 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from socket import timeout as _SocketTimeout
 
-from .utils import log_warn, normalize_url, sanitize_url
+from .utils import compose_auth_value, log_warn, normalize_url, sanitize_url
 
 
 def _model_supports_reasoning(model: str) -> bool:
@@ -181,7 +181,7 @@ class OpenAIResponsesTranslator:
         if ah.lower() == "x-api-key":
             req.add_header("x-api-key", token)
         else:
-            req.add_header(ah, f"{self.auth_prefix}{token}")
+            req.add_header(ah, compose_auth_value(self.auth_prefix, token))
 
         try:
             with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:
@@ -262,4 +262,3 @@ class OpenAIResponsesTranslator:
         except Exception as e:
             self.last_error = _log_openai_translate_error(endpoint, auth_token=token, detail=f"error={type(e).__name__}")
             return ""
-

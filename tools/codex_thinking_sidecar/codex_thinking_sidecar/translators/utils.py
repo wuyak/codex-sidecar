@@ -56,3 +56,20 @@ def log_warn(kind: str, msg: str, min_interval_s: float = 5.0) -> str:
         pass
     return msg
 
+
+def compose_auth_value(prefix: str, token: str) -> str:
+    """
+    Compose an auth header value.
+
+    Many servers expect "Bearer <token>" with a space. Users may configure prefix as
+    "Bearer" or "Bearer " (with a trailing space). This helper normalizes both.
+    """
+    p = str(prefix or "")
+    t = str(token or "")
+    if not p:
+        return t
+    if not t:
+        return p
+    if p.endswith((" ", "\t")):
+        return p + t
+    return p + " " + t

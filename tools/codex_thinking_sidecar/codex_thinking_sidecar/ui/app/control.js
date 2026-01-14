@@ -430,8 +430,16 @@ export async function saveConfig(dom, state) {
   if (wasRunning) {
     // Config changes only take effect on watcher restart; prompt to apply immediately.
     if (confirm("已保存配置。需要重启监听使新配置生效吗？")) {
-      await api("POST", "/api/control/stop");
-      await api("POST", "/api/control/start");
+      const stopped = await api("POST", "/api/control/stop");
+      if (stopped && stopped.running) {
+        // Watcher may still be stuck in a translate HTTP request; avoid spawning duplicates.
+        if (confirm("停止监听未能及时完成（可能仍在翻译请求中）。是否改用“重启 Sidecar”以确保新配置生效？")) {
+          await restartProcess(dom, state, { skipConfirm: true });
+          return;
+        }
+      } else {
+        await api("POST", "/api/control/start");
+      }
     }
   }
   if (!wasRunning && patch.auto_start) {
@@ -505,8 +513,11 @@ async function waitForRestartCycle(beforePid) {
   return { beforePid: beforePid || null, afterPid, sawDown };
 }
 
-export async function restartProcess(dom, state) {
-  if (!confirm("确定要重启 sidecar 进程？（将杀死并重新拉起服务）")) return;
+export async function restartProcess(dom, state, opts) {
+  const skipConfirm = !!(opts && typeof opts === "object" && opts.skipConfirm);
+  if (!skipConfirm) {
+    if (!confirm("确定要重启 sidecar 进程？（将杀死并重新拉起服务）")) return;
+  }
   const beforePid = await healthPid();
   setStatus(dom, beforePid ? `正在重启 sidecar…（pid:${beforePid}）` : "正在重启 sidecar…");
   try { if (state.uiEventSource) state.uiEventSource.close(); } catch (_) {}

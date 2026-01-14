@@ -252,17 +252,33 @@ class SidecarController:
                 self._last_error = str(e)
 
     def stop(self) -> Dict[str, Any]:
+        """
+        Stop watcher thread.
+
+        Important: do NOT clear thread references before it actually exits;
+        otherwise callers may start a second watcher while the previous one is
+        still alive (causing duplicate ingestion and extra translation requests).
+        """
         with self._lock:
             t = self._thread
             ev = self._stop_event
-            self._thread = None
-            self._stop_event = None
-            self._watcher = None
         if ev is not None:
             ev.set()
         if t is not None and t.is_alive():
+            # NOTE: translation may be blocked by network; rely on per-request timeout.
             t.join(timeout=2.0)
-        return {"ok": True, "running": False}
+        still_running = bool(t is not None and t.is_alive())
+        if not still_running:
+            with self._lock:
+                self._thread = None
+                self._stop_event = None
+                self._watcher = None
+            return {"ok": True, "running": False}
+        # Keep state so status() remains accurate and start() won't spawn duplicates.
+        with self._lock:
+            if not self._last_error:
+                self._last_error = "stop_timeout"
+        return {"ok": True, "running": True, "stop_timeout": True}
 
     def status(self) -> Dict[str, Any]:
         with self._lock:
