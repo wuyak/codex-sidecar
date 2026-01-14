@@ -46,7 +46,7 @@
 - 优化：回答内容（assistant_message）改为 Markdown 渲染。
 - 新增：所有消息的文本块/代码块右上角增加“复制”按钮。
 - 优化：思考块（`reasoning_summary`/`agent_reasoning`）改为 Markdown 渲染，并将“思考（EN/ZH）”移到时间戳同行。
-- 调整：↑ 顶部 / ↓ 底部悬浮按钮移动到左侧。
+- 调整：↑ 顶部 / ↓ 底部悬浮按钮移动到右侧。
 - 重构：UI HTML 从 `server.py` 抽离到 `tools/codex_thinking_sidecar/codex_thinking_sidecar/ui/index.html`，便于后续分层与迭代。
 - 修复：UI Markdown 渲染支持有序列表（`1.` / `1)`）与 `•/◦` 无序列表，避免回答分点在 UI 中丢失。
 - 优化：主页面控制收敛到右侧悬浮工具栏（⚙️/▶️/⏹️/🧹/⏻），顶栏仅保留标题与状态。

@@ -60,7 +60,7 @@
       button.primary { background:#111827; color:#fff; border-color:#111827; }
 	      button.danger { background:#fee2e2; border-color:#fecaca; }
 		      .muted { opacity: .8; }
-      .float-nav { position: fixed; left: 16px; right: auto; bottom: 16px; display:flex; flex-direction:column; gap:6px; z-index: 1000; }
+      .float-nav { position: fixed; right: 16px; left: auto; bottom: 16px; display:flex; flex-direction:column; gap:6px; z-index: 1000; }
       .float-nav button { width: 38px; height: 38px; padding: 0; border-radius: 999px; box-shadow: 0 6px 20px rgba(0,0,0,.08); font-size: 16px; }
 		      .drawer-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.18); z-index: 900; }
 			      .drawer { position: fixed; top: 16px; right: 16px; bottom: 16px; width: 440px; max-width: calc(100vw - 32px); background:#fff; border: 1px solid #ddd; border-radius: 12px; padding: 12px; overflow: auto; z-index: 910; box-shadow: 0 12px 40px rgba(0,0,0,.12); }
