@@ -119,12 +119,7 @@ export function renderMessage(dom, state, msg) {
 
     const hasDetails = !!String(expandedText || "").trim();
     if (hasDetails) {
-      const metaLines = [];
-      metaLines.push(`工具：${toolName || "tool_output"}`);
-      if (callId) metaLines.push(`call_id：${callId}`);
-      if (exitCode !== null) metaLines.push(`Exit：${exitCode}`);
-      if (wallTime) metaLines.push(`耗时：${wallTime}`);
-      const detailsText = [metaLines.join("\n"), "", String(expandedText || "").trim()].join("\n");
+      const detailsText = String(expandedText || "").trim();
       const detailsHtml = (toolName === "apply_patch") ? renderDiffText(detailsText) : escapeHtml(detailsText);
       metaRightExtra = `<button class="tool-toggle" type="button" data-target="${escapeHtml(detailsId)}" data-swap="${escapeHtml(summaryId)}">详情</button>`;
       body = `
