@@ -38,6 +38,9 @@
 - 优化：meta 行为工具输出/工具调用/输入/回答补充“类型 + 工具名”标识，统一信息位置。
 - 修复：预扫描 `tool_call` 建立 call_id→tool 索引，解决部分 `tool_output` 无法识别工具而展示 raw JSON 的问题。
 - 优化：`apply_patch` 详情使用统一 diff 高亮（`+/-/@@`）渲染，便于快速扫读增删改。
+- 修复：diff 渲染不再“每行空一行”，行距与分段更紧凑。
+- 优化：复制按钮改为小图标（⧉），避免遮挡内容。
+- 优化：用户输入（user_message）正文改为 Markdown 渲染，且不再在正文重复“用户”标签（统一放在 meta 行）。
 - 优化：隐藏 `apply_patch` 的 `tool_call` 行；`apply_patch` 的 `tool_output` 改为终端风格摘要，并在“详情”中提供补丁内容可复制。
 - 优化：`update_plan` 不再折叠展示，按“计划→说明”输出并使用 Markdown 排版，移除原始参数与工具元信息。
 - 优化：回答内容（assistant_message）改为 Markdown 渲染。

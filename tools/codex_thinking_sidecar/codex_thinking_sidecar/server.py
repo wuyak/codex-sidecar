@@ -359,15 +359,15 @@ _UI_HTML = """<!doctype html>
 	      .pill { display:inline-block; padding:2px 8px; border-radius:999px; border:1px solid #e2e8f0; background:#fff; font-size:12px; }
 	      .tool-meta { display:flex; flex-wrap:wrap; gap:10px; margin-top: 6px; color:#555; font-size: 12px; }
 	      .pre-wrap { position: relative; }
-	      .copy-btn { position:absolute; top: 8px; right: 8px; padding: 4px 8px; border-radius: 8px; font-size: 12px; border: 1px solid rgba(148,163,184,.55); background: rgba(15,23,42,.88); color:#e2e8f0; cursor:pointer; opacity: 0; transition: opacity .15s; }
-	      .copy-btn.light { background:#fff; color:#0f172a; border-color:#e2e8f0; }
+	      .copy-btn { position:absolute; top: 6px; right: 6px; width: 26px; height: 26px; padding: 0; border-radius: 8px; font-size: 14px; line-height: 1; display:flex; align-items:center; justify-content:center; border: 1px solid rgba(148,163,184,.45); background: rgba(15,23,42,.55); color:#e2e8f0; cursor:pointer; opacity: 0; transition: opacity .15s; backdrop-filter: blur(2px); }
+	      .copy-btn.light { background: rgba(255,255,255,.85); color:#0f172a; border-color:#e2e8f0; }
 	      .pre-wrap:hover .copy-btn { opacity: 1; }
 	      .copy-btn:active { transform: translateY(1px); }
 	      pre.code { background:#0b1020; color:#e5e7eb; padding: 10px; border-radius: 10px; overflow:auto; white-space: pre; word-break: normal; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; line-height: 1.35; }
 	      pre.code .diff-line { display:block; padding: 0 6px; border-radius: 6px; }
 	      pre.code .diff-add { background: rgba(34, 197, 94, .16); }
 	      pre.code .diff-del { background: rgba(239, 68, 68, .16); }
-	      pre.code .diff-ellipsis { color:#94a3b8; }
+	      pre.code .diff-ellipsis { color:#cbd5e1; background: rgba(59, 130, 246, .12); }
 	      .change-head { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
 	      .md { font-size: 13px; line-height: 1.6; }
 	      .md h1, .md h2, .md h3 { margin: 10px 0 6px; line-height: 1.25; }
@@ -551,7 +551,7 @@ _UI_HTML = """<!doctype html>
         }
       }
 
-      function decoratePreBlocks(root) {
+	      function decoratePreBlocks(root) {
         if (!root || !root.querySelectorAll) return;
         const pres = root.querySelectorAll("pre");
         for (const pre of pres) {
@@ -560,19 +560,20 @@ _UI_HTML = """<!doctype html>
             if (pre.parentElement.classList && pre.parentElement.classList.contains("pre-wrap")) continue;
             const wrap = document.createElement("div");
             wrap.className = "pre-wrap";
-            const btn = document.createElement("button");
-            btn.type = "button";
-            const isDark = pre.classList && pre.classList.contains("code");
-            btn.className = "copy-btn" + (isDark ? "" : " light");
-            btn.textContent = "复制";
-            btn.title = "复制内容";
-            btn.onclick = async (e) => {
-              try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
-              const ok = await copyToClipboard(pre.textContent || "");
-              const old = btn.textContent;
-              btn.textContent = ok ? "已复制" : "复制失败";
-              setTimeout(() => { btn.textContent = old; }, 900);
-            };
+	            const btn = document.createElement("button");
+	            btn.type = "button";
+	            const isDark = pre.classList && pre.classList.contains("code");
+	            btn.className = "copy-btn" + (isDark ? "" : " light");
+	            const icon = "⧉";
+	            btn.textContent = icon;
+	            btn.title = "复制";
+	            btn.setAttribute("aria-label", "复制");
+	            btn.onclick = async (e) => {
+	              try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+	              const ok = await copyToClipboard(pre.textContent || "");
+	              btn.textContent = ok ? "✓" : "!";
+	              setTimeout(() => { btn.textContent = icon; }, 650);
+	            };
             pre.parentNode.insertBefore(wrap, pre);
             wrap.appendChild(btn);
             wrap.appendChild(pre);
@@ -580,7 +581,7 @@ _UI_HTML = """<!doctype html>
         }
       }
 
-      function decorateMdBlocks(root) {
+	      function decorateMdBlocks(root) {
         if (!root || !root.querySelectorAll) return;
         const blocks = root.querySelectorAll("div.md");
         for (const md of blocks) {
@@ -589,18 +590,19 @@ _UI_HTML = """<!doctype html>
             if (md.parentElement.classList && md.parentElement.classList.contains("pre-wrap")) continue;
             const wrap = document.createElement("div");
             wrap.className = "pre-wrap";
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.className = "copy-btn light";
-            btn.textContent = "复制";
-            btn.title = "复制内容";
-            btn.onclick = async (e) => {
-              try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
-              const ok = await copyToClipboard(md.innerText || md.textContent || "");
-              const old = btn.textContent;
-              btn.textContent = ok ? "已复制" : "复制失败";
-              setTimeout(() => { btn.textContent = old; }, 900);
-            };
+	            const btn = document.createElement("button");
+	            btn.type = "button";
+	            btn.className = "copy-btn light";
+	            const icon = "⧉";
+	            btn.textContent = icon;
+	            btn.title = "复制";
+	            btn.setAttribute("aria-label", "复制");
+	            btn.onclick = async (e) => {
+	              try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+	              const ok = await copyToClipboard(md.innerText || md.textContent || "");
+	              btn.textContent = ok ? "✓" : "!";
+	              setTimeout(() => { btn.textContent = icon; }, 650);
+	            };
             md.parentNode.insertBefore(wrap, md);
             wrap.appendChild(btn);
             wrap.appendChild(md);
@@ -1079,7 +1081,8 @@ _UI_HTML = """<!doctype html>
 	          const cls = diffClassForLine(ln);
 	          html.push(`<span class=\"diff-line ${cls}\">${escapeHtml(ln)}</span>`);
 	        }
-	        return html.join(\"\\n\");
+	        // Each line is already a block; avoid inserting extra newlines that become blank lines.
+	        return html.join(\"\");
 	      }
 	
 	      function renderCodexEditSummary(text) {
@@ -1473,8 +1476,8 @@ _UI_HTML = """<!doctype html>
 	            `;
 	          }
 	        } else if (kind === "user_message") {
-	          metaLeftExtra = `<span class="pill">输入</span>`;
-	          body = `<pre><b>用户</b>\\n${escapeHtml(msg.text || "")}</pre>`;
+	          metaLeftExtra = `<span class="pill">用户输入</span>`;
+	          body = `<div class="md">${renderMarkdown(msg.text || "")}</div>`;
 	        } else if (kind === "assistant_message") {
 	          metaLeftExtra = `<span class="pill">回答</span>`;
 	          const txt = String(msg.text || "");
