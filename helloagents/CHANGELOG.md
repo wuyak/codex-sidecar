@@ -88,3 +88,4 @@
 - 调整：right.codes（Codex 网关）默认模型改为 `gpt-5.1`（避免部分 ChatGPT 账号不支持 `gpt-4o-mini` 导致 400，同时较 `gpt-5.2` 更省）。
 - 新增：UI Markdown 渲染支持表格（pipe table），输入/输出里含 `|---|` 的表格会渲染为 HTML table。
 - 修复：兼容部分网关在 `stream:false` 时仍返回 `text/event-stream`（SSE）；翻译器会解析 SSE 事件并提取 `output_text`，避免把整段 `event: response.created ...` 原样展示到思考内容里。
+- 优化：OpenAI/Responses 翻译请求增加 `Accept: application/json`，并缩短翻译 prompt 以减少 token 消耗（同时仍保持 Markdown/代码块保真规则）。

@@ -30,14 +30,10 @@ def _build_zh_translation_prompt(text: str) -> str:
     """
     sentinel_a = "<<<SIDE_CAR_TEXT>>>"
     sentinel_b = "<<<END_SIDE_CAR_TEXT>>>"
+    # Keep this prompt short to reduce token cost.
     return (
-        "你是一个高质量的翻译引擎。请把下面内容翻译成【简体中文】。\n\n"
-        "要求：\n"
-        "- 只输出译文，不要添加任何解释/前缀/引号。\n"
-        "- 尽量保持原有 Markdown 结构（标题/列表/空行/缩进）。\n"
-        "- 代码块、命令行、路径、变量名、JSON 等“看起来像代码”的片段保持原样，不要翻译。\n"
-        "- 专有名词如 API/HTTP/JSON/Codex/Sidecar 保持原样。\n"
-        "- 如果原文已经是中文为主，则原样返回。\n\n"
+        "把下面内容翻译成【简体中文】，只输出译文。\n"
+        "保留原有 Markdown/换行；代码块/命令/路径/变量名/JSON 原样不翻译；专有名词（API/HTTP/JSON/Codex/Sidecar 等）原样保留；原文中文为主则原样返回。\n\n"
         f"{sentinel_a}\n{text}\n{sentinel_b}\n"
     )
 
@@ -242,6 +238,8 @@ class OpenAIResponsesTranslator:
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         req = urllib.request.Request(endpoint, data=data, method="POST")
         req.add_header("Content-Type", "application/json; charset=utf-8")
+        # Prefer a single JSON response when gateways support content negotiation.
+        req.add_header("Accept", "application/json")
 
         # Auth header compatible with common gateways:
         # - Authorization: Bearer {key}
