@@ -6,7 +6,7 @@ from collections import deque
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Deque, Dict, List, Optional, Any
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlparse, unquote
 from pathlib import Path
 
 
@@ -187,66 +187,14 @@ class _Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/ui":
-            # Avoid stale UI HTML due to browser caching when iterating locally.
-            self._send_text(
-                HTTPStatus.OK,
-                _load_ui_text(
-                    _UI_INDEX_PATH,
-                    (
-                        "<!doctype html><meta charset=\"utf-8\"/>"
-                        "<title>Codex Thinking Sidecar</title>"
-                        "<pre>UI file missing: {}\n".format(_UI_INDEX_PATH) + "</pre>"
-                    ),
-                ),
-                content_type="text/html; charset=utf-8",
-                extra_headers={
-                    "Cache-Control": "no-store, max-age=0",
-                    "Pragma": "no-cache",
-                },
-            )
+            self._serve_ui_file("index.html")
             return
 
-        if path == "/ui/" or path == "/ui/index.html":
-            self._send_text(
-                HTTPStatus.OK,
-                _load_ui_text(
-                    _UI_INDEX_PATH,
-                    (
-                        "<!doctype html><meta charset=\"utf-8\"/>"
-                        "<title>Codex Thinking Sidecar</title>"
-                        "<pre>UI file missing: {}\n".format(_UI_INDEX_PATH) + "</pre>"
-                    ),
-                ),
-                content_type="text/html; charset=utf-8",
-                extra_headers={
-                    "Cache-Control": "no-store, max-age=0",
-                    "Pragma": "no-cache",
-                },
-            )
-            return
-
-        if path == "/ui/styles.css":
-            self._send_text(
-                HTTPStatus.OK,
-                _load_ui_text(_UI_CSS_PATH, f"/* UI file missing: {_UI_CSS_PATH} */\n"),
-                content_type="text/css; charset=utf-8",
-                extra_headers={
-                    "Cache-Control": "no-store, max-age=0",
-                    "Pragma": "no-cache",
-                },
-            )
-            return
-
-        if path == "/ui/app.js":
-            self._send_text(
-                HTTPStatus.OK,
-                _load_ui_text(_UI_JS_PATH, f"console.warn('UI file missing: {_UI_JS_PATH}');\n"),
-                content_type="application/javascript; charset=utf-8",
-                extra_headers={
-                    "Cache-Control": "no-store, max-age=0",
-                    "Pragma": "no-cache",
-                },
-            )
+        if path.startswith("/ui/"):
+            rel = path[len("/ui/") :]
+            if not rel or rel == "index.html":
+                rel = "index.html"
+            self._serve_ui_file(rel)
             return
 
         if path == "/events":
@@ -254,6 +202,60 @@ class _Handler(BaseHTTPRequestHandler):
             return
 
         self._send_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": "not_found"})
+
+    def _serve_ui_file(self, rel: str) -> None:
+        """
+        Serve static UI assets from the local ui/ folder.
+
+        Notes:
+        - All UI routes are marked no-store to avoid confusing stale caches during iteration.
+        - Rel path is sanitized and forced to stay inside _UI_DIR.
+        """
+        headers = {
+            "Cache-Control": "no-store, max-age=0",
+            "Pragma": "no-cache",
+        }
+        try:
+            rel_norm = unquote(rel or "").lstrip("/")
+            cand = (_UI_DIR / rel_norm).resolve()
+            root = _UI_DIR.resolve()
+            if root not in cand.parents and cand != root:
+                self._send_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": "not_found"})
+                return
+            if not cand.exists() or not cand.is_file():
+                # Keep dev-friendly fallbacks for common asset types.
+                if rel_norm.endswith(".js"):
+                    self._send_text(
+                        HTTPStatus.OK,
+                        f"console.warn('UI file missing: {cand}');\n",
+                        content_type="application/javascript; charset=utf-8",
+                        extra_headers=headers,
+                    )
+                    return
+                if rel_norm.endswith(".css"):
+                    self._send_text(
+                        HTTPStatus.OK,
+                        f"/* UI file missing: {cand} */\n",
+                        content_type="text/css; charset=utf-8",
+                        extra_headers=headers,
+                    )
+                    return
+                self._send_text(
+                    HTTPStatus.OK,
+                    (
+                        "<!doctype html><meta charset=\"utf-8\"/>"
+                        "<title>Codex Sidecar</title>"
+                        "<pre>UI file missing: {}\n".format(cand) + "</pre>"
+                    ),
+                    content_type="text/html; charset=utf-8",
+                    extra_headers=headers,
+                )
+                return
+            ct = _ui_content_type(cand)
+            body = _load_ui_text(cand, "")
+            self._send_text(HTTPStatus.OK, body, content_type=ct, extra_headers=headers)
+        except Exception:
+            self._send_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": "not_found"})
 
     def _handle_sse(self) -> None:
         q = self._state.subscribe()
@@ -386,6 +388,18 @@ _UI_DIR = Path(__file__).with_name("ui")
 _UI_INDEX_PATH = _UI_DIR / "index.html"
 _UI_CSS_PATH = _UI_DIR / "styles.css"
 _UI_JS_PATH = _UI_DIR / "app.js"
+
+def _ui_content_type(path: Path) -> str:
+    ext = (path.suffix or "").lower()
+    if ext in (".html", ".htm"):
+        return "text/html; charset=utf-8"
+    if ext == ".css":
+        return "text/css; charset=utf-8"
+    if ext == ".js":
+        return "application/javascript; charset=utf-8"
+    if ext == ".json":
+        return "application/json; charset=utf-8"
+    return "text/plain; charset=utf-8"
 
 def _load_ui_text(path: Path, fallback: str) -> str:
     try:
