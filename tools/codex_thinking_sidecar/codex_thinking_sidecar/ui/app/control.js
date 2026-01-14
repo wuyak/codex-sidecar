@@ -379,13 +379,22 @@ export async function stopWatch(dom, state) {
   setStatus(dom, r.running ? "停止监听失败" : "已停止监听");
 }
 
-async function waitForHealthThen(dom, fn) {
-  const deadline = Date.now() + 12000;
+async function waitForRestartCycleThen(fn) {
+  const deadline = Date.now() + 15000;
+  let sawDown = false;
+  // Give restart a moment to actually begin.
+  await new Promise((res) => setTimeout(res, 220));
   while (Date.now() < deadline) {
     try {
       const r = await fetch(`/health?t=${Date.now()}`, { cache: "no-store" });
-      if (r && r.ok) break;
-    } catch (e) {}
+      if (r && r.ok) {
+        if (sawDown) break;
+      } else {
+        sawDown = true;
+      }
+    } catch (e) {
+      sawDown = true;
+    }
     await new Promise((res) => setTimeout(res, 160));
   }
   try { await fn(); } catch (e) {}
@@ -398,7 +407,7 @@ export async function restartProcess(dom, state) {
   closeDrawer(dom);
   try { await api("POST", "/api/control/restart_process", {}); } catch (e) {}
   // The current request completes before restart; then we poll until the service is back.
-  await waitForHealthThen(dom, async () => {
+  await waitForRestartCycleThen(async () => {
     try { await api("POST", "/api/control/start"); } catch (e) {}
     try { window.location.reload(); } catch (_) {}
   });

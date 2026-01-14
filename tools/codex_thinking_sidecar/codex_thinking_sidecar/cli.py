@@ -1,6 +1,7 @@
 import argparse
 import os
 import signal
+import subprocess
 import sys
 import tempfile
 import threading
@@ -148,6 +149,7 @@ def main(argv=None) -> int:
     signal.signal(signal.SIGINT, _handle_sigint)
     signal.signal(signal.SIGTERM, _handle_sigint)
 
+    do_restart = False
     try:
         # UI mode: only run the server; watcher is controlled via HTTP endpoints.
         if server is not None and args.ui:
@@ -218,13 +220,19 @@ def main(argv=None) -> int:
                 lock_fh.close()
             except Exception:
                 pass
-        if restart_event.is_set():
-            # Full process restart (dev-friendly): re-exec self after graceful shutdown.
-            cmd = [sys.executable, "-m", "codex_thinking_sidecar"] + raw_argv
-            try:
-                print(f"[sidecar] RESTART: {' '.join(cmd)}", file=sys.stderr)
-            except Exception:
-                pass
+        do_restart = restart_event.is_set()
+
+    if do_restart:
+        cmd = [sys.executable, "-m", "codex_thinking_sidecar"] + raw_argv
+        try:
+            print(f"[sidecar] RESTART: {' '.join(cmd)}", file=sys.stderr)
+        except Exception:
+            pass
+        try:
+            subprocess.Popen(cmd, env=os.environ.copy(), start_new_session=True)
+            return 0
+        except Exception:
+            # Fallback: in-place restart (PID unchanged).
             os.execv(cmd[0], cmd)
 
     return 0
