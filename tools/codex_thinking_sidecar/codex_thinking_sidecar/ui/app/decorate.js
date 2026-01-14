@@ -1,15 +1,32 @@
 import { copyToClipboard } from "./utils.js";
 
-function flashCopied(wrap, isLight = false) {
-  if (!wrap || !wrap.appendChild) return;
-  try {
-    const old = wrap.querySelector(".copy-toast");
-    if (old && old.parentNode) old.parentNode.removeChild(old);
-  } catch (_) {}
+function clamp(n, a, b) {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return a;
+  return Math.min(b, Math.max(a, x));
+}
+
+function flashCopiedAt(x, y, isLight = false) {
   const el = document.createElement("div");
-  el.className = "copy-toast" + (isLight ? " light" : "");
+  el.className = "copy-toast fixed" + (isLight ? " light" : "");
   el.textContent = "已复制";
-  wrap.appendChild(el);
+  el.style.left = "0px";
+  el.style.top = "0px";
+  document.body.appendChild(el);
+  try {
+    const rect = el.getBoundingClientRect();
+    const pad = 12;
+    const dx = 14;
+    const dy = 14;
+    let left = Number(x || 0) + dx;
+    let top = Number(y || 0) + dy;
+    if (left + rect.width + pad > window.innerWidth) left = Number(x || 0) - rect.width - dx;
+    if (top + rect.height + pad > window.innerHeight) top = window.innerHeight - rect.height - pad;
+    left = clamp(left, pad, Math.max(pad, window.innerWidth - rect.width - pad));
+    top = clamp(top, pad, Math.max(pad, window.innerHeight - rect.height - pad));
+    el.style.left = `${left}px`;
+    el.style.top = `${top}px`;
+  } catch (_) {}
   setTimeout(() => {
     try { if (el && el.parentNode) el.parentNode.removeChild(el); } catch (_) {}
   }, 1300);
@@ -49,13 +66,9 @@ function toggleToolDetailsFromPre(pre) {
   }
 }
 
-function wirePreClickAndLongPress(pre) {
-  if (!pre || pre.__wiredPress) return;
-  try {
-    // 仅对“代码块”启用点击展开/长按复制，避免影响普通 <pre> 文本。
-    if (!pre.classList || !pre.classList.contains("code")) return;
-  } catch (_) {}
-  pre.__wiredPress = true;
+function wireHoldCopy(el, opts) {
+  if (!el || el.__wiredPress) return;
+  el.__wiredPress = true;
 
   let startX = 0;
   let startY = 0;
@@ -83,12 +96,12 @@ function wirePreClickAndLongPress(pre) {
       if (moved) return;
       longFired = true;
       try {
-        const ok = await copyToClipboard(pre.textContent || "");
+        const txt = (opts && typeof opts.getText === "function") ? opts.getText() : (el.textContent || "");
+        const ok = await copyToClipboard(txt || "");
         if (ok) {
-          const wrap = (pre.closest && pre.closest(".pre-wrap")) ? pre.closest(".pre-wrap") : null;
-          flashCopied(wrap, false);
-          pre.classList.add("copied");
-          setTimeout(() => { try { pre.classList.remove("copied"); } catch (_) {} }, 750);
+          flashCopiedAt(startX, startY, !!(opts && opts.toastIsLight));
+          try { el.classList.add("copied"); } catch (_) {}
+          setTimeout(() => { try { el.classList.remove("copied"); } catch (_) {} }, 750);
         }
       } catch (_) {}
     }, 420);
@@ -109,18 +122,18 @@ function wirePreClickAndLongPress(pre) {
   const onUp = () => { clear(); };
   const onCancel = () => { clear(); };
 
-  pre.addEventListener("pointerdown", onDown);
-  pre.addEventListener("pointermove", onMove);
-  pre.addEventListener("pointerup", onUp);
-  pre.addEventListener("pointercancel", onCancel);
-  pre.addEventListener("pointerleave", onCancel);
+  el.addEventListener("pointerdown", onDown);
+  el.addEventListener("pointermove", onMove);
+  el.addEventListener("pointerup", onUp);
+  el.addEventListener("pointercancel", onCancel);
+  el.addEventListener("pointerleave", onCancel);
 
-  pre.addEventListener("click", (e) => {
+  el.addEventListener("click", (e) => {
     try {
       if (longFired) { longFired = false; e.preventDefault(); e.stopPropagation(); return; }
       if (moved) return;
       if (hasActiveSelection()) return;
-      toggleToolDetailsFromPre(pre);
+      if (opts && typeof opts.onTap === "function") opts.onTap(e);
     } catch (_) {}
   });
 }
@@ -139,25 +152,14 @@ function decoratePreBlocks(root) {
         wrap.classList.add("hidden");
         try { pre.classList.remove("hidden"); } catch (_) {}
       }
-      const btn = document.createElement("button");
-      btn.type = "button";
-      const isDark = pre.classList && pre.classList.contains("code");
-      btn.className = "copy-btn" + (isDark ? "" : " light");
-      const icon = "⧉";
-      btn.textContent = icon;
-      btn.title = "复制";
-      btn.setAttribute("aria-label", "复制");
-      btn.onclick = async (e) => {
-        try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
-        const ok = await copyToClipboard(pre.textContent || "");
-        if (ok) flashCopied(wrap, !isDark);
-        btn.textContent = ok ? "✓" : "!";
-        setTimeout(() => { btn.textContent = icon; }, 650);
-      };
       pre.parentNode.insertBefore(wrap, pre);
-      wrap.appendChild(btn);
       wrap.appendChild(pre);
-      wirePreClickAndLongPress(pre);
+      const isCode = !!(pre.classList && pre.classList.contains("code"));
+      wireHoldCopy(pre, {
+        getText: () => pre.textContent || "",
+        toastIsLight: !isCode,
+        onTap: isCode ? () => toggleToolDetailsFromPre(pre) : null,
+      });
     } catch (_) {}
   }
 }
@@ -171,23 +173,13 @@ function decorateMdBlocks(root) {
       if (md.parentElement.classList && md.parentElement.classList.contains("pre-wrap")) continue;
       const wrap = document.createElement("div");
       wrap.className = "pre-wrap";
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "copy-btn light";
-      const icon = "⧉";
-      btn.textContent = icon;
-      btn.title = "复制";
-      btn.setAttribute("aria-label", "复制");
-      btn.onclick = async (e) => {
-        try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
-        const ok = await copyToClipboard(md.innerText || md.textContent || "");
-        if (ok) flashCopied(wrap, true);
-        btn.textContent = ok ? "✓" : "!";
-        setTimeout(() => { btn.textContent = icon; }, 650);
-      };
       md.parentNode.insertBefore(wrap, md);
-      wrap.appendChild(btn);
       wrap.appendChild(md);
+      wireHoldCopy(md, {
+        getText: () => md.innerText || md.textContent || "",
+        toastIsLight: true,
+        onTap: null,
+      });
     } catch (_) {}
   }
 }
@@ -229,8 +221,60 @@ function wireToolToggles(root) {
   }
 }
 
+function wireMetaCopy(root) {
+  if (!root || !root.querySelectorAll) return;
+  const btns = root.querySelectorAll("button.meta-copy");
+  for (const btn of btns) {
+    try {
+      if (btn.__wired) continue;
+      btn.__wired = true;
+      btn.onclick = async (e) => {
+        try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+        const row = btn.closest ? btn.closest(".row") : null;
+        if (!row) return;
+        // Copy visible body blocks in DOM order.
+        const parts = [];
+        const nodes = row.querySelectorAll("pre.code, div.md, pre");
+        for (const el of nodes) {
+          try {
+            if (!el) continue;
+            if (el.closest && el.closest(".hidden")) continue;
+            if (el.classList && el.classList.contains("meta")) continue;
+            if (el.tagName === "DIV" && el.classList && el.classList.contains("md")) {
+              const t = String(el.innerText || el.textContent || "").trim();
+              if (t) parts.push(t);
+            } else if (el.tagName === "PRE") {
+              const t = String(el.textContent || "").trimEnd();
+              if (t) parts.push(t);
+            }
+          } catch (_) {}
+        }
+        const text = parts.join("\n\n").trim();
+        const ok = await copyToClipboard(text || "");
+        try {
+          const icon = "⧉";
+          btn.textContent = ok ? "✓" : "!";
+          setTimeout(() => { btn.textContent = icon; }, 650);
+        } catch (_) {}
+        if (ok) {
+          try {
+            const r = btn.getBoundingClientRect();
+            flashCopiedAt(r.right, r.top + (r.height / 2), true);
+          } catch (_) {}
+        }
+      };
+    } catch (_) {}
+  }
+}
+
 export function decorateRow(row) {
+  // cleanup legacy per-block copy buttons if any existed (older UI versions)
+  try {
+    const olds = row.querySelectorAll ? row.querySelectorAll(".copy-btn") : [];
+    for (const b of olds) { try { if (b && b.parentNode) b.parentNode.removeChild(b); } catch (_) {} }
+  } catch (_) {}
   decoratePreBlocks(row);
   decorateMdBlocks(row);
   wireToolToggles(row);
+  wireMetaCopy(row);
 }

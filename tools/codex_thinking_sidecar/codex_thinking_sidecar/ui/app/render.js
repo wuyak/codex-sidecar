@@ -246,6 +246,7 @@ export function renderMessage(dom, state, msg) {
       </div>
       <div class="meta-right">
         ${metaRightExtra || ""}
+        <button class="meta-copy" type="button" title="复制" aria-label="复制">⧉</button>
       </div>
     </div>
     ${body}
