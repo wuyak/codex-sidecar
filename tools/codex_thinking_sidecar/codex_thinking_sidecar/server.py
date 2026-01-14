@@ -515,6 +515,18 @@ _UI_HTML = """<!doctype html>
         return raw.replace(/[^a-z0-9_-]/gi, "_");
       }
 
+      function extractJsonOutputString(s) {
+        const raw = String(s ?? "").trim();
+        if (!raw) return "";
+        const obj = safeJsonParse(raw);
+        if (obj && typeof obj === "object") {
+          if (typeof obj.output === "string") return String(obj.output || "");
+          if (typeof obj.stdout === "string") return String(obj.stdout || "");
+          if (typeof obj.message === "string") return String(obj.message || "");
+        }
+        return "";
+      }
+
       async function copyToClipboard(text) {
         const t = String(text ?? "");
         try {
@@ -1045,10 +1057,19 @@ _UI_HTML = """<!doctype html>
 	
 	      function diffClassForLine(ln) {
 	        const s = String(ln ?? \"\");
+	        // Unified diff / patches
+	        if (s.startsWith(\"@@\")) return \"diff-ellipsis\";
+	        if (s.startsWith(\"+\") && !s.startsWith(\"+++\")) return \"diff-add\";
+	        if (s.startsWith(\"-\") && !s.startsWith(\"---\")) return \"diff-del\";
 	        const m = s.match(/^\\s*\\d+\\s+([+-])\\s/);
 	        if (m) return (m[1] === \"+\") ? \"diff-add\" : \"diff-del\";
 	        if (s.includes(\"⋮\") || s.includes(\"…\")) return \"diff-ellipsis\";
 	        return \"\";
+	      }
+
+	      function renderDiffText(text) {
+	        const lines = String(text ?? \"\").split(\"\\n\");
+	        return renderDiffBlock(lines);
 	      }
 	
 	      function renderDiffBlock(lines) {
@@ -1339,41 +1360,49 @@ _UI_HTML = """<!doctype html>
 		          const detailsId = ("tool_" + safeDomId((msg.id || callId || "") + "_details"));
 		          const summaryId = ("tool_" + safeDomId((msg.id || callId || "") + "_summary"));
 
-			          let runShort = "";
-			          let expandedText = "";
+		          let runShort = "";
+		          let expandedText = "";
+		          let expandedHtml = "";
 
-			          if (toolName === "shell_command" && cmdFull) {
-			            runShort = formatShellRun(cmdFull, outputBody, exitCode);
-			            const runLong = formatShellRunExpanded(cmdFull, outputBody, exitCode);
-			            if (runLong && runLong !== runShort) expandedText = runLong;
-			          } else if (toolName === "apply_patch") {
-			            runShort = formatApplyPatchRun(argsRaw, outputBody, 8);
-			            const runLong = formatApplyPatchRun(argsRaw, outputBody, 120);
-			            const parts = [];
-			            if (argsRaw.trim()) parts.push(argsRaw.trim());
-			            if (runLong && runLong.trim()) parts.push(runLong.trim());
-			            expandedText = parts.join("\\n\\n");
-			          } else if (toolName === "view_image") {
-			            const p = (meta && meta.args_obj) ? String(meta.args_obj.path || "") : "";
-			            const base = (p.split(/[\\\\/]/).pop() || "").trim();
-			            const first = firstMeaningfulLine(outputBody) || "attached local image";
-			            runShort = `• ${first}${base ? `: ${base}` : ``}`;
-			          } else {
-			            const header = `• ${toolName || "tool_output"}`;
-			            const lines = normalizeNonEmptyLines(outputBody);
-			            runShort = formatOutputTree(header, lines, 10);
-			            const runLong = formatOutputTree(header, lines, 120);
-			            if (runLong && runLong !== runShort) expandedText = runLong;
-			          }
+		          if (toolName === "shell_command" && cmdFull) {
+		            metaLeftExtra = `<span class="pill">工具输出</span><span class="pill"><code>${escapeHtml(toolName)}</code></span>`;
+		            runShort = formatShellRun(cmdFull, outputBody, exitCode);
+		            const runLong = formatShellRunExpanded(cmdFull, outputBody, exitCode);
+		            if (runLong && runLong !== runShort) expandedText = runLong;
+		          } else if (toolName === "apply_patch") {
+		            metaLeftExtra = `<span class="pill">工具输出</span><span class="pill"><code>${escapeHtml(toolName)}</code></span>`;
+		            runShort = formatApplyPatchRun(argsRaw, outputBody, 8);
+		            const runLong = formatApplyPatchRun(argsRaw, outputBody, 120);
+		            const parts = [];
+		            if (argsRaw.trim()) parts.push(argsRaw.trim());
+		            if (runLong && runLong.trim()) parts.push(runLong.trim());
+		            expandedText = parts.join("\\n\\n");
+		            if (expandedText.trim()) expandedHtml = renderDiffText(expandedText);
+		          } else if (toolName === "view_image") {
+		            metaLeftExtra = `<span class="pill">工具输出</span><span class="pill"><code>${escapeHtml(toolName)}</code></span>`;
+		            const p = (meta && meta.args_obj) ? String(meta.args_obj.path || "") : "";
+		            const base = (p.split(/[\\\\/]/).pop() || "").trim();
+		            const first = firstMeaningfulLine(outputBody) || "attached local image";
+		            runShort = `• ${first}${base ? `: ${base}` : ``}`;
+		          } else {
+		            if (toolName) metaLeftExtra = `<span class="pill">工具输出</span><span class="pill"><code>${escapeHtml(toolName)}</code></span>`;
+		            else metaLeftExtra = `<span class="pill">工具输出</span><span class="pill">未知工具</span>`;
+		            const header = `• ${toolName || "tool_output"}`;
+		            const jsonOut = extractJsonOutputString(outputBody);
+		            const lines = normalizeNonEmptyLines(jsonOut || outputBody);
+		            runShort = formatOutputTree(header, lines, 10);
+		            const runLong = formatOutputTree(header, lines, 120);
+		            if (runLong && runLong !== runShort) expandedText = runLong;
+		          }
 
 		          if (!String(runShort || "").trim()) {
 		            const header = `• ${toolName || "tool_output"}`;
 		            runShort = formatOutputTree(header, normalizeNonEmptyLines(outputBody), 10);
 		          }
 
-			          const hasDetails = !!String(expandedText || "").trim();
-			          const detailsHtml = hasDetails ? `<pre id="${escapeHtml(detailsId)}" class="code hidden">${escapeHtml(expandedText)}</pre>` : ``;
-			          if (hasDetails) metaRightExtra = `<button class="tool-toggle" type="button" data-target="${escapeHtml(detailsId)}" data-swap="${escapeHtml(summaryId)}">详情</button>`;
+		          const hasDetails = !!String(expandedText || "").trim();
+		          const detailsHtml = hasDetails ? `<pre id="${escapeHtml(detailsId)}" class="code hidden">${expandedHtml ? expandedHtml : escapeHtml(expandedText)}</pre>` : ``;
+		          if (hasDetails) metaRightExtra = `<button class="tool-toggle" type="button" data-target="${escapeHtml(detailsId)}" data-swap="${escapeHtml(summaryId)}">详情</button>`;
 			          body = `
 			            <div class="tool-card">
 			              ${runShort ? `<pre id="${escapeHtml(summaryId)}" class="code">${escapeHtml(runShort)}</pre>` : ``}
@@ -1430,6 +1459,7 @@ _UI_HTML = """<!doctype html>
 	              </details>
 	            `;
 	          } else {
+	            metaLeftExtra = `<span class="pill">工具调用</span><span class="pill"><code>${escapeHtml(toolName)}</code></span>`;
 	            const pretty = argsObj ? JSON.stringify(argsObj, null, 2) : argsRaw;
 	            body = `
 	              <details class="tool-card">
@@ -1443,8 +1473,10 @@ _UI_HTML = """<!doctype html>
 	            `;
 	          }
 	        } else if (kind === "user_message") {
+	          metaLeftExtra = `<span class="pill">输入</span>`;
 	          body = `<pre><b>用户</b>\\n${escapeHtml(msg.text || "")}</pre>`;
 	        } else if (kind === "assistant_message") {
+	          metaLeftExtra = `<span class="pill">回答</span>`;
 	          const txt = String(msg.text || "");
 	          if (isCodexEditSummary(txt)) {
 	            body = renderCodexEditSummary(txt) || `<pre>${escapeHtml(txt)}</pre>`;
@@ -1794,9 +1826,9 @@ _UI_HTML = """<!doctype html>
         setStatus("已清空显示");
       }
 
-      async function refreshList() {
-        try {
-          let url = "/api/messages";
+	      async function refreshList() {
+	        try {
+	          let url = "/api/messages";
           // 当前 key 为 thread_id 时，走服务端过滤；否则退化为前端过滤（例如 key=file/unknown）
           if (currentKey !== "all") {
             const t = threadIndex.get(currentKey);
@@ -1805,16 +1837,28 @@ _UI_HTML = """<!doctype html>
             }
           }
           const resp = await fetch(url);
-          const data = await resp.json();
-          const msgs = (data.messages || []);
-          callIndex.clear();
-          clearList();
-          const filtered = currentKey === "all" ? msgs : msgs.filter(m => keyOf(m) === currentKey);
-          if (filtered.length === 0) renderEmpty();
-          else for (const m of filtered) render(m);
-        } catch (e) {
-          clearList();
-          renderEmpty();
+	          const data = await resp.json();
+	          const msgs = (data.messages || []);
+	          callIndex.clear();
+	          clearList();
+	          const filtered = currentKey === "all" ? msgs : msgs.filter(m => keyOf(m) === currentKey);
+	          // Pre-index tool_call so tool_output can always resolve tool_name even if order is odd.
+	          for (const m of filtered) {
+	            try {
+	              if (!m || m.kind !== "tool_call") continue;
+	              const parsed = parseToolCallText(m.text || "");
+	              const toolName = parsed.toolName || "";
+	              const callId = parsed.callId || "";
+	              const argsRaw = parsed.argsRaw || "";
+	              const argsObj = safeJsonParse(argsRaw);
+	              if (callId) callIndex.set(callId, { tool_name: toolName, args_raw: argsRaw, args_obj: argsObj });
+	            } catch (_) {}
+	          }
+	          if (filtered.length === 0) renderEmpty();
+	          else for (const m of filtered) render(m);
+	        } catch (e) {
+	          clearList();
+	          renderEmpty();
         }
         renderTabs();
       }
