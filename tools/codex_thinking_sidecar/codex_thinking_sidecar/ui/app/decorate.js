@@ -7,8 +7,13 @@ function decoratePreBlocks(root) {
     try {
       if (!pre || !pre.parentElement) continue;
       if (pre.parentElement.classList && pre.parentElement.classList.contains("pre-wrap")) continue;
+      const wasHidden = pre.classList && pre.classList.contains("hidden");
       const wrap = document.createElement("div");
       wrap.className = "pre-wrap";
+      if (wasHidden) {
+        wrap.classList.add("hidden");
+        try { pre.classList.remove("hidden"); } catch (_) {}
+      }
       const btn = document.createElement("button");
       btn.type = "button";
       const isDark = pre.classList && pre.classList.contains("code");
@@ -73,17 +78,22 @@ function wireToolToggles(root) {
         let el = null;
         try { el = document.getElementById(id); } catch (_) {}
         if (!el) return;
+        let elWrap = el;
+        try { elWrap = (el.closest && el.closest(".pre-wrap")) ? el.closest(".pre-wrap") : el; } catch (_) {}
         const swapId = btn.getAttribute("data-swap") || "";
         let swapEl = null;
         if (swapId) {
           try { swapEl = document.getElementById(swapId); } catch (_) {}
         }
-        const willHide = !el.classList.contains("hidden");
-        if (willHide) el.classList.add("hidden");
-        else el.classList.remove("hidden");
-        if (swapEl) {
-          if (willHide) swapEl.classList.remove("hidden");
-          else swapEl.classList.add("hidden");
+        let swapWrap = swapEl;
+        try { swapWrap = (swapEl && swapEl.closest && swapEl.closest(".pre-wrap")) ? swapEl.closest(".pre-wrap") : swapEl; } catch (_) {}
+
+        const willHide = !elWrap.classList.contains("hidden");
+        if (willHide) elWrap.classList.add("hidden");
+        else elWrap.classList.remove("hidden");
+        if (swapWrap) {
+          if (willHide) swapWrap.classList.remove("hidden");
+          else swapWrap.classList.add("hidden");
         }
         btn.textContent = willHide ? "详情" : "收起";
       };
@@ -96,4 +106,3 @@ export function decorateRow(row) {
   decorateMdBlocks(row);
   wireToolToggles(row);
 }
-
