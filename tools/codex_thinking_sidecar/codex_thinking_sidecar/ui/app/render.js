@@ -13,6 +13,7 @@ import {
   isCodexEditSummary,
   parseToolCallText,
   parseToolOutputText,
+  renderDiffText,
   statusIcon,
   summarizeCommand,
   renderCodexEditSummary,
@@ -89,8 +90,15 @@ export function renderMessage(dom, state, msg) {
     } else if (toolName === "apply_patch") {
       metaLeftExtra = `<span class="pill">工具输出</span><span class="pill"><code>${escapeHtml(toolName)}</code></span>`;
       runShort = formatApplyPatchRun(argsRaw, outputBody, 8);
+      const patchText = String(argsRaw || "").trim();
       const runLong = formatApplyPatchRun(argsRaw, outputBody, 200);
-      if (runLong && runLong !== runShort) expandedText = runLong;
+      const parts = [];
+      if (runLong && runLong !== runShort) parts.push(String(runLong || "").trim());
+      if (patchText) {
+        if (parts.length) parts.push("");
+        parts.push(patchText);
+      }
+      expandedText = parts.join("\n");
     } else if (toolName === "view_image") {
       metaLeftExtra = `<span class="pill">工具输出</span><span class="pill"><code>${escapeHtml(toolName)}</code></span>`;
       const p = (meta && meta.args_obj) ? String(meta.args_obj.path || "") : "";
@@ -121,11 +129,12 @@ export function renderMessage(dom, state, msg) {
       if (exitCode !== null) metaLines.push(`Exit：${exitCode}`);
       if (wallTime) metaLines.push(`耗时：${wallTime}`);
       const detailsText = [metaLines.join("\n"), "", String(expandedText || "").trim()].join("\n");
+      const detailsHtml = (toolName === "apply_patch") ? renderDiffText(detailsText) : escapeHtml(detailsText);
       metaRightExtra = `<button class="tool-toggle" type="button" data-target="${escapeHtml(detailsId)}" data-swap="${escapeHtml(summaryId)}">详情</button>`;
       body = `
         <div class="tool-card">
           ${runShort ? `<pre id="${escapeHtml(summaryId)}" class="code">${escapeHtml(runShort)}</pre>` : ``}
-          <pre id="${escapeHtml(detailsId)}" class="code hidden">${escapeHtml(detailsText)}</pre>
+          <pre id="${escapeHtml(detailsId)}" class="code hidden">${detailsHtml}</pre>
         </div>
       `;
     } else {
@@ -243,4 +252,3 @@ export function renderMessage(dom, state, msg) {
   list.appendChild(row);
   if (autoscroll) window.scrollTo(0, document.body.scrollHeight);
 }
-

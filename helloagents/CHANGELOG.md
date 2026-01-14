@@ -63,3 +63,4 @@
 - 优化：配置抽屉更极简（常用项优先；HTTP Profiles 操作改为图标按钮；非 HTTP Provider 时隐藏 HTTP 配置块）。
 - 完善：会话侧栏“圆点模式”使用自定义 tooltip（不依赖浏览器 title），并在圆点上展示消息数徽标提升区分度。
 - 修复：tool_output “详情/收起”切换时同步隐藏复制按钮容器，避免出现空白占位/看似重复两条的问题。
+- 修复：`apply_patch` 的 Add File/Update File 也提供“详情”展开（显示完整 patch 内容并做 diff 高亮）。
