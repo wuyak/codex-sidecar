@@ -63,11 +63,13 @@ export function renderMessage(dom, state, msg) {
     const callId = parsed.callId || "";
     const outputRaw = parsed.outputRaw || "";
     const meta = callId ? state.callIndex.get(callId) : null;
-    const toolName = meta && meta.tool_name ? String(meta.tool_name) : "";
-    if (toolName === "update_plan") return; // update_plan 已在 tool_call 里展示，避免重复
     const exitCode = extractExitCode(outputRaw);
     const wallTime = extractWallTime(outputRaw);
     const outputBody = extractOutputBody(outputRaw);
+    const toolName = meta && meta.tool_name ? String(meta.tool_name) : "";
+    if (toolName === "update_plan") return; // update_plan 已在 tool_call 里展示，避免重复
+    // 容错：极少数情况下 tool_call 丢失导致无法识别 tool_name，但 update_plan 的 output 往往只有 "Plan updated"。
+    if (!toolName && String(outputBody || "").trim() === "Plan updated") return;
     const cmdFull = (meta && meta.args_obj && toolName === "shell_command") ? String(meta.args_obj.command || "") : "";
     const argsRaw = (meta && meta.args_raw) ? String(meta.args_raw || "") : "";
     const rid = `${safeDomId(msg.id || "")}_${safeDomId(callId || "")}_${state.renderSeq++}`;
