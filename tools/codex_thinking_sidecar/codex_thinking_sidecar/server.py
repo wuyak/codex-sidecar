@@ -327,7 +327,9 @@ _UI_HTML = """<!doctype html>
 	      .row.kind-tool_call, .row.kind-tool_output { border-left-color:#fbbf24; }
 	      .row.kind-reasoning_summary, .row.kind-agent_reasoning { border-left-color:#c4b5fd; }
 	      .meta { color: #555; font-size: 12px; }
-	      .meta-line { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
+	      .meta-line { display:flex; align-items:center; gap:8px; }
+	      .meta-left { display:flex; align-items:center; gap:8px; flex-wrap:wrap; min-width: 0; }
+	      .meta-right { margin-left:auto; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 	      .meta-line .timestamp { font-variant-numeric: tabular-nums; }
 	      pre { white-space: pre-wrap; word-break: break-word; margin: 8px 0 0; }
 	      .badge { display:inline-block; padding:2px 8px; border-radius:999px; background:#f1f5f9; font-size:12px; margin-right:8px; }
@@ -566,6 +568,34 @@ _UI_HTML = """<!doctype html>
         }
       }
 
+      function decorateMdBlocks(root) {
+        if (!root || !root.querySelectorAll) return;
+        const blocks = root.querySelectorAll("div.md");
+        for (const md of blocks) {
+          try {
+            if (!md || !md.parentElement) continue;
+            if (md.parentElement.classList && md.parentElement.classList.contains("pre-wrap")) continue;
+            const wrap = document.createElement("div");
+            wrap.className = "pre-wrap";
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "copy-btn light";
+            btn.textContent = "复制";
+            btn.title = "复制内容";
+            btn.onclick = async (e) => {
+              try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+              const ok = await copyToClipboard(md.innerText || md.textContent || "");
+              const old = btn.textContent;
+              btn.textContent = ok ? "已复制" : "复制失败";
+              setTimeout(() => { btn.textContent = old; }, 900);
+            };
+            md.parentNode.insertBefore(wrap, md);
+            wrap.appendChild(btn);
+            wrap.appendChild(md);
+          } catch (_) {}
+        }
+      }
+
       function wireToolToggles(root) {
         if (!root || !root.querySelectorAll) return;
         const btns = root.querySelectorAll("button.tool-toggle[data-target]");
@@ -591,6 +621,7 @@ _UI_HTML = """<!doctype html>
 
       function decorateRow(row) {
         decoratePreBlocks(row);
+        decorateMdBlocks(row);
         wireToolToggles(row);
       }
 
@@ -1253,7 +1284,8 @@ _UI_HTML = """<!doctype html>
         const autoscroll = (window.innerHeight + window.scrollY) >= (document.body.scrollHeight - 80);
 
 	        let body = "";
-	        let metaExtra = "";
+	        let metaLeftExtra = "";
+	        let metaRightExtra = "";
 		        if (kind === "tool_output") {
 		          const parsed = parseToolOutputText(msg.text || "");
 		          const callId = parsed.callId || "";
@@ -1261,12 +1293,10 @@ _UI_HTML = """<!doctype html>
 		          const meta = callId ? callIndex.get(callId) : null;
 		          const toolName = meta && meta.tool_name ? String(meta.tool_name) : "";
 		          const exitCode = extractExitCode(outputRaw);
-		          const wallTime = extractWallTime(outputRaw);
 		          const outputBody = extractOutputBody(outputRaw);
 		          const cmdFull = (meta && meta.args_obj && toolName === "shell_command") ? String(meta.args_obj.command || "") : "";
 		          const argsRaw = (meta && meta.args_raw) ? String(meta.args_raw || "") : "";
-		          const showRaw = (String(outputBody || "").trim() !== String(outputRaw || "").trim());
-		          const detailsId = ("tool_" + safeDomId(callId || (msg.id || "")) + "_" + String(Math.random()).slice(2, 8));
+		          const detailsId = ("tool_" + safeDomId((msg.id || callId || "") + "_details"));
 
 		          let runShort = "";
 		          let runLong = "";
@@ -1275,89 +1305,24 @@ _UI_HTML = """<!doctype html>
 		          if (toolName === "shell_command" && cmdFull) {
 		            runShort = formatShellRun(cmdFull, outputBody, exitCode);
 		            runLong = formatShellRunExpanded(cmdFull, outputBody, exitCode);
-		            detailsParts.push(`
-		              <div class="tool-meta">
-		                ${toolName ? `<span class="pill">工具：<code>${escapeHtml(toolName)}</code></span>` : ``}
-		                ${callId ? `<span class="pill">call_id：<code>${escapeHtml(callId)}</code></span>` : ``}
-		                ${exitCode !== null ? `<span class="pill">Exit：<code>${escapeHtml(exitCode)}</code></span>` : ``}
-		                ${wallTime ? `<span class="pill">耗时：<code>${escapeHtml(wallTime)}</code></span>` : ``}
-		              </div>
-		            `);
-		            if (cmdFull.trim()) {
-		              detailsParts.push(`<pre>${escapeHtml(cmdFull)}</pre>`);
-		            }
-		            if (runLong && runLong !== runShort) {
-		              detailsParts.push(`<pre class="code">${escapeHtml(runLong)}</pre>`);
-		            }
-		            if (showRaw) {
-		              detailsParts.push(`
-		                <details>
-		                  <summary class="meta">原始输出</summary>
-		                  <pre>${escapeHtml(outputRaw)}</pre>
-		                </details>
-		              `);
-		            }
+		            if (cmdFull.trim()) detailsParts.push(`<pre class="code">${escapeHtml(cmdFull)}</pre>`);
+		            if (runLong && runLong !== runShort) detailsParts.push(`<pre class="code">${escapeHtml(runLong)}</pre>`);
 		          } else if (toolName === "apply_patch") {
 		            runShort = formatApplyPatchRun(argsRaw, outputBody, 8);
-		            runLong = formatApplyPatchRun(argsRaw, outputBody, 40);
-		            detailsParts.push(`
-		              <div class="tool-meta">
-		                ${toolName ? `<span class="pill">工具：<code>${escapeHtml(toolName)}</code></span>` : ``}
-		                ${callId ? `<span class="pill">call_id：<code>${escapeHtml(callId)}</code></span>` : ``}
-		              </div>
-		            `);
-		            if (runLong && runLong !== runShort) {
-		              detailsParts.push(`<pre class="code">${escapeHtml(runLong)}</pre>`);
-		            }
-		            if (argsRaw.trim()) {
-		              detailsParts.push(`
-		                <details>
-		                  <summary class="meta">补丁内容</summary>
-		                  <pre class="code">${escapeHtml(argsRaw)}</pre>
-		                </details>
-		              `);
-		            }
-		            if (showRaw) {
-		              detailsParts.push(`
-		                <details>
-		                  <summary class="meta">原始输出</summary>
-		                  <pre>${escapeHtml(outputRaw)}</pre>
-		                </details>
-		              `);
-		            }
+		            runLong = formatApplyPatchRun(argsRaw, outputBody, 120);
+		            if (argsRaw.trim()) detailsParts.push(`<pre class="code">${escapeHtml(argsRaw)}</pre>`);
+		            if (runLong && runLong !== runShort) detailsParts.push(`<pre class="code">${escapeHtml(runLong)}</pre>`);
 		          } else if (toolName === "view_image") {
 		            const p = (meta && meta.args_obj) ? String(meta.args_obj.path || "") : "";
 		            const base = (p.split(/[\\\\/]/).pop() || "").trim();
 		            const first = firstMeaningfulLine(outputBody) || "attached local image";
 		            runShort = `• ${first}${base ? `: ${base}` : ``}`;
-		            if (callId || toolName) {
-		              detailsParts.push(`
-		                <div class="tool-meta">
-		                  ${toolName ? `<span class="pill">工具：<code>${escapeHtml(toolName)}</code></span>` : ``}
-		                  ${callId ? `<span class="pill">call_id：<code>${escapeHtml(callId)}</code></span>` : ``}
-		                </div>
-		              `);
-		            }
 		          } else {
 		            const header = `• ${toolName || "tool_output"}`;
 		            const lines = normalizeNonEmptyLines(outputBody);
 		            runShort = formatOutputTree(header, lines, 10);
-		            runLong = formatOutputTree(header, lines, 40);
-		            detailsParts.push(`
-		              <div class="tool-meta">
-		                ${toolName ? `<span class="pill">工具：<code>${escapeHtml(toolName)}</code></span>` : ``}
-		                ${callId ? `<span class="pill">call_id：<code>${escapeHtml(callId)}</code></span>` : ``}
-		              </div>
-		            `);
+		            runLong = formatOutputTree(header, lines, 120);
 		            if (runLong && runLong !== runShort) detailsParts.push(`<pre class="code">${escapeHtml(runLong)}</pre>`);
-		            if (showRaw) {
-		              detailsParts.push(`
-		                <details>
-		                  <summary class="meta">原始输出</summary>
-		                  <pre>${escapeHtml(outputRaw)}</pre>
-		                </details>
-		              `);
-		            }
 		          }
 
 		          if (!String(runShort || "").trim()) {
@@ -1366,11 +1331,10 @@ _UI_HTML = """<!doctype html>
 		          }
 
 		          const hasDetails = detailsParts.filter(x => String(x || "").trim()).length > 0;
-		          const toggleBtn = hasDetails ? `<button class="tool-toggle" type="button" data-target="${escapeHtml(detailsId)}">详情</button>` : ``;
 		          const detailsHtml = hasDetails ? `<div id="${escapeHtml(detailsId)}" class="tool-details hidden">${detailsParts.join("\\n")}</div>` : ``;
+		          if (hasDetails) metaRightExtra = `<button class="tool-toggle" type="button" data-target="${escapeHtml(detailsId)}">详情</button>`;
 		          body = `
 		            <div class="tool-card">
-		              ${toggleBtn ? `<div class="tool-head"><div class="tool-actions"></div>${toggleBtn}</div>` : ``}
 		              ${runShort ? `<pre class="code">${escapeHtml(runShort)}</pre>` : ``}
 		              ${detailsHtml}
 		            </div>
@@ -1388,29 +1352,21 @@ _UI_HTML = """<!doctype html>
 	          if (toolName === "update_plan" && argsObj && typeof argsObj === "object") {
 	            const explanation = (typeof argsObj.explanation === "string") ? argsObj.explanation : "";
 	            const plan = Array.isArray(argsObj.plan) ? argsObj.plan : [];
-	            const lines = [];
+	            const items = [];
 	            for (const it of plan) {
 	              if (!it || typeof it !== "object") continue;
 	              const st = statusIcon(it.status);
 	              const step = String(it.step || "").trim();
 	              if (!step) continue;
-	              lines.push(`${st} ${step}`);
+	              items.push(`- ${st} ${step}`);
 	            }
-	            body = `
-	              <details class="tool-card">
-	                <summary class="meta">更新计划（点击展开）: <code>${escapeHtml(lines.length ? `${lines.length} 项` : "无变更")}</code></summary>
-	                <div class="tool-meta">
-	                  <span class="pill">工具：<code>update_plan</code></span>
-	                  ${callId ? `<span class="pill">call_id：<code>${escapeHtml(callId)}</code></span>` : ``}
-	                </div>
-	                ${explanation ? `<div class="meta" style="opacity:.9">explanation：${escapeHtml(explanation)}</div>` : ``}
-	                ${lines.length ? `<pre>${escapeHtml(lines.join("\\n"))}</pre>` : `<pre>（无 plan 变更）</pre>`}
-	                <details>
-	                  <summary class="meta">原始参数</summary>
-	                  <pre>${escapeHtml(argsRaw)}</pre>
-	                </details>
-	              </details>
-	            `;
+	            const md = [
+	              "**更新计划**",
+	              ...(items.length ? items : ["- （无变更）"]),
+	              ...(explanation.trim() ? ["", "**说明**", explanation.trim()] : []),
+	            ].join("\\n");
+	            metaLeftExtra = `<span class="pill">更新计划</span><span class="pill">${escapeHtml(String(items.length || 0))} 项</span>`;
+	            body = `<div class="md">${renderMarkdown(md)}</div>`;
 	          } else if (toolName === "shell_command" && argsObj && typeof argsObj === "object") {
 	            const wd = String(argsObj.workdir || "").trim();
 	            const cmd = String(argsObj.command || "");
@@ -1452,13 +1408,13 @@ _UI_HTML = """<!doctype html>
 	          if (isCodexEditSummary(txt)) {
 	            body = renderCodexEditSummary(txt) || `<pre>${escapeHtml(txt)}</pre>`;
 	          } else {
-	            body = `<pre><b>回答</b>\\n${escapeHtml(txt)}</pre>`;
+	            body = `<div class="md">${renderMarkdown(txt)}</div>`;
 	          }
 	        } else if (isThinking) {
 	          const pills = [];
 	          if (showEn) pills.push(`<span class="pill">思考（EN）</span>`);
 	          if (showZh && hasZh) pills.push(`<span class="pill">思考（ZH）</span>`);
-	          metaExtra = pills.join("");
+	          metaLeftExtra = pills.join("");
 	          const enHtml = showEn ? `<div class="md">${renderMarkdown(msg.text || "")}</div>` : "";
 	          const zhHtml = (showZh && hasZh) ? `<div class="md think-split">${renderMarkdown(zhText)}</div>` : "";
 	          body = `${enHtml}${zhHtml}` || `<div class="meta">（空）</div>`;
@@ -1469,8 +1425,13 @@ _UI_HTML = """<!doctype html>
 
 	        row.innerHTML = `
 	          <div class="meta meta-line">
-	            <span class="timestamp">${escapeHtml(t.local || t.utc)}</span>
-	            ${metaExtra || ""}
+	            <div class="meta-left">
+	              <span class="timestamp">${escapeHtml(t.local || t.utc)}</span>
+	              ${metaLeftExtra || ""}
+	            </div>
+	            <div class="meta-right">
+	              ${metaRightExtra || ""}
+	            </div>
 	          </div>
 	          ${body}
 	        `;

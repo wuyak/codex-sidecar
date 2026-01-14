@@ -26,14 +26,16 @@
 - 优化：tool_call/tool_output 展示更友好（`shell_command` 命令块高亮、tool_output 提取 Exit/耗时/Output 正文，并保留“原始输出/参数”可展开）。
 - 新增：UI 右下角悬浮“↑ 顶部 / ↓ 底部”按钮，便于快速跳转页面上下。
 - 优化：消息时间戳统一按北京时间展示（不再额外显示 UTC 行）。
-- 优化：tool_call 默认折叠展示（点击展开），摘要更智能地跳过 `set -euo pipefail` 等 bash prologue。
-- 优化：tool_output 默认展示精简的 “Ran … + 关键输出摘要”，详情（call_id/Exit/耗时/原始输出）移入二级折叠，减少信息噪音。
+- 优化：tool_call 默认折叠展示（点击展开），摘要更智能地跳过 `set -euo pipefail` 等 bash prologue（`update_plan` 例外：直接渲染）。
+- 优化：tool_output 默认展示精简的 “Ran … + 关键输出摘要”，并移除 call_id/Exit/耗时 等噪音字段。
 - 优化：对 Codex 的 “• Edited … (+x -y)” 改动摘要做结构化渲染（按文件分卡片、diff 行高亮、避免长行强制换行）。
 - 优化：`shell_command` 的 `tool_output` 对 `rg` 输出做更智能的折叠（只展示命中的文件路径 + 嵌套的 `\\n` 行数估计 + 其余匹配数量）。
-- 优化：`shell_command` 的 `tool_output` 默认直接展示终端风格块（`• Ran ...` + `│/└` 树形摘要），并将工具元信息收进“详情”折叠。
+- 优化：`shell_command` 的 `tool_output` 默认直接展示终端风格块（`• Ran ...` + `│/└` 树形摘要），并在“详情”中展示完整命令与更多输出。
 - 优化：隐藏 `shell_command/view_image` 的 `tool_call` 行，避免与 `tool_output` 重复；并调整树形缩进/`|| true` 换行，更贴近终端样式。
-- 优化：`tool_output` 的“详情”改为卡片头部按钮（详情/收起），展开后可查看更多输出与元信息。
+- 优化：`tool_output` 的“详情”按钮移动到时间戳行（更省空间），点击后直接展开完整详情（不再二次折叠）。
 - 优化：隐藏 `apply_patch` 的 `tool_call` 行；`apply_patch` 的 `tool_output` 改为终端风格摘要，并在“详情”中提供补丁内容可复制。
+- 优化：`update_plan` 不再折叠展示，按“计划→说明”输出并使用 Markdown 排版，移除原始参数与工具元信息。
+- 优化：回答内容（assistant_message）改为 Markdown 渲染。
 - 新增：所有消息的文本块/代码块右上角增加“复制”按钮。
 - 优化：思考块（`reasoning_summary`/`agent_reasoning`）改为 Markdown 渲染，并将“思考（EN/ZH）”移到时间戳同行。
 - 调整：↑ 顶部 / ↓ 底部悬浮按钮移动到左侧。
