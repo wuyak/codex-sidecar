@@ -860,7 +860,7 @@ const statusText = document.getElementById("statusText");
 	            continue;
 	          }
 
-	          const li = t.match(/^\s*[-*]\s+(.*)$/);
+	          const li = t.match(/^\s*(?:[-*]|[•◦])\s+(.*)$/);
 	          if (li) {
 	            flushPara();
 	            if (!list || list.type !== "ul") { flushList(); list = { type: "ul", items: [] }; }
