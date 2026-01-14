@@ -65,6 +65,10 @@ class SidecarController:
         self._process_restart_event: Optional[threading.Event] = None
         self._last_error: str = ""
         self._started_at: float = 0.0
+        # Follow selection (UI runtime state; NOT persisted to config.json).
+        self._selection_mode: str = "auto"  # auto|pin
+        self._pinned_thread_id: str = ""
+        self._pinned_file: str = ""
 
     def set_process_stop_event(self, stop_event: threading.Event) -> None:
         """
@@ -228,6 +232,10 @@ class SidecarController:
                 codex_process_regex=str(getattr(cfg, "codex_process_regex", "codex") or "codex"),
                 only_follow_when_process=bool(getattr(cfg, "only_follow_when_process", True)),
             )
+            try:
+                watcher.set_follow(self._selection_mode, thread_id=self._pinned_thread_id, file=self._pinned_file)
+            except Exception:
+                pass
             self._stop_event = stop_event
             self._watcher = watcher
 
@@ -236,6 +244,31 @@ class SidecarController:
             t.start()
 
         return {"ok": True, "running": True}
+
+    def set_follow(self, mode: str, thread_id: str = "", file: str = "") -> Dict[str, Any]:
+        """
+        Control which rollout file is followed.
+
+        - auto: sidecar picks latest / process-based file
+        - pin : lock to a specific thread_id / file (from UI sidebar selection)
+        """
+        m = str(mode or "").strip().lower()
+        if m not in ("auto", "pin"):
+            m = "auto"
+        tid = str(thread_id or "").strip()
+        fp = str(file or "").strip()
+        watcher = None
+        with self._lock:
+            self._selection_mode = m
+            self._pinned_thread_id = tid
+            self._pinned_file = fp
+            watcher = self._watcher
+        if watcher is not None:
+            try:
+                watcher.set_follow(m, thread_id=tid, file=fp)
+            except Exception:
+                pass
+        return {"ok": True, "mode": m, "thread_id": tid, "file": fp}
 
     def _run_watcher(self) -> None:
         try:
@@ -287,6 +320,9 @@ class SidecarController:
             last_error = self._last_error
             started_at = self._started_at
             cfg = self._cfg.to_dict()
+            sel_mode = self._selection_mode
+            pin_tid = self._pinned_thread_id
+            pin_file = self._pinned_file
 
         ws = watcher.status() if watcher is not None else {}
         env_hint = {}
@@ -312,6 +348,11 @@ class SidecarController:
             "started_at": started_at,
             "last_error": last_error or ws.get("last_error") or "",
             "watcher": ws,
+            "follow": {
+                "mode": sel_mode,
+                "thread_id": pin_tid,
+                "file": pin_file,
+            },
             "config": cfg,
             "env": env_hint,
         }

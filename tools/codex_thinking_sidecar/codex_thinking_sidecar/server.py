@@ -361,6 +361,22 @@ class _Handler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.OK, self._controller.stop())
             return
 
+        if self.path == "/api/control/follow":
+            length = int(self.headers.get("Content-Length") or "0")
+            raw = self.rfile.read(length) if length > 0 else b"{}"
+            try:
+                obj = json.loads(raw.decode("utf-8", errors="replace"))
+            except Exception:
+                obj = {}
+            if not isinstance(obj, dict):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "invalid_payload"})
+                return
+            mode = str(obj.get("mode") or obj.get("selection_mode") or "auto")
+            thread_id = str(obj.get("thread_id") or obj.get("threadId") or "")
+            file = str(obj.get("file") or "")
+            self._send_json(HTTPStatus.OK, self._controller.set_follow(mode, thread_id=thread_id, file=file))
+            return
+
         if self.path == "/api/control/restart_process":
             # Respond first, then restart asynchronously; otherwise the process may re-exec/exit
             # before the response body is fully written.

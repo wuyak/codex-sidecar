@@ -12,6 +12,27 @@ export async function initApp() {
 
   const onSelectKey = async (key) => {
     state.currentKey = key;
+    // When multiple Codex sessions exist, auto-follow may jump between rollout files.
+    // Selecting a session in the sidebar pins the watcher to that thread/file so the
+    // visible log keeps updating for the chosen session.
+    try {
+      if (key === "all") {
+        await fetch("/api/control/follow", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mode: "auto" }),
+        });
+      } else {
+        const t = state.threadIndex.get(key) || {};
+        const threadId = (t.thread_id || key || "").toString();
+        const file = (t.file || "").toString();
+        await fetch("/api/control/follow", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mode: "pin", thread_id: threadId, file }),
+        });
+      }
+    } catch (_) {}
     await refreshList(dom, state, renderTabsWrapper, renderMessage, renderEmpty);
   };
 

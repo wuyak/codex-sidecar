@@ -2,6 +2,7 @@ import hashlib
 import json
 import os
 import re
+import threading
 import sys
 import time
 import urllib.error
@@ -37,6 +38,30 @@ def _parse_thread_id_from_filename(path: Path) -> Optional[str]:
     if not m:
         return None
     return m.group(1)
+
+
+def _find_rollout_file_for_thread(codex_home: Path, thread_id: str) -> Optional[Path]:
+    """
+    Locate rollout file by thread_id (uuid) inside CODEX_HOME/sessions.
+    """
+    tid = str(thread_id or "").strip()
+    if not tid:
+        return None
+    sessions = codex_home / "sessions"
+    if not sessions.exists():
+        return None
+    # Layout: sessions/YYYY/MM/DD/rollout-...-{thread_id}.jsonl
+    try:
+        hits = list(sessions.glob(f"*/*/*/rollout-*-{tid}.jsonl"))
+    except Exception:
+        hits = []
+    if not hits:
+        return None
+    try:
+        hits.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    except Exception:
+        pass
+    return hits[0]
 
 
 def _sha1_hex(s: str) -> str:
@@ -171,6 +196,15 @@ class RolloutWatcher:
         self._codex_pids: List[int] = []
         self._process_file: Optional[Path] = None
 
+        # Follow strategy:
+        # - auto: pick follow file via existing logic (latest / process-based)
+        # - pin:  lock to a specific thread/file (user-selected in UI)
+        self._follow_lock = threading.Lock()
+        self._selection_mode: str = "auto"  # auto|pin
+        self._pinned_thread_id: str = ""
+        self._pinned_file: Optional[Path] = None
+        self._follow_dirty: bool = False
+
         # Codex TUI log tail: surface "waiting for tool gate" so UI can show
         # "needs confirmation" states even when no new rollout lines appear.
         self._tui_log_path = (self._codex_home / "log" / "codex-tui.log")
@@ -181,6 +215,16 @@ class RolloutWatcher:
         self._tui_gate_waiting: bool = False
 
     def status(self) -> Dict[str, str]:
+        sel = "auto"
+        pin_tid = ""
+        pin_file = ""
+        try:
+            with self._follow_lock:
+                sel = self._selection_mode or "auto"
+                pin_tid = self._pinned_thread_id or ""
+                pin_file = str(self._pinned_file) if self._pinned_file is not None else ""
+        except Exception:
+            sel = "auto"
         return {
             "current_file": str(self._current_file) if self._current_file is not None else "",
             "thread_id": self._thread_id or "",
@@ -188,11 +232,58 @@ class RolloutWatcher:
             "line_no": str(self._line_no),
             "last_error": self._last_error or "",
             "follow_mode": self._follow_mode or "",
+            "selection_mode": sel,
+            "pinned_thread_id": pin_tid,
+            "pinned_file": pin_file,
             "codex_detected": "1" if self._codex_detected else "0",
             "codex_pids": ",".join(str(x) for x in self._codex_pids[:8]),
             "codex_process_regex": self._codex_process_regex_raw,
             "process_file": str(self._process_file) if self._process_file is not None else "",
         }
+
+    def set_follow(self, mode: str, thread_id: str = "", file: str = "") -> None:
+        """
+        Update follow strategy at runtime (called from HTTP control plane).
+
+        - mode=auto: use existing selection strategy (latest/process)
+        - mode=pin : lock to a specific thread_id or file path
+        """
+        m = str(mode or "").strip().lower()
+        if m not in ("auto", "pin"):
+            m = "auto"
+        tid = str(thread_id or "").strip()
+        fp = str(file or "").strip()
+
+        pinned_file: Optional[Path] = None
+        if fp:
+            try:
+                cand = Path(fp).expanduser()
+                if not cand.is_absolute():
+                    cand = (self._codex_home / cand).resolve()
+                else:
+                    cand = cand.resolve()
+                sessions_root = (self._codex_home / "sessions").resolve()
+                try:
+                    _ = cand.relative_to(sessions_root)
+                except Exception:
+                    cand = None  # type: ignore[assignment]
+                if cand is not None and cand.exists() and cand.is_file() and _ROLLOUT_RE.match(cand.name):
+                    pinned_file = cand
+            except Exception:
+                pinned_file = None
+
+        if pinned_file is None and tid:
+            pinned_file = _find_rollout_file_for_thread(self._codex_home, tid)
+
+        with self._follow_lock:
+            self._selection_mode = m
+            if m == "pin":
+                self._pinned_thread_id = tid
+                self._pinned_file = pinned_file
+            else:
+                self._pinned_thread_id = ""
+                self._pinned_file = None
+            self._follow_dirty = True
 
     def run(self, stop_event) -> None:
         # Initial pick
@@ -208,6 +299,18 @@ class RolloutWatcher:
             self._warned_missing = True
         while not stop_event.is_set():
             now = time.time()
+            # Follow mode changed (e.g. UI pinned a thread): force a rescan/switch immediately.
+            force_switch = False
+            try:
+                with self._follow_lock:
+                    if self._follow_dirty:
+                        self._follow_dirty = False
+                        force_switch = True
+            except Exception:
+                force_switch = False
+            if force_switch:
+                self._switch_to_latest_if_needed(force=True)
+                self._last_file_scan_ts = now
             if now - self._last_file_scan_ts >= self._file_scan_interval_s:
                 self._switch_to_latest_if_needed(force=False)
                 self._last_file_scan_ts = now
@@ -247,9 +350,42 @@ class RolloutWatcher:
         self._codex_detected = False
         self._codex_pids = []
 
+        # UI pin: lock to a specific thread/file (preferred over auto selection).
+        sel = "auto"
+        pin_tid = ""
+        pin_file = None
+        try:
+            with self._follow_lock:
+                sel = self._selection_mode or "auto"
+                pin_tid = self._pinned_thread_id or ""
+                pin_file = self._pinned_file
+        except Exception:
+            sel = "auto"
+            pin_tid = ""
+            pin_file = None
+
+        if sel == "pin":
+            picked = pin_file
+            if picked is None and pin_tid:
+                picked = _find_rollout_file_for_thread(self._codex_home, pin_tid)
+                if picked is not None:
+                    try:
+                        with self._follow_lock:
+                            self._pinned_file = picked
+                    except Exception:
+                        pass
+            if picked is not None:
+                self._follow_mode = "pinned"
+                self._last_error = ""
+                return picked
+            # Keep auto as a fallback, but surface status.
+            self._follow_mode = "pinned_missing"
+            self._last_error = "pinned_missing"
+
         if not self._follow_codex_process:
             self._follow_mode = "legacy"
-            self._last_error = ""
+            if self._last_error != "pinned_missing":
+                self._last_error = ""
             return _latest_rollout_file(self._codex_home)
 
         detected, root_pids = self._detect_codex_processes()
