@@ -85,4 +85,5 @@
 - 修复：OpenAI/Responses 翻译鉴权头的 Bearer 前缀自动补空格，避免 `Authorization: Bearersk-...` 导致 401 “缺少 API Key”。
 - 修复：停止监听不再提前清空 watcher 线程引用，避免“停止未完成又启动”导致的重复监听/重复翻译请求。
 - 调整：保存配置后的“立即生效”改为直接复用右侧 🔄 的“重启 Sidecar”逻辑（更确定，不受 in-flight 翻译请求影响）。
-- 调整：right.codes（Codex 网关）默认模型改为 `gpt-5.2`（避免部分 ChatGPT 账号不支持 `gpt-4o-mini` 导致 400）。
+- 调整：right.codes（Codex 网关）默认模型改为 `gpt-5.1`（避免部分 ChatGPT 账号不支持 `gpt-4o-mini` 导致 400，同时较 `gpt-5.2` 更省）。
+- 新增：UI Markdown 渲染支持表格（pipe table），输入/输出里含 `|---|` 的表格会渲染为 HTML table。

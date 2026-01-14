@@ -63,7 +63,7 @@ function ensureOpenAIDefaults(dom) {
       const base = String(dom.openaiBaseUrl && dom.openaiBaseUrl.value ? dom.openaiBaseUrl.value : "").trim().toLowerCase();
       // right.codes 的 Codex 网关在“ChatGPT 账号”场景下可能不支持部分常见模型（例如 gpt-4o-mini）。
       // 给一个更稳妥的默认值，用户仍可按 /models 列表自行调整。
-      dom.openaiModel.value = (base.includes("right.codes") && base.includes("/codex/")) ? "gpt-5.2" : "gpt-4o-mini";
+      dom.openaiModel.value = (base.includes("right.codes") && base.includes("/codex/")) ? "gpt-5.1" : "gpt-4o-mini";
     }
     if (dom.openaiTimeout && (dom.openaiTimeout.value === "" || dom.openaiTimeout.value == null)) {
       dom.openaiTimeout.value = 12;

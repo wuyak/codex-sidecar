@@ -99,6 +99,12 @@
 		      .md li { margin: 2px 0; }
 		      .md code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; background:#f1f5f9; padding: 1px 6px; border-radius: 6px; }
 	      .md pre code { background: transparent; padding: 0; }
+        .md-table { margin: 8px 0 0; overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 10px; background: #fff; }
+        .md-table table { border-collapse: collapse; width: 100%; min-width: 420px; }
+        .md-table th, .md-table td { border-top: 1px solid #e2e8f0; border-left: 1px solid #e2e8f0; padding: 6px 8px; vertical-align: top; }
+        .md-table th:first-child, .md-table td:first-child { border-left: none; }
+        .md-table thead th { background: #f8fafc; font-weight: 700; color: #0f172a; }
+        .md-table tbody tr:nth-child(even) td { background: #fbfdff; }
 	      .think-split { margin-top: 10px; padding-top: 10px; border-top: 1px solid #e2e8f0; }
 	      .profile-row { display:flex; gap: 6px; align-items:center; }
 	      .mini-btn { width: 30px; height: 30px; padding: 0; border-radius: 10px; border: 1px solid #e2e8f0; background:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 14px; line-height: 1; }
