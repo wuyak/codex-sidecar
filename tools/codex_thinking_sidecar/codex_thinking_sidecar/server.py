@@ -338,11 +338,18 @@ class _Handler(BaseHTTPRequestHandler):
             return
 
         if self.path == "/api/control/shutdown":
-            try:
-                r = self._controller.request_shutdown()
-            except Exception:
-                r = {"ok": True}
-            self._send_json(HTTPStatus.OK, r if isinstance(r, dict) else {"ok": True})
+            # Respond first, then shutdown asynchronously; otherwise the process may exit
+            # before the response body is fully written, causing clients to see a truncated transfer.
+            self._send_json(HTTPStatus.OK, {"ok": True})
+
+            def _shutdown_later() -> None:
+                time.sleep(0.05)
+                try:
+                    self._controller.request_shutdown()
+                except Exception:
+                    return
+
+            threading.Thread(target=_shutdown_later, name="sidecar-shutdown", daemon=True).start()
             return
 
         if self.path != "/ingest":

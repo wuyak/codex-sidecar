@@ -62,6 +62,14 @@
 		        <button id="recoverBtn" type="button">恢复配置</button>
 		        <button class="danger" id="shutdownBtn" type="button">退出 Sidecar</button>
 		      </div>
+		      <div class="draft">
+		        <div class="meta"><b>草稿</b> <span class="muted">（写好后点“复制草稿”，粘贴到终端里的 Codex 执行；旁路 UI 不会自动执行本机命令）</span></div>
+		        <textarea id="draftText" rows="6" placeholder="在这里写 Prompt / 命令 / tool_call 模板…"></textarea>
+		        <div class="btns" style="margin-top:8px;">
+		          <button id="draftCopyBtn" type="button">复制草稿</button>
+		          <button id="draftClearBtn" type="button">清空</button>
+		        </div>
+		      </div>
 		      <details id="debugDetails" style="margin-top:8px;">
 		        <summary class="meta">调试信息（配置加载/缓存排查）</summary>
 		        <pre id="debugText" class="meta" style="white-space:pre-wrap; user-select:text;"></pre>

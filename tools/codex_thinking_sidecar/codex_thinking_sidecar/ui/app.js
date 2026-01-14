@@ -31,6 +31,9 @@ const statusText = document.getElementById("statusText");
 	      const drawer = document.getElementById("drawer");
 	      const drawerCloseBtn = document.getElementById("drawerCloseBtn");
 	      const shutdownBtn = document.getElementById("shutdownBtn");
+	      const draftText = document.getElementById("draftText");
+	      const draftCopyBtn = document.getElementById("draftCopyBtn");
+	      const draftClearBtn = document.getElementById("draftClearBtn");
 	      const scrollTopBtn = document.getElementById("scrollTopBtn");
 	      const scrollBottomBtn = document.getElementById("scrollBottomBtn");
 
@@ -1728,6 +1731,14 @@ ${st}` : msg;
 		        try { await api("POST", "/api/control/shutdown", {}); } catch (e) {}
 		        closeDrawer();
 		        setStatus("已发送退出请求（服务将停止）。");
+		      });
+		      if (draftCopyBtn && draftText) draftCopyBtn.addEventListener("click", async () => {
+		        const ok = await copyToClipboard(draftText.value || "");
+		        setStatus(ok ? "已复制草稿" : "复制失败");
+		      });
+		      if (draftClearBtn && draftText) draftClearBtn.addEventListener("click", () => {
+		        draftText.value = "";
+		        setStatus("已清空草稿");
 		      });
 		      if (scrollTopBtn) scrollTopBtn.addEventListener("click", () => { window.scrollTo({ top: 0, behavior: "smooth" }); });
 		      if (scrollBottomBtn) scrollBottomBtn.addEventListener("click", () => { window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }); });
