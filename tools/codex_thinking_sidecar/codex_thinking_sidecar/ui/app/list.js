@@ -50,10 +50,30 @@ export async function bootstrap(dom, state, renderTabs, renderMessage, renderEmp
       const threads = td.threads || [];
       for (const t of threads) state.threadIndex.set(t.key, t);
     } catch (e) {}
+
+    // Sync UI selection with watcher follow mode (avoid “UI 显示全部，但实际上已锁定跟随某会话”).
+    try {
+      const st = await fetch("/api/status", { cache: "no-store" }).then(r => r.json());
+      const follow = (st && typeof st === "object") ? (st.follow || {}) : {};
+      const mode = String((follow && follow.mode) ? follow.mode : "").trim().toLowerCase();
+      const tid = String((follow && follow.thread_id) ? follow.thread_id : "").trim();
+      const file = String((follow && follow.file) ? follow.file : "").trim();
+      if (mode === "pin" && (tid || file)) {
+        let key = "";
+        if (tid && state.threadIndex.has(tid)) key = tid;
+        if (!key && file) {
+          for (const t of state.threadIndex.values()) {
+            if (t && String(t.file || "") === file) { key = String(t.key || ""); break; }
+          }
+        }
+        // Only apply when we can map it to an existing tab; otherwise keep "all".
+        if (key) state.currentKey = key;
+      }
+    } catch (e) {}
+
     await refreshList(dom, state, renderTabs, renderMessage, renderEmpty);
   } catch (e) {
     if (dom.list) while (dom.list.firstChild) dom.list.removeChild(dom.list.firstChild);
     renderEmpty(dom);
   }
 }
-

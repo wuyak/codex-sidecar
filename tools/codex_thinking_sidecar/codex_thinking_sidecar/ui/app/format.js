@@ -40,9 +40,33 @@ export function parseToolCallText(text) {
     }
   }
 
+  // Heuristic: find the real payload start.
+  //
+  // - apply_patch: payload often begins with "*** Begin Patch"
+  // - shell_command/update_plan: payload often begins with JSON "{...}"
+  // - Some formats may put call_id after the payload; do not assume ordering.
+  let payloadIdx = -1;
+  // 1) Strong marker: apply_patch patch body
+  for (let i = 1; i < lines.length; i++) {
+    const t = String(lines[i] ?? "").trimStart();
+    if (!t) continue;
+    if (t === "原始参数" || t === "参数") continue;
+    if (t.startsWith("*** Begin Patch")) { payloadIdx = i; break; }
+  }
+  // 2) JSON payload (shell_command/update_plan variants)
+  if (payloadIdx < 0) {
+    for (let i = 1; i < lines.length; i++) {
+      const t = String(lines[i] ?? "").trimStart();
+      if (!t) continue;
+      if (t === "原始参数" || t === "参数") continue;
+      if (t.startsWith("{") || t.startsWith("[")) { payloadIdx = i; break; }
+    }
+  }
+
   let idx = 1;
-  if (callIdx >= 0) idx = callIdx + 1;
-  // Prefer the first JSON-ish line after call_id (useful for "原始参数" variants).
+  if (payloadIdx >= 0) idx = payloadIdx;
+  else if (callIdx >= 0) idx = callIdx + 1;
+  // Prefer the first JSON-ish line after idx (useful for "原始参数" variants).
   for (let i = idx; i < lines.length; i++) {
     const t = String(lines[i] ?? "").trimStart();
     if (!t) continue;
@@ -573,4 +597,3 @@ export function firstMeaningfulLine(s) {
   }
   return "";
 }
-

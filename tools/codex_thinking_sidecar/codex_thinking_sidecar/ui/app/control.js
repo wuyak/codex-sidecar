@@ -294,10 +294,21 @@ export async function loadControl(dom, state) {
     const detected = (w.codex_detected === "1");
     const pids = w.codex_pids || "";
     let detail = "";
-    if (mode === "idle") detail = "（等待 Codex 进程）";
-    else if (mode === "process") detail = pids ? `（process | pid:${pids}）` : "（process）";
-    else if (mode === "fallback") detail = detected && pids ? `（fallback | pid:${pids}）` : "（fallback）";
-    else if (mode) detail = `(${mode})`;
+    let followHint = "";
+    try {
+      const f = (st && typeof st === "object") ? (st.follow || {}) : {};
+      const fm = String((f && f.mode) ? f.mode : "").trim().toLowerCase();
+      if (fm === "pin") followHint = " | pin";
+    } catch (_) {}
+    if (mode === "idle") detail = `（等待 Codex 进程${followHint}）`;
+    else if (mode === "process") detail = pids ? `（process | pid:${pids}${followHint}）` : `（process${followHint}）`;
+    else if (mode === "fallback") detail = detected && pids ? `（fallback | pid:${pids}${followHint}）` : `（fallback${followHint}）`;
+    else if (mode) {
+      const mm = String(mode || "");
+      const extra = (followHint && !mm.startsWith("pinned")) ? followHint : "";
+      detail = `(${mm}${extra})`;
+    }
+    else if (followHint) detail = `(auto${followHint})`;
     if (st.running) {
       if (cur) setStatus(dom, `运行中：${cur} ${detail} ${hint}${sidecarSuffix}`.trim());
       else setStatus(dom, `运行中：${detail} ${hint}${sidecarSuffix}`.trim());
@@ -536,6 +547,10 @@ export async function restartProcess(dom, state, opts) {
 
 export async function clearView(dom, state, refreshList) {
   await api("POST", "/api/control/clear");
+  try {
+    // Clear 通常意味着回到“自动跟随/全部视图”，避免 UI=all 但 watcher 仍处于 pin 状态造成“监听跑偏”错觉。
+    await api("POST", "/api/control/follow", { mode: "auto" });
+  } catch (_) {}
   state.threadIndex.clear();
   state.callIndex.clear();
   state.currentKey = "all";
