@@ -135,6 +135,45 @@ export function renderMarkdown(md) {
   return blocks.join("\n");
 }
 
+function looksLikeCodeLine(ln) {
+  const t = String(ln ?? "").trim();
+  if (!t) return false;
+  if (/^(Added|Edited|Deleted|Created|Updated|Removed)\s+/.test(t)) return true;
+  if (/^\d+\s*[+-]\s/.test(t)) return true; // e.g. "1 +import ..."
+  if (/^\*\*\*\s+(Begin Patch|Add File|Update File|Delete File):\s+/.test(t)) return true;
+  if (/^diff --git\s+/.test(t)) return true;
+  if (/^@@\s/.test(t) || t.startsWith("@@")) return true;
+  if (/^[+-](?!\s)/.test(t)) return true; // "+foo" / "-bar" (avoid "- bullet")
+  if (/^(import|from|export|function|const|let|var|class)\b/.test(t)) return true;
+  if (/^(Traceback|Exception|Error:)\b/.test(t)) return true;
+  return false;
+}
+
+export function splitLeadingCodeBlock(text) {
+  const src = String(text ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  if (!src.includes("\n")) return { code: "", rest: src };
+  // 用户已显式用 fenced code block 时，保持原 Markdown。
+  if (/^\s*```/m.test(src)) return { code: "", rest: src };
+
+  const lines = src.split("\n");
+  let matches = 0;
+  let end = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const raw = String(lines[i] ?? "");
+    const t = raw.trimEnd();
+    if (!t.trim()) { end = i + 1; continue; }
+    if (looksLikeCodeLine(t)) { matches += 1; end = i + 1; continue; }
+    // 确保不是误判：至少 3 行“代码/日志”才切分。
+    if (matches >= 3) break;
+    return { code: "", rest: src };
+  }
+
+  if (matches < 3) return { code: "", rest: src };
+  const code = lines.slice(0, end).join("\n").trimEnd();
+  const rest = lines.slice(end).join("\n").trim();
+  return { code, rest };
+}
+
 export function cleanThinkingText(md) {
   const src = String(md ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   const lines = src.split("\n");
@@ -179,4 +218,3 @@ export function cleanThinkingText(md) {
   }
   return out.join("\n");
 }
-

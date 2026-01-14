@@ -1,5 +1,5 @@
 import { decorateRow } from "./decorate.js";
-import { cleanThinkingText, renderMarkdown } from "./markdown.js";
+import { cleanThinkingText, renderMarkdown, splitLeadingCodeBlock } from "./markdown.js";
 import {
   extractExitCode,
   extractWallTime,
@@ -207,7 +207,13 @@ export function renderMessage(dom, state, msg) {
     }
   } else if (kind === "user_message") {
     metaLeftExtra = `<span class="pill">用户输入</span>`;
-    body = `<div class="md">${renderMarkdown(msg.text || "")}</div>`;
+    const txt = String(msg.text || "");
+    const split = splitLeadingCodeBlock(txt);
+    if (split && split.code) {
+      body = `${split.code ? `<pre class="code">${escapeHtml(split.code)}</pre>` : ``}${split.rest ? `<div class="md">${renderMarkdown(split.rest)}</div>` : ``}`;
+    } else {
+      body = `<div class="md">${renderMarkdown(txt)}</div>`;
+    }
   } else if (kind === "assistant_message") {
     metaLeftExtra = `<span class="pill">回答</span>`;
     const txt = String(msg.text || "");
