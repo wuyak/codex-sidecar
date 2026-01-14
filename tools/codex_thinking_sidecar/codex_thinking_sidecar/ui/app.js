@@ -42,6 +42,7 @@ const statusText = document.getElementById("statusText");
       let currentKey = "all";
       const threadIndex = new Map(); // key -> { key, thread_id, file, count, last_ts }
       const callIndex = new Map(); // call_id -> { tool_name, args_raw, args_obj }
+      let renderSeq = 0;
 
 	      function formatTs(ts) {
 	        if (!ts) return { utc: "", local: "" };
@@ -64,6 +65,26 @@ const statusText = document.getElementById("statusText");
         if (!s) return "";
         if (s.length <= 10) return s;
         return s.slice(0, 6) + "…" + s.slice(-4);
+      }
+
+      function hashHue(s) {
+        const str = String(s ?? "");
+        let h = 2166136261;
+        for (let i = 0; i < str.length; i++) {
+          h ^= str.charCodeAt(i);
+          h = Math.imul(h, 16777619);
+        }
+        return (h >>> 0) % 360;
+      }
+
+      function colorForKey(key) {
+        const hue = hashHue(key);
+        return {
+          fg: `hsl(${hue} 85% 42%)`,
+          border: `hsla(${hue} 85% 42% / .45)`,
+          bgActive: `hsl(${hue} 85% 38%)`,
+          dotBg: `hsla(${hue} 85% 42% / .18)`,
+        };
       }
 
       function escapeHtml(s) {
@@ -224,9 +245,9 @@ const statusText = document.getElementById("statusText");
         wireToolToggles(row);
       }
 
-	      function parseToolCallText(text) {
-	        const lines = String(text ?? "").split("\n");
-	        const known = ["shell_command", "apply_patch", "view_image", "update_plan", "web_search_call"];
+      function parseToolCallText(text) {
+        const lines = String(text ?? "").split("\n");
+        const known = ["shell_command", "apply_patch", "view_image", "update_plan", "web_search_call"];
 
 	        let toolName = "";
 	        for (const ln of lines) {
@@ -265,23 +286,47 @@ const statusText = document.getElementById("statusText");
 	          // Otherwise keep idx as-is.
 	          break;
 	        }
-	        const argsRaw = lines.slice(idx).join("\n").trimEnd();
-	        return { toolName, callId, argsRaw };
-	      }
+        const argsRaw = lines.slice(idx).join("\n").trimEnd();
+        return { toolName, callId, argsRaw };
+      }
 
-	      function parseToolOutputText(text) {
-	        const lines = String(text ?? "").split("\n");
+      function inferToolName(toolName, argsRaw, argsObj) {
+        const t = String(toolName || "").trim();
+        const raw = String(argsRaw || "");
+        // If already looks like a real tool name, keep it.
+        if (t && !t.startsWith("tool_call") && !t.startsWith("tool_output") && t !== "tool_call") return t;
+        // Heuristics for legacy / variant formats.
+        if (raw.includes("*** Begin Patch")) return "apply_patch";
+        try {
+          if (argsObj && typeof argsObj === "object") {
+            if (Array.isArray(argsObj.plan) || (Array.isArray(argsObj.plan) && typeof argsObj.explanation === "string")) return "update_plan";
+            if (typeof argsObj.command === "string") return "shell_command";
+            if (typeof argsObj.path === "string") return "view_image";
+          }
+        } catch (_) {}
+        return t;
+      }
+
+      function parseToolOutputText(text) {
+        const lines = String(text ?? "").split("\n");
         let callId = "";
-        let idx = 0;
-        if ((lines[0] || "").startsWith("call_id=")) {
-          callId = (lines[0] || "").slice("call_id=".length).trim();
-          idx = 1;
+        for (let i = 0; i < lines.length; i++) {
+          const t = String(lines[i] ?? "").trim();
+          if (!t) continue;
+          let m = t.match(/^call_id\s*[=:\uFF1A]\s*([^\s]+)\s*$/);
+          if (m) { callId = String(m[1] ?? "").trim(); break; }
+          m = t.match(/call_id\s*[=:\uFF1A]\s*([A-Za-z0-9_-]+)/);
+          if (m) { callId = String(m[1] ?? "").trim(); break; }
         }
-        // Defensive: 某些输出可能重复带 call_id 行；去掉前导的 call_id 行。
-        while ((lines[idx] || "").startsWith("call_id=")) idx += 1;
-        const outputRaw = lines.slice(idx).join("\n");
-	        return { callId, outputRaw };
-	      }
+        const kept = [];
+        for (const ln of lines) {
+          const t = String(ln ?? "").trim();
+          if (t && /^call_id\s*[=:\uFF1A]/.test(t)) continue;
+          kept.push(String(ln ?? ""));
+        }
+        const outputRaw = kept.join("\n").replace(/^\n+/, "");
+        return { callId, outputRaw };
+      }
 
       function statusIcon(status) {
         const s = String(status || "").toLowerCase();
@@ -358,15 +403,28 @@ const statusText = document.getElementById("statusText");
 	        return out;
 	      }
 	
-	      function normalizeNonEmptyLines(s) {
-	        const lines = String(s ?? "").split("\n");
-	        // trim leading/trailing empties
-	        let a = 0;
-	        let b = lines.length;
-	        while (a < b && !String(lines[a] || "").trim()) a++;
-	        while (b > a && !String(lines[b - 1] || "").trim()) b--;
-	        return lines.slice(a, b).map(x => String(x ?? "").replace(/\s+$/g, ""));
-	      }
+      function normalizeNonEmptyLines(s) {
+        const lines = String(s ?? "").split("\n");
+        // trim leading/trailing empties
+        let a = 0;
+        let b = lines.length;
+        while (a < b && !String(lines[a] || "").trim()) a++;
+        while (b > a && !String(lines[b - 1] || "").trim()) b--;
+        const out = [];
+        let blankRun = 0;
+        for (const raw of lines.slice(a, b)) {
+          const ln = String(raw ?? "").replace(/\s+$/g, "");
+          if (!ln.trim()) {
+            blankRun += 1;
+            if (blankRun > 1) continue;
+            out.push("");
+            continue;
+          }
+          blankRun = 0;
+          out.push(ln);
+        }
+        return out;
+      }
 	
 	      function excerptLines(lines, maxLines = 6) {
 	        const xs = Array.isArray(lines) ? lines : [];
@@ -525,15 +583,15 @@ const statusText = document.getElementById("statusText");
 	        return lines.join("\n");
 	      }
 
-	      function formatShellRunExpanded(cmdFull, outputBody, exitCode) {
-	        const cmdOne = commandPreview(cmdFull, 400);
-	        const outAll = normalizeNonEmptyLines(outputBody);
-	        const cmdWrap = wrapCommandForDisplay(cmdOne, 78);
-	        const firstCmd = String(cmdOne ?? "").trim();
-	        const isRg = /^rg\b/.test(firstCmd);
-	        const pick = (outAll.length > 0)
-	          ? (isRg ? formatRgOutput(outAll, 6) : summarizeOutputLines(outAll, 24))
-	          : [];
+      function formatShellRunExpanded(cmdFull, outputBody, exitCode) {
+        const cmdOne = commandPreview(cmdFull, 400);
+        const outAll = normalizeNonEmptyLines(outputBody);
+        const cmdWrap = wrapCommandForDisplay(cmdOne, 78);
+        const firstCmd = String(cmdOne ?? "").trim();
+        const isRg = /^rg\b/.test(firstCmd);
+        const pick = (outAll.length > 0)
+          ? (isRg ? formatRgOutput(outAll, 12) : summarizeOutputLines(outAll, 120))
+          : [];
 	        const lines = [];
 	        if (cmdWrap.length > 0) {
 	          lines.push(`• Ran ${cmdWrap[0]}`);
@@ -865,17 +923,30 @@ const statusText = document.getElementById("statusText");
 	            continue;
 	          }
 
-	          const oli = t.match(/^\s*\d+[.)]\s+(.*)$/);
-	          if (oli) {
-	            flushPara();
-	            if (!list || list.type !== "ol") { flushList(); list = { type: "ol", items: [] }; }
-	            list.items.push(String(oli[1] ?? "").trim());
-	            continue;
-	          }
+          const oli = t.match(/^\s*\d+[.)]\s+(.*)$/);
+          if (oli) {
+            flushPara();
+            if (!list || list.type !== "ol") { flushList(); list = { type: "ol", items: [] }; }
+            list.items.push(String(oli[1] ?? "").trim());
+            continue;
+          }
 
-	          flushList();
-	          para.push(t.trim());
-	        }
+          // Continuation lines for list items (common in terminal-wrapped bullets).
+          // Example:
+          // - foo bar baz +
+          //   continued...
+          if (list && Array.isArray(list.items) && list.items.length > 0) {
+            const isIndented = /^\s{2,}\S/.test(ln);
+            const isAnotherItem = /^\s*(?:[-*]|[•◦]|\d+[.)])\s+\S/.test(t);
+            if (isIndented && !isAnotherItem) {
+              list.items[list.items.length - 1] = (String(list.items[list.items.length - 1] || "") + " " + t.trim()).trim();
+              continue;
+            }
+          }
+
+          flushList();
+          para.push(t.trim());
+        }
 
 	        if (inCode) flushCode();
 		        flushPara();
@@ -977,18 +1048,35 @@ const statusText = document.getElementById("statusText");
         for (const t of items) {
           const btn = document.createElement("button");
           btn.className = "tab" + (currentKey === t.key ? " active" : "");
+          const clr = colorForKey(t.key || "");
           const label = threadLabel(t);
           if (collapsed) {
             btn.textContent = "●";
+            try {
+              btn.style.color = clr.fg;
+              btn.style.borderColor = clr.border;
+              if (currentKey === t.key) {
+                btn.style.background = clr.bgActive;
+                btn.style.color = "#fff";
+              } else {
+                btn.style.background = "#fff";
+              }
+            } catch (_) {}
             const full = t.thread_id || t.file || t.key || "";
             btn.title = `${label} (${t.count || 0})${full ? "\n" + full : ""}`;
           } else {
+            try {
+              btn.style.borderColor = clr.border;
+            } catch (_) {}
+            const dot = document.createElement("span");
+            dot.className = "tab-dot";
+            try { dot.style.background = clr.fg; } catch (_) {}
             const labelSpan = document.createElement("span");
             labelSpan.textContent = label;
             const small = document.createElement("small");
             small.textContent = `(${t.count || 0})`;
+            btn.appendChild(dot);
             btn.appendChild(labelSpan);
-            btn.appendChild(document.createTextNode(" "));
             btn.appendChild(small);
             btn.title = t.thread_id || t.file || t.key;
           }
@@ -1025,38 +1113,37 @@ const statusText = document.getElementById("statusText");
 		          const callId = parsed.callId || "";
 		          const outputRaw = parsed.outputRaw || "";
 			          const meta = callId ? callIndex.get(callId) : null;
-			          const toolName = meta && meta.tool_name ? String(meta.tool_name) : "";
-			          if (toolName === "update_plan") return; // update_plan 已在 tool_call 里优雅展示，避免重复
-				          const exitCode = extractExitCode(outputRaw);
-				          const outputBody = extractOutputBody(outputRaw);
-				          const cmdFull = (meta && meta.args_obj && toolName === "shell_command") ? String(meta.args_obj.command || "") : "";
-				          const argsRaw = (meta && meta.args_raw) ? String(meta.args_raw || "") : "";
-		          const detailsId = ("tool_" + safeDomId((msg.id || callId || "") + "_details"));
-		          const summaryId = ("tool_" + safeDomId((msg.id || callId || "") + "_summary"));
+				          const toolName = meta && meta.tool_name ? String(meta.tool_name) : "";
+				          if (toolName === "update_plan") return; // update_plan 已在 tool_call 里优雅展示，避免重复
+					          const exitCode = extractExitCode(outputRaw);
+					          const wallTime = extractWallTime(outputRaw);
+					          const outputBody = extractOutputBody(outputRaw);
+					          const cmdFull = (meta && meta.args_obj && toolName === "shell_command") ? String(meta.args_obj.command || "") : "";
+					          const argsRaw = (meta && meta.args_raw) ? String(meta.args_raw || "") : "";
+			          const rid = `${safeDomId(msg.id || "")}_${safeDomId(callId || "")}_${renderSeq++}`;
+			          const detailsId = ("tool_" + rid + "_details");
+			          const summaryId = ("tool_" + rid + "_summary");
 
 		          let runShort = "";
 		          let expandedText = "";
 		          let expandedHtml = "";
 
-		          if (toolName === "shell_command" && cmdFull) {
-		            metaLeftExtra = `<span class="pill">工具输出</span><span class="pill"><code>${escapeHtml(toolName)}</code></span>`;
-		            runShort = formatShellRun(cmdFull, outputBody, exitCode);
-		            const runLong = formatShellRunExpanded(cmdFull, outputBody, exitCode);
-		            if (runLong && runLong !== runShort) expandedText = runLong;
-			          } else if (toolName === "apply_patch") {
+			          if (toolName === "shell_command" && cmdFull) {
 			            metaLeftExtra = `<span class="pill">工具输出</span><span class="pill"><code>${escapeHtml(toolName)}</code></span>`;
-			            runShort = formatApplyPatchRun(argsRaw, outputBody, 8);
-			            expandedText = String(argsRaw || "").trim();
-			            if (!expandedText) {
-			              expandedText = formatApplyPatchRun(argsRaw, outputBody, 120);
-			            }
-			            if (expandedText.trim()) expandedHtml = renderDiffText(expandedText);
-			          } else if (toolName === "view_image") {
-		            metaLeftExtra = `<span class="pill">工具输出</span><span class="pill"><code>${escapeHtml(toolName)}</code></span>`;
-		            const p = (meta && meta.args_obj) ? String(meta.args_obj.path || "") : "";
-		            const base = (p.split(/[\\/]/).pop() || "").trim();
-		            const first = firstMeaningfulLine(outputBody) || "attached local image";
-		            runShort = `• ${first}${base ? `: ${base}` : ``}`;
+			            runShort = formatShellRun(cmdFull, outputBody, exitCode);
+			            const runLong = formatShellRunExpanded(cmdFull, outputBody, exitCode);
+			            if (runLong && runLong !== runShort) expandedText = runLong;
+				          } else if (toolName === "apply_patch") {
+				            metaLeftExtra = `<span class="pill">工具输出</span><span class="pill"><code>${escapeHtml(toolName)}</code></span>`;
+				            runShort = formatApplyPatchRun(argsRaw, outputBody, 8);
+				            const runLong = formatApplyPatchRun(argsRaw, outputBody, 200);
+				            if (runLong && runLong !== runShort) expandedText = runLong;
+				          } else if (toolName === "view_image") {
+			            metaLeftExtra = `<span class="pill">工具输出</span><span class="pill"><code>${escapeHtml(toolName)}</code></span>`;
+			            const p = (meta && meta.args_obj) ? String(meta.args_obj.path || "") : "";
+			            const base = (p.split(/[\\/]/).pop() || "").trim();
+			            const first = firstMeaningfulLine(outputBody) || "attached local image";
+			            runShort = `• ${first}${base ? `: ${base}` : ``}`;
 		          } else {
 		            if (toolName) metaLeftExtra = `<span class="pill">工具输出</span><span class="pill"><code>${escapeHtml(toolName)}</code></span>`;
 		            else metaLeftExtra = `<span class="pill">工具输出</span><span class="pill">未知工具</span>`;
@@ -1068,29 +1155,36 @@ const statusText = document.getElementById("statusText");
 		            if (runLong && runLong !== runShort) expandedText = runLong;
 		          }
 
-		          if (!String(runShort || "").trim()) {
-		            const header = `• ${toolName || "tool_output"}`;
-		            runShort = formatOutputTree(header, normalizeNonEmptyLines(outputBody), 10);
-		          }
+			          if (!String(runShort || "").trim()) {
+			            const header = `• ${toolName || "tool_output"}`;
+			            runShort = formatOutputTree(header, normalizeNonEmptyLines(outputBody), 10);
+			          }
 
-		          const hasDetails = !!String(expandedText || "").trim();
-		          const detailsHtml = hasDetails ? `<pre id="${escapeHtml(detailsId)}" class="code hidden">${expandedHtml ? expandedHtml : escapeHtml(expandedText)}</pre>` : ``;
-		          if (hasDetails) metaRightExtra = `<button class="tool-toggle" type="button" data-target="${escapeHtml(detailsId)}" data-swap="${escapeHtml(summaryId)}">详情</button>`;
-			          body = `
-			            <div class="tool-card">
-			              ${runShort ? `<pre id="${escapeHtml(summaryId)}" class="code">${escapeHtml(runShort)}</pre>` : ``}
-			              ${detailsHtml}
-			            </div>
-			          `;
+			          const hasDetails = !!String(expandedText || "").trim();
+			          const metaLines = [];
+			          metaLines.push(`工具：${toolName || "tool_output"}`);
+			          if (callId) metaLines.push(`call_id：${callId}`);
+			          if (exitCode !== null) metaLines.push(`Exit：${exitCode}`);
+			          if (wallTime) metaLines.push(`耗时：${wallTime}`);
+			          const detailsText = hasDetails ? [metaLines.join("\n"), "", String(expandedText || "").trim()].join("\n") : "";
+			          const detailsHtml = hasDetails ? `<pre id="${escapeHtml(detailsId)}" class="code hidden">${expandedHtml ? expandedHtml : escapeHtml(detailsText)}</pre>` : ``;
+			          if (hasDetails) metaRightExtra = `<button class="tool-toggle" type="button" data-target="${escapeHtml(detailsId)}" data-swap="${escapeHtml(summaryId)}">详情</button>`;
+				          body = `
+				            <div class="tool-card">
+				              ${runShort ? `<pre id="${escapeHtml(summaryId)}" class="code">${escapeHtml(runShort)}</pre>` : ``}
+				              ${detailsHtml}
+				            </div>
+				          `;
 			        } else if (kind === "tool_call") {
-		          const parsed = parseToolCallText(msg.text || "");
-		          const toolName = parsed.toolName || "tool_call";
-		          const callId = parsed.callId || "";
-		          const argsRaw = parsed.argsRaw || "";
-		          const argsObj = safeJsonParse(argsRaw);
-		          if (callId) callIndex.set(callId, { tool_name: toolName, args_raw: argsRaw, args_obj: argsObj });
-		          // Avoid duplicate clutter: tool_output already renders the useful summary for these.
-		          if (toolName === "shell_command" || toolName === "view_image" || toolName === "apply_patch") return;
+			          const parsed = parseToolCallText(msg.text || "");
+			          let toolName = parsed.toolName || "tool_call";
+			          const callId = parsed.callId || "";
+			          const argsRaw = parsed.argsRaw || "";
+			          const argsObj = safeJsonParse(argsRaw);
+			          toolName = inferToolName(toolName, argsRaw, argsObj) || toolName;
+			          if (callId) callIndex.set(callId, { tool_name: toolName, args_raw: argsRaw, args_obj: argsObj });
+			          // Avoid duplicate clutter: tool_output already renders the useful summary for these.
+			          if (toolName === "shell_command" || toolName === "view_image" || toolName === "apply_patch") return;
 
 	          if (toolName === "update_plan" && argsObj && typeof argsObj === "object") {
 	            const explanation = (typeof argsObj.explanation === "string") ? argsObj.explanation : "";
@@ -1161,17 +1255,20 @@ const statusText = document.getElementById("statusText");
 		          const zhClean = (showZh && hasZh) ? cleanThinkingText(zhText) : "";
 		          const hasZhClean = !!String(zhClean || "").trim();
 
-		          const pills = [];
-		          if (showEn) pills.push(`<span class="pill">思考（EN）</span>`);
-		          if (showZh && hasZhClean) pills.push(`<span class="pill">思考（ZH）</span>`);
-		          metaLeftExtra = pills.join("");
-		          const enHtml = showEn ? `<div class="md">${renderMarkdown(enText)}</div>` : "";
-		          const zhHtml = (showZh && hasZhClean) ? `<div class="md think-split">${renderMarkdown(zhClean)}</div>` : "";
-		          body = `${enHtml}${zhHtml}` || `<div class="meta">（空）</div>`;
-	        } else {
-	          // Fallback for unknown kinds.
-	          body = `<pre>${escapeHtml(msg.text || "")}</pre>`;
-	        }
+			          const pills = [];
+			          if (showEn) pills.push(`<span class="pill">思考（EN）</span>`);
+			          if (showZh && hasZhClean) pills.push(`<span class="pill">思考（ZH）</span>`);
+			          metaLeftExtra = pills.join("");
+			          const enRendered = showEn ? renderMarkdown(enText) : "";
+			          const enHtml = enRendered ? `<div class="md">${enRendered}</div>` : "";
+			          const zhRendered = (showZh && hasZhClean) ? renderMarkdown(zhClean) : "";
+			          const zhCls = enHtml ? "md think-split" : "md";
+			          const zhHtml = zhRendered ? `<div class="${zhCls}">${zhRendered}</div>` : "";
+			          body = (enHtml || zhHtml) ? (`${enHtml}${zhHtml}`) : `<div class="meta">（空）</div>`;
+		        } else {
+		          // Fallback for unknown kinds.
+		          body = `<pre>${escapeHtml(msg.text || "")}</pre>`;
+		        }
 
 	        row.innerHTML = `
 	          <div class="meta meta-line">
@@ -1341,10 +1438,10 @@ ${st}` : msg;
 	        return score;
 	      }
 
-	      async function loadControl() {
-	        const ts = Date.now();
-	        let debugLines = [];
-	        setDebug("");
+      async function loadControl() {
+        const ts = Date.now();
+        let debugLines = [];
+        setDebug("");
 
         // 1) Translators（容错：接口失败时仍展示默认三项，避免“下拉为空”）
         let translators = [
@@ -1371,18 +1468,25 @@ ${st}` : msg;
           debugLines.push(`[error] render translators: ${fmtErr(e)}`);
         }
 
-	        // 2) Config
-	        let cfg = {};
-	        let recovery = {};
-	        try {
-	          const c = await fetch(`/api/config?t=${ts}`, { cache: "no-store" }).then(r => r.json());
-	          cfg = c.config || c || {};
-	          recovery = (c && typeof c === "object") ? (c.recovery || {}) : {};
-	        } catch (e) {
-	          debugLines.push(`[error] /api/config: ${fmtErr(e)}`);
-	          cfg = {};
-	          recovery = {};
-	        }
+        // 2) Config
+        let cfg = {};
+        let recovery = {};
+        try {
+          const c = await fetch(`/api/config?t=${ts}`, { cache: "no-store" }).then(r => r.json());
+          cfg = c.config || c || {};
+          recovery = (c && typeof c === "object") ? (c.recovery || {}) : {};
+        } catch (e) {
+          debugLines.push(`[error] /api/config: ${fmtErr(e)}`);
+          cfg = {};
+          recovery = {};
+        }
+        try {
+          const canRecover = !!(recovery && typeof recovery === "object" && recovery.available);
+          if (recoverBtn) {
+            recoverBtn.disabled = !canRecover;
+            recoverBtn.title = canRecover ? "从本机备份恢复翻译 Profiles" : "未检测到可恢复的本机备份";
+          }
+        } catch (_) {}
 
         // 3) Apply config to UI（尽量继续，不让某个字段报错导致整体“全无”）
 	        try {
@@ -1612,17 +1716,18 @@ ${st}` : msg;
 	          clearList();
 	          const filtered = currentKey === "all" ? msgs : msgs.filter(m => keyOf(m) === currentKey);
 	          // Pre-index tool_call so tool_output can always resolve tool_name even if order is odd.
-	          for (const m of filtered) {
-	            try {
-	              if (!m || m.kind !== "tool_call") continue;
-	              const parsed = parseToolCallText(m.text || "");
-	              const toolName = parsed.toolName || "";
-	              const callId = parsed.callId || "";
-	              const argsRaw = parsed.argsRaw || "";
-	              const argsObj = safeJsonParse(argsRaw);
-	              if (callId) callIndex.set(callId, { tool_name: toolName, args_raw: argsRaw, args_obj: argsObj });
-	            } catch (_) {}
-	          }
+		          for (const m of filtered) {
+		            try {
+		              if (!m || m.kind !== "tool_call") continue;
+		              const parsed = parseToolCallText(m.text || "");
+		              let toolName = parsed.toolName || "";
+		              const callId = parsed.callId || "";
+		              const argsRaw = parsed.argsRaw || "";
+		              const argsObj = safeJsonParse(argsRaw);
+		              toolName = inferToolName(toolName, argsRaw, argsObj);
+		              if (callId) callIndex.set(callId, { tool_name: toolName, args_raw: argsRaw, args_obj: argsObj });
+		            } catch (_) {}
+		          }
 	          if (filtered.length === 0) renderEmpty();
 	          else for (const m of filtered) render(m);
 	        } catch (e) {
@@ -1648,7 +1753,7 @@ ${st}` : msg;
         }
       }
 
-      setSidebarCollapsed(false);
+	      setSidebarCollapsed(true);
       if (sidebarToggleBtn) sidebarToggleBtn.addEventListener("click", () => {
         setSidebarCollapsed(!isSidebarCollapsed());
         renderTabs();

@@ -265,13 +265,45 @@ def load_config(config_home: Path) -> SidecarConfig:
     except Exception:
         pass
 
-    # First-run migration: try legacy config in CODEX_HOME/tmp if present.
+    # First-run migration: try legacy snapshots in CODEX_HOME/tmp if present.
+    #
+    # Older versions stored config in:
+    #   $CODEX_HOME/tmp/codex_thinking_sidecar.config.json
+    # and sometimes only kept:
+    #   $CODEX_HOME/tmp/codex_thinking_sidecar.config.json.lastgood
+    # (plus optional .bak-* files). Prefer the newest by mtime.
     try:
-        legacy = _legacy_config_path(Path(_default_watch_codex_home()))
+        wh = Path(_default_watch_codex_home())
+        legacy = _legacy_config_path(wh)
+        candidates = []
         if legacy.exists():
-            raw = legacy.read_text(encoding="utf-8")
-            obj = json.loads(raw)
-            if isinstance(obj, dict):
+            candidates.append(legacy)
+        lg = legacy.with_name(legacy.name + ".lastgood")
+        if lg.exists():
+            candidates.append(lg)
+        try:
+            backups = sorted(
+                legacy.parent.glob(legacy.name + ".bak-*"),
+                key=lambda x: x.stat().st_mtime,
+                reverse=True,
+            )
+            candidates.extend(backups)
+        except Exception:
+            pass
+
+        # If multiple candidates exist, pick the newest file.
+        if len(candidates) > 1:
+            try:
+                candidates = sorted(candidates, key=lambda x: x.stat().st_mtime, reverse=True)
+            except Exception:
+                pass
+
+        for cand in candidates:
+            try:
+                raw = cand.read_text(encoding="utf-8")
+                obj = json.loads(raw)
+                if not isinstance(obj, dict):
+                    continue
                 cfg = SidecarConfig.from_dict(obj)
                 cfg.config_home = str(config_home)
                 if not cfg.watch_codex_home:
@@ -281,6 +313,8 @@ def load_config(config_home: Path) -> SidecarConfig:
                 except Exception:
                     pass
                 return cfg
+            except Exception:
+                continue
     except Exception:
         pass
     return default_config(config_home)
