@@ -15,7 +15,6 @@ import {
   parseToolOutputText,
   renderDiffText,
   statusIcon,
-  summarizeCommand,
   renderCodexEditSummary,
   normalizeNonEmptyLines,
 } from "./format.js";
@@ -164,36 +163,13 @@ export function renderMessage(dom, state, msg) {
       ].join("\n");
       metaLeftExtra = `<span class="pill">更新计划</span><span class="pill">${escapeHtml(String(items.length || 0))} 项</span>`;
       body = `<div class="md">${renderMarkdown(md)}</div>`;
-    } else if (toolName === "shell_command" && argsObj && typeof argsObj === "object") {
-      // Legacy fallbacks (kept minimal)
-      const wd = String(argsObj.workdir || "").trim();
-      const cmd = String(argsObj.command || "");
-      const timeoutMs = argsObj.timeout_ms;
-      const cmdSummary = summarizeCommand(cmd) || "shell_command";
-      body = `
-        <details class="tool-card">
-          <summary class="meta">执行命令（点击展开）: <code>${escapeHtml(cmdSummary)}</code></summary>
-          <div class="tool-meta">
-            <span class="pill">工具：<code>shell_command</code></span>
-            ${callId ? `<span class="pill">call_id：<code>${escapeHtml(callId)}</code></span>` : ``}
-            ${wd ? `<span class="pill">workdir：<code>${escapeHtml(wd)}</code></span>` : ``}
-            ${Number.isFinite(Number(timeoutMs)) ? `<span class="pill">timeout_ms：<code>${escapeHtml(timeoutMs)}</code></span>` : ``}
-          </div>
-          <pre class="code">${escapeHtml(cmd)}</pre>
-        </details>
-      `;
     } else {
       metaLeftExtra = `<span class="pill">工具调用</span><span class="pill"><code>${escapeHtml(toolName)}</code></span>`;
       const pretty = argsObj ? JSON.stringify(argsObj, null, 2) : argsRaw;
       body = `
-        <details class="tool-card">
-          <summary class="meta">工具调用（点击展开）: <code>${escapeHtml(toolName)}</code></summary>
-          <div class="tool-meta">
-            <span class="pill">工具：<code>${escapeHtml(toolName)}</code></span>
-            ${callId ? `<span class="pill">call_id：<code>${escapeHtml(callId)}</code></span>` : ``}
-          </div>
-          <pre>${escapeHtml(pretty || "")}</pre>
-        </details>
+        <div class="tool-card">
+          <pre class="code">${escapeHtml(pretty || "")}</pre>
+        </div>
       `;
     }
   } else if (kind === "user_message") {
