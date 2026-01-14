@@ -91,3 +91,4 @@
 - 优化：OpenAI/Responses 翻译请求增加 `Accept: application/json`，并缩短翻译 prompt 以减少 token 消耗（同时仍保持 Markdown/代码块保真规则）。
 - 新增：监听 `codex-tui.log` 的 tool gate 状态（`waiting for tool gate` / `tool gate released`），在 UI 中提示“终端等待确认/已确认”，避免需要授权时 UI 看起来卡住。
 - 新增：多会话场景下支持“锁定跟随”——点击侧边栏会话会将 watcher 固定到该 thread/file（不再按最新文件跳转），避免同时开多个 Codex 会话时 UI 看起来“不是最新”。
+- 修复：Markdown 渲染对终端换行更友好（中文不再出现“会 话”这类断词空格），并将 `────` 分隔行独立成块，避免与下一行合并导致结构错乱。
