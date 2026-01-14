@@ -31,11 +31,12 @@ const statusText = document.getElementById("statusText");
 	      const drawer = document.getElementById("drawer");
 	      const drawerCloseBtn = document.getElementById("drawerCloseBtn");
 	      const shutdownBtn = document.getElementById("shutdownBtn");
-	      const scrollTopBtn = document.getElementById("scrollTopBtn");
-	      const scrollBottomBtn = document.getElementById("scrollBottomBtn");
+      const scrollTopBtn = document.getElementById("scrollTopBtn");
+      const scrollBottomBtn = document.getElementById("scrollBottomBtn");
 
       let httpProfiles = [];
       let httpSelected = "";
+      let uiEventSource = null;
 
 	      const tabs = document.getElementById("tabs");
 	      const list = document.getElementById("list");
@@ -146,6 +147,54 @@ const statusText = document.getElementById("statusText");
         } catch (_) {
           return false;
         }
+      }
+
+      function showShutdownScreen() {
+        const html = `<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Sidecar 已退出</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; margin: 0; background: #0b1020; color: #e5e7eb; }
+      .wrap { max-width: 720px; margin: 10vh auto; padding: 24px; }
+      .card { background: rgba(255,255,255,.06); border: 1px solid rgba(226,232,240,.20); border-radius: 14px; padding: 18px 18px 14px; }
+      h1 { font-size: 18px; margin: 0 0 8px; }
+      p { margin: 8px 0; color: rgba(226,232,240,.90); line-height: 1.6; }
+      .btns { display:flex; gap:10px; margin-top: 14px; flex-wrap:wrap; }
+      button { border: 1px solid rgba(226,232,240,.25); background: rgba(255,255,255,.08); color: #e5e7eb; padding: 10px 12px; border-radius: 10px; cursor: pointer; }
+      button:hover { background: rgba(255,255,255,.12); }
+      .muted { color: rgba(226,232,240,.70); font-size: 12px; margin-top: 10px; }
+      code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; background: rgba(255,255,255,.10); padding: 2px 6px; border-radius: 8px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <h1>Sidecar 已退出</h1>
+        <p>监听已停止，服务已关闭。为避免误会，此页面已切换到离线提示页。</p>
+        <div class="btns">
+          <button type="button" id="closeBtn">关闭此标签页</button>
+          <button type="button" id="reloadBtn">重新打开 UI</button>
+        </div>
+        <div class="muted">提示：浏览器可能限制脚本直接关闭非脚本打开的页面。你也可以手动关闭此标签页。</div>
+      </div>
+    </div>
+    <script>
+      (function () {
+        var closeBtn = document.getElementById("closeBtn");
+        var reloadBtn = document.getElementById("reloadBtn");
+        if (closeBtn) closeBtn.onclick = function () { try { window.close(); } catch (e) {} };
+        if (reloadBtn) reloadBtn.onclick = function () { try { window.location.href = "http://127.0.0.1:8787/ui"; } catch (e) {} };
+      })();
+    </script>
+  </body>
+</html>`;
+        const url = "data:text/html;charset=utf-8," + encodeURIComponent(html);
+        try { window.location.replace(url); return; } catch (_) {}
+        try { window.location.href = url; return; } catch (_) {}
+        try { window.location.replace("about:blank"); } catch (_) {}
       }
 
 	      function decoratePreBlocks(root) {
@@ -1831,13 +1880,19 @@ ${st}` : msg;
 		      startBtn.addEventListener("click", async () => { await startWatch(); });
 		      stopBtn.addEventListener("click", async () => { await stopWatch(); });
 		      clearBtn.addEventListener("click", async () => { await clearView(); });
-		      if (shutdownBtn) shutdownBtn.addEventListener("click", async () => {
-		        if (!confirm("确定要退出 sidecar 进程？（将停止监听并关闭服务）")) return;
-		        setStatus("正在退出 sidecar…");
-		        try { await api("POST", "/api/control/shutdown", {}); } catch (e) {}
-		        closeDrawer();
-		        setStatus("已发送退出请求（服务将停止）。");
-		      });
+      if (shutdownBtn) shutdownBtn.addEventListener("click", async () => {
+        if (!confirm("确定要退出 sidecar 进程？（将停止监听并关闭服务）")) return;
+        setStatus("正在退出 sidecar…");
+        try { if (uiEventSource) uiEventSource.close(); } catch (_) {}
+        try { await api("POST", "/api/control/shutdown", {}); } catch (e) {}
+        closeDrawer();
+        // 让用户不再停留在旧 UI（服务已关闭时会造成“卡死/没刷新”的误会）
+        setTimeout(() => {
+          try { window.close(); } catch (_) {}
+          // 无论 close 是否被浏览器拦截，都切到离线提示页
+          showShutdownScreen();
+        }, 80);
+      });
 		      if (scrollTopBtn) scrollTopBtn.addEventListener("click", () => { window.scrollTo({ top: 0, behavior: "smooth" }); });
 		      if (scrollBottomBtn) scrollBottomBtn.addEventListener("click", () => { window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }); });
 
@@ -1862,8 +1917,8 @@ ${st}` : msg;
         await loadControl();
         await bootstrap();
       })();
-      const es = new EventSource("/events");
-      es.addEventListener("message", (ev) => {
+      uiEventSource = new EventSource("/events");
+      uiEventSource.addEventListener("message", (ev) => {
         try {
           const msg = JSON.parse(ev.data);
           upsertThread(msg);
@@ -1872,4 +1927,8 @@ ${st}` : msg;
           if (currentKey === "all" || currentKey === k) render(msg);
           renderTabs();
         } catch (e) {}
+      });
+      uiEventSource.addEventListener("error", () => {
+        // 服务停止后 SSE 会断开；提示一下避免误会。
+        try { setStatus("连接已断开（可能已停止/退出）"); } catch (_) {}
       });
