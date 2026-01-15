@@ -14,6 +14,23 @@ import {
 import { escapeHtml, extractJsonOutputString, safeDomId, safeJsonParse } from "../../utils.js";
 import { renderMarkdownCached } from "../md_cache.js";
 
+function _extractApplyPatchFromShellCommand(cmdFull) {
+  const lines = String(cmdFull ?? "").split("\n");
+  let start = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const t = String(lines[i] ?? "").trimStart();
+    if (t.startsWith("*** Begin Patch")) { start = i; break; }
+  }
+  if (start < 0) return "";
+  let end = -1;
+  for (let i = lines.length - 1; i >= start; i--) {
+    const t = String(lines[i] ?? "").trimStart();
+    if (t.startsWith("*** End Patch")) { end = i; break; }
+  }
+  if (end < 0) end = lines.length - 1;
+  return lines.slice(start, end + 1).join("\n").trim();
+}
+
 export function renderToolOutput(dom, state, msg, ctx) {
   const mid = (ctx && typeof ctx.mid === "string") ? ctx.mid : "";
 
@@ -42,12 +59,23 @@ export function renderToolOutput(dom, state, msg, ctx) {
   let body = "";
   let runShort = "";
   let expandedText = "";
+  let detailsAsDiff = false;
 
   if (toolName === "shell_command" && cmdFull) {
     metaLeftExtra = `<span class="pill">工具输出</span><span class="pill"><code>${escapeHtml(toolName)}</code></span>`;
+    // Special-case: some environments run apply_patch via shell_command (here-doc). Show patch details.
+    const patchText = _extractApplyPatchFromShellCommand(cmdFull);
     runShort = formatShellRun(cmdFull, outputBody, exitCode);
     const runLong = formatShellRunExpanded(cmdFull, outputBody, exitCode);
-    if (runLong && runLong !== runShort) expandedText = runLong;
+    if (patchText) {
+      detailsAsDiff = true;
+      const parts = [];
+      if (runLong && runLong !== runShort) parts.push(String(runLong || "").trim());
+      parts.push(patchText);
+      expandedText = parts.join("\n\n");
+    } else if (runLong && runLong !== runShort) {
+      expandedText = runLong;
+    }
   } else if (toolName === "apply_patch") {
     metaLeftExtra = `<span class="pill">工具输出</span><span class="pill"><code>${escapeHtml(toolName)}</code></span>`;
     runShort = formatApplyPatchRun(argsRaw, outputBody, 8);
@@ -60,6 +88,7 @@ export function renderToolOutput(dom, state, msg, ctx) {
       parts.push(patchText);
     }
     expandedText = parts.join("\n");
+    detailsAsDiff = true;
   } else if (toolName === "view_image") {
     metaLeftExtra = `<span class="pill">工具输出</span><span class="pill"><code>${escapeHtml(toolName)}</code></span>`;
     const p = (meta && meta.args_obj) ? String(meta.args_obj.path || "") : "";
@@ -85,7 +114,7 @@ export function renderToolOutput(dom, state, msg, ctx) {
   const hasDetails = !!String(expandedText || "").trim();
   if (hasDetails) {
     const detailsText = String(expandedText || "").trim();
-    const detailsHtml = (toolName === "apply_patch") ? renderDiffText(detailsText) : escapeHtml(detailsText);
+    const detailsHtml = detailsAsDiff ? renderDiffText(detailsText) : escapeHtml(detailsText);
     metaRightExtra = `<button class="tool-toggle" type="button" data-target="${escapeHtml(detailsId)}" data-swap="${escapeHtml(summaryId)}">详情</button>`;
     body = `
       <div class="tool-card">
@@ -106,4 +135,3 @@ export function renderToolOutput(dom, state, msg, ctx) {
 
   return { metaLeftExtra, metaRightExtra, body };
 }
-
