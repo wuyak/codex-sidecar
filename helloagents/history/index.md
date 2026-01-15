@@ -14,3 +14,4 @@
 - 202601131123_display_modes_and_http_compat
 - 202601131105_http_token_field
 - 202601131049_multi_translate_profiles
+- 202601150958_ui_refactor_modules

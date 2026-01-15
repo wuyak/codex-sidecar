@@ -57,7 +57,8 @@ cd ~/src/codex-thinking-sidecar-zh
   - `watcher.py`: 跟随 rollout 读取→`/ingest`；翻译后台队列（批量仅用于回放导入）
   - `server.py`: HTTP+SSE；消息 `seq`；`op=add/update`
   - `ui/`: 纯静态 UI（无构建）
-    - `ui/app/render.js`: 时间线渲染（按 `(timestamp, seq)` 插入 + `op=update` 原位回填）
+    - `ui/app/render.js`: 时间线渲染门面（实现：`ui/app/render/core.js`）
+    - `ui/app/sdk.js`: SDK 控制 UI 门面（实现：`ui/app/sdk/core.js`；存储：`ui/app/sdk/storage.js`）
     - `ui/app/markdown.js`: Markdown 门面；实现位于 `ui/app/markdown/*`
     - `ui/app/decorate.js`: 行装饰门面；实现位于 `ui/app/decorate/core.js`
 - `src/codex-sdk/`: SDK 控制模式（实验性）
