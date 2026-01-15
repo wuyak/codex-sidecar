@@ -15,3 +15,4 @@
 - 202601131105_http_token_field
 - 202601131049_multi_translate_profiles
 - 202601150958_ui_refactor_modules
+- 202601151037_ui_perf_translation

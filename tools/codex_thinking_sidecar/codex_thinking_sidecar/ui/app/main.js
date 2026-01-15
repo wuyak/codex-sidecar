@@ -14,6 +14,8 @@ export async function initApp() {
   const onSelectKey = async (key) => {
     state.currentKey = key;
     syncSdkSelection(dom, state);
+    // 快速 UI 反馈：先更新选中态，再异步拉取/重绘消息列表。
+    try { renderTabsWrapper(dom, state); } catch (_) {}
     // When multiple Codex sessions exist, auto-follow may jump between rollout files.
     // Selecting a session in the sidebar pins the watcher to that thread/file so the
     // visible log keeps updating for the chosen session.

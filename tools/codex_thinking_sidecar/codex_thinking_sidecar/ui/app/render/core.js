@@ -36,10 +36,11 @@ export function renderEmpty(dom) {
 }
 
 export function renderMessage(dom, state, msg, opts = {}) {
-  const list = dom.list;
+  const opt = (opts && typeof opts === "object") ? opts : {};
+  const list = opt.list || dom.list;
   if (!list) return;
-  const insertBefore = (opts && typeof opts === "object") ? (opts.insertBefore || null) : null;
-  const replaceEl = (opts && typeof opts === "object") ? (opts.replaceEl || null) : null;
+  const insertBefore = opt.insertBefore || null;
+  const replaceEl = opt.replaceEl || null;
 
   const row = document.createElement("div");
   const t = formatTs(msg.ts || "");
@@ -54,7 +55,9 @@ export function renderMessage(dom, state, msg, opts = {}) {
   const zhText = (typeof msg.zh === "string") ? msg.zh : "";
   const hasZh = !!zhText.trim();
 
-  const autoscroll = (window.innerHeight + window.scrollY) >= (document.body.scrollHeight - 80);
+  const autoscroll = ("autoscroll" in opt)
+    ? !!opt.autoscroll
+    : ((window.innerHeight + window.scrollY) >= (document.body.scrollHeight - 80));
 
   let body = "";
   let metaLeftExtra = "";
@@ -201,10 +204,12 @@ export function renderMessage(dom, state, msg, opts = {}) {
     const enText = showEn ? cleanThinkingText(msg.text || "") : "";
     const zhClean = (showZh && hasZh) ? cleanThinkingText(zhText) : "";
     const hasZhClean = !!String(zhClean || "").trim();
+    const waitingZh = (showZh && !hasZhClean);
 
     const pills = [];
     if (showEn) pills.push(`<span class="pill">思考（EN）</span>`);
     if (showZh && hasZhClean) pills.push(`<span class="pill">思考（ZH）</span>`);
+    else if (waitingZh) pills.push(`<span class="pill">思考（ZH…）</span>`);
     metaLeftExtra = pills.join("");
 
     const enRendered = showEn ? renderMarkdown(enText) : "";
@@ -212,8 +217,10 @@ export function renderMessage(dom, state, msg, opts = {}) {
     const zhRendered = (showZh && hasZhClean) ? renderMarkdown(zhClean) : "";
     const zhCls = enHtml ? "md think-split" : "md";
     const zhHtml = zhRendered ? `<div class="${zhCls}">${zhRendered}</div>` : "";
-    const waiting = (showZh && !showEn && !hasZhClean);
-    body = (enHtml || zhHtml) ? (`${enHtml}${zhHtml}`) : (waiting ? `<div class="meta">（翻译中…）</div>` : `<div class="meta">（空）</div>`);
+    const waitingHtml = waitingZh ? `<div class="meta">（ZH 翻译中…）</div>` : "";
+    body = (enHtml || zhHtml)
+      ? (`${enHtml}${zhHtml || waitingHtml}`)
+      : (waitingHtml || `<div class="meta">（空）</div>`);
   } else {
     body = `<pre>${escapeHtml(msg.text || "")}</pre>`;
   }

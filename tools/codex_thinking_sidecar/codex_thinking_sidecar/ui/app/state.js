@@ -12,6 +12,13 @@ export function createState() {
     uiEventSource: null,
     lastRenderedMs: NaN,
 
+    // 刷新/渲染控制（用于频繁切换会话与长时间挂着时的稳定性/性能）
+    isRefreshing: false,
+    refreshToken: 0,
+    refreshAbort: null,
+    ssePending: [],
+    sseFlushTimer: 0,
+
     // SDK 控制模式状态（由 /api/sdk/status 动态探测）
     sdkAvailable: false,
     sdkCsrfToken: "",

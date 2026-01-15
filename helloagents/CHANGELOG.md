@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 - UI: 拆分 `ui/app/sdk.js` / `ui/app/render.js`，引入子目录实现（保持纯静态，无构建）
+- UI: 优化列表刷新/切换性能：使用 `DocumentFragment`，刷新期间暂存 SSE 并在结束后回放；思考区增加“ZH 翻译中”占位提示（对照/英文模式可见）。
 
 - UI: 拆分 `ui/app/markdown.js` / `ui/app/decorate.js`，引入子目录实现（保持纯静态，无构建）
 - 新增：SDK 控制模式（浏览器输入栏 → `/api/sdk/turn/run` → Codex SDK 执行一次 turn，并写回 `/events` 统一展示；`/api/sdk/status` 提供依赖/权限诊断与 CSRF token）。

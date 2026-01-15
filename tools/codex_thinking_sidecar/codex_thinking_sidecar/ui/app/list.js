@@ -2,7 +2,17 @@ import { inferToolName, parseToolCallText } from "./format.js";
 import { keyOf, safeJsonParse, tsToMs } from "./utils.js";
 
 export async function refreshList(dom, state, renderTabs, renderMessage, renderEmpty) {
+  const token = (state && typeof state === "object")
+    ? (state.refreshToken = (Number(state.refreshToken) || 0) + 1)
+    : 0;
+  const wasAtBottom = (window.innerHeight + window.scrollY) >= (document.body.scrollHeight - 80);
+  if (state && typeof state === "object") state.isRefreshing = true;
+  let ac = null;
   try {
+    try { if (state && state.refreshAbort) state.refreshAbort.abort(); } catch (_) {}
+    ac = new AbortController();
+    if (state && typeof state === "object") state.refreshAbort = ac;
+
     let url = "/api/messages";
     // 当前 key 为 thread_id 时，走服务端过滤；否则退化为前端过滤（例如 key=file/unknown）
     if (state.currentKey !== "all") {
@@ -11,7 +21,8 @@ export async function refreshList(dom, state, renderTabs, renderMessage, renderE
         url = `/api/messages?thread_id=${encodeURIComponent(t.thread_id)}`;
       }
     }
-    const resp = await fetch(url);
+    const resp = await fetch(url, ac ? { signal: ac.signal } : undefined);
+    if (token && state && state.refreshToken !== token) return;
     const data = await resp.json();
     const msgs = (data.messages || []);
     state.callIndex.clear();
@@ -60,19 +71,31 @@ export async function refreshList(dom, state, renderTabs, renderMessage, renderE
 
     state.lastRenderedMs = NaN;
     if (filtered.length === 0) renderEmpty(dom);
-    else for (const m of filtered) {
-      renderMessage(dom, state, m);
-      const ms = tsToMs(m && m.ts);
-      if (Number.isFinite(ms)) state.lastRenderedMs = ms;
-      const mid = (m && typeof m.id === "string") ? m.id : "";
-      if (mid && state.rowIndex && state.rowIndex.has(mid) && state.timeline && Array.isArray(state.timeline)) {
-        const seq = Number.isFinite(Number(m && m.seq)) ? Number(m.seq) : NaN;
-        state.timeline.push({ id: mid, ms, seq });
+    else {
+      const frag = document.createDocumentFragment();
+      for (const m of filtered) {
+        renderMessage(dom, state, m, { list: frag, autoscroll: false });
+        const ms = tsToMs(m && m.ts);
+        if (Number.isFinite(ms)) state.lastRenderedMs = ms;
+        const mid = (m && typeof m.id === "string") ? m.id : "";
+        if (mid && state.rowIndex && state.rowIndex.has(mid) && state.timeline && Array.isArray(state.timeline)) {
+          const seq = Number.isFinite(Number(m && m.seq)) ? Number(m.seq) : NaN;
+          state.timeline.push({ id: mid, ms, seq });
+        }
       }
+      if (dom.list) dom.list.appendChild(frag);
+      if (wasAtBottom) window.scrollTo(0, document.body.scrollHeight);
     }
   } catch (e) {
+    if (token && state && state.refreshToken !== token) return;
+    if (e && e.name === "AbortError") return;
     if (dom.list) while (dom.list.firstChild) dom.list.removeChild(dom.list.firstChild);
     renderEmpty(dom);
+  } finally {
+    if (token && state && state.refreshToken === token) {
+      state.isRefreshing = false;
+      if (state.refreshAbort === ac) state.refreshAbort = null;
+    }
   }
   renderTabs(dom, state);
 }

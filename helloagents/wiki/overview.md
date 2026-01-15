@@ -14,5 +14,7 @@
   - `tools/codex_thinking_sidecar/codex_thinking_sidecar/ui/app/decorate/core.js`: 行装饰实现（门面：`ui/app/decorate.js`）
 
   - `tools/codex_thinking_sidecar/codex_thinking_sidecar/ui/app/render/core.js`: 时间线渲染实现（门面：`ui/app/render.js`）
+  - `tools/codex_thinking_sidecar/codex_thinking_sidecar/ui/app/list.js`: 列表刷新（`DocumentFragment` + refreshToken/Abort）
+  - `tools/codex_thinking_sidecar/codex_thinking_sidecar/ui/app/events.js`: SSE 事件流（刷新期间暂存/回放）
   - `tools/codex_thinking_sidecar/codex_thinking_sidecar/ui/app/sdk/core.js`: SDK 控制 UI 实现（门面：`ui/app/sdk.js`）
   - `tools/codex_thinking_sidecar/codex_thinking_sidecar/ui/app/sdk/storage.js`: SDK 选中会话存储（localStorage）

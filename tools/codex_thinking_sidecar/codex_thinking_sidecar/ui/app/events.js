@@ -39,9 +39,30 @@ function _findInsertIndex(timeline, item) {
 
 export function connectEventStream(dom, state, upsertThread, renderTabs, renderMessage, setStatus, refreshList) {
   state.uiEventSource = new EventSource("/events");
-  state.uiEventSource.addEventListener("message", (ev) => {
+
+  function _scheduleFlush(delayMs = 0) {
+    if (!state || typeof state !== "object") return;
+    if (state.sseFlushTimer) return;
+    state.sseFlushTimer = setTimeout(() => {
+      state.sseFlushTimer = 0;
+      _flushPending();
+    }, delayMs);
+  }
+
+  function _flushPending() {
+    if (!state || typeof state !== "object") return;
+    if (state.isRefreshing) {
+      _scheduleFlush(50);
+      return;
+    }
+    const pending = Array.isArray(state.ssePending) ? state.ssePending.splice(0) : [];
+    if (!pending.length) return;
+    for (const msg of pending) _handleMsg(msg);
+    if (state.ssePending && state.ssePending.length) _scheduleFlush(0);
+  }
+
+  function _handleMsg(msg) {
     try {
-      const msg = JSON.parse(ev.data);
       const op = String((msg && msg.op) ? msg.op : "").trim().toLowerCase();
       const mid = (msg && typeof msg.id === "string") ? msg.id : "";
 
@@ -78,9 +99,21 @@ export function connectEventStream(dom, state, upsertThread, renderTabs, renderM
       }
       renderTabs(dom, state);
     } catch (e) {}
+  }
+
+  state.uiEventSource.addEventListener("message", (ev) => {
+    try {
+      const msg = JSON.parse(ev.data);
+      if (state && typeof state === "object" && state.isRefreshing) {
+        if (!Array.isArray(state.ssePending)) state.ssePending = [];
+        state.ssePending.push(msg);
+        _scheduleFlush(50);
+        return;
+      }
+      _handleMsg(msg);
+    } catch (e) {}
   });
   state.uiEventSource.addEventListener("error", () => {
     try { setStatus(dom, "连接已断开（可能已停止/退出）"); } catch (_) {}
   });
 }
-
