@@ -46,6 +46,7 @@ export async function saveConfig(dom, state) {
     follow_codex_process: (dom.followProc && dom.followProc.value) === "1",
     only_follow_when_process: (dom.onlyWhenProc && dom.onlyWhenProc.value) === "1",
     codex_process_regex: ((dom.procRegex && dom.procRegex.value) ? dom.procRegex.value : "codex").trim(),
+    watch_max_sessions: Number((dom.maxSessions && dom.maxSessions.value) ? dom.maxSessions.value : 3),
     replay_last_lines: Number((dom.replayLines && dom.replayLines.value) ? dom.replayLines.value : 0),
     include_agent_reasoning: (dom.includeAgent && dom.includeAgent.value) === "1",
     poll_interval: Number((dom.pollInterval && dom.pollInterval.value) ? dom.pollInterval.value : 0.5),

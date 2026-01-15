@@ -201,6 +201,7 @@ def main(argv=None) -> int:
                 ingest=ingest,
                 translator=translator,
                 replay_last_lines=int(args.replay_last_lines),
+                watch_max_sessions=3,
                 poll_interval_s=float(args.poll_interval),
                 file_scan_interval_s=float(args.file_scan_interval),
                 include_agent_reasoning=bool(args.include_agent_reasoning),

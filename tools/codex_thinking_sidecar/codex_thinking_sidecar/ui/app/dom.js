@@ -10,6 +10,7 @@ export function getDom() {
     followProc: byId("followProc"),
     onlyWhenProc: byId("onlyWhenProc"),
     procRegex: byId("procRegex"),
+    maxSessions: byId("maxSessions"),
     replayLines: byId("replayLines"),
     includeAgent: byId("includeAgent"),
     displayMode: byId("displayMode"),

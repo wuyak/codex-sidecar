@@ -18,6 +18,7 @@
 ## 关键实现点
 - 只读解析 JSONL（不改写原始日志）
 - 轮询 + 增量读取（按 offset tail），支持启动时回放尾部 N 行
+- 多会话并行 tail：默认同时跟随最近 N 个会话文件（配置项 `watch_max_sessions`，默认 3），用于“至少 3 个会话同时实时更新”；锁定（pin）仅影响主跟随，不阻断后台摄取与侧栏会话发现
 - 代码分层：`watcher.py` 聚焦主流程；`watch/*` 承载“跟随策略/进程扫描/翻译批处理与队列”等可复用组件
   - 其中 `watch/rollout_extract.py` 负责“单条 JSONL 记录 → UI 事件块”提取（assistant/user/tool/reasoning）
 - 服务端分层：`server.py` 仅负责启动/绑定；HTTP 路由、SSE 与静态资源拆分到 `http/*`

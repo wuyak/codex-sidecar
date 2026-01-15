@@ -136,3 +136,6 @@
 - 新增：思考行增加“翻译/重译”按钮，可对单条思考强制重新翻译（`/api/control/retranslate`），译文仍以 `op=update` 回填到原位；并支持单条思考的 EN/ZH/对照切换（不影响全局显示模式）。
 - 修复：当 `apply_patch` 以 `shell_command` here-doc 形式执行时，tool_output 的“详情”现在会展示 patch 本体并做 diff 高亮（不再只看到 `Success...` 摘要）。
 - 修复：Markdown 渲染对终端换行更友好（中文不再出现“会 话”这类断词空格），并将 `────` 分隔行独立成块，避免与下一行合并导致结构错乱。
+- 新增：Watcher 支持并行 tail 最近 N 个会话文件（配置项 `watch_max_sessions`，默认 3），满足“至少 3 个会话同时实时更新”；锁定（pin）仅影响主跟随，不阻断后台摄取与侧栏会话发现。
+- 新增：UI 高级设置加入“并行会话”输入框（maxSessions），用于配置 `watch_max_sessions`（保存后重启监听生效）。
+- 修复：UI 状态/调试信息里可显示 `tail:N` 与翻译队列统计，便于定位“翻译慢”是队列积压还是模型/网络耗时。

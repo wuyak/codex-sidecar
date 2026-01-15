@@ -14,6 +14,8 @@ class SidecarConfig:
     watch_codex_home: str
 
     replay_last_lines: int = 0
+    # 同时 tail 的会话文件数量（用于多会话并行，不依赖“锁定跟随”切换）。
+    watch_max_sessions: int = 3
     poll_interval: float = 0.5
     file_scan_interval: float = 2.0
     include_agent_reasoning: bool = False
@@ -57,6 +59,7 @@ class SidecarConfig:
             config_home=cfg_home,
             watch_codex_home=watch_home,
             replay_last_lines=int(d.get("replay_last_lines") or 0),
+            watch_max_sessions=int(d.get("watch_max_sessions") or d.get("max_sessions") or 3),
             poll_interval=float(d.get("poll_interval") or 0.5),
             file_scan_interval=float(d.get("file_scan_interval") or 2.0),
             include_agent_reasoning=bool(d.get("include_agent_reasoning") or False),
@@ -240,6 +243,7 @@ def default_config(config_home: Path) -> SidecarConfig:
         config_home=cfg_home,
         watch_codex_home=_default_watch_codex_home(),
         replay_last_lines=0,
+        watch_max_sessions=3,
         poll_interval=0.5,
         file_scan_interval=2.0,
         include_agent_reasoning=False,

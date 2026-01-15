@@ -65,6 +65,7 @@ export async function loadControl(dom, state) {
     if (dom.onlyWhenProc) dom.onlyWhenProc.value = (cfg.only_follow_when_process === false) ? "0" : "1";
     if (dom.procRegex) dom.procRegex.value = cfg.codex_process_regex || "codex";
     if (dom.replayLines) dom.replayLines.value = cfg.replay_last_lines ?? 0;
+    if (dom.maxSessions) dom.maxSessions.value = cfg.watch_max_sessions ?? 3;
     if (dom.includeAgent) dom.includeAgent.value = cfg.include_agent_reasoning ? "1" : "0";
     if (dom.displayMode) dom.displayMode.value = (localStorage.getItem("codex_sidecar_display_mode") || "both");
     if (dom.pollInterval) dom.pollInterval.value = cfg.poll_interval ?? 0.5;
@@ -117,8 +118,9 @@ export async function loadControl(dom, state) {
   } catch (e) {}
 
   // 4) Status（运行态提示）
+  let st = null;
   try {
-    const st = await fetch(`/api/status?t=${ts}`, { cache: "no-store" }).then(r => r.json());
+    st = await fetch(`/api/status?t=${ts}`, { cache: "no-store" }).then(r => r.json());
     let hint = "";
     const sidecarPid = (st && (st.pid !== undefined) && (st.pid !== null)) ? String(st.pid) : "";
     const sidecarSuffix = sidecarPid ? ` | sidecar:${sidecarPid}` : "";
@@ -136,6 +138,10 @@ export async function loadControl(dom, state) {
       const f = (st && typeof st === "object") ? (st.follow || {}) : {};
       const fm = String((f && f.mode) ? f.mode : "").trim().toLowerCase();
       if (fm === "pin") followHint = " | pin";
+    } catch (_) {}
+    try {
+      const fs = Array.isArray(w.follow_files) ? w.follow_files : [];
+      if (fs.length > 1) followHint = `${followHint} | tail:${fs.length}`;
     } catch (_) {}
     if (mode === "idle") detail = `（等待 Codex 进程${followHint}）`;
     else if (mode === "process") detail = pids ? `（process | pid:${pids}${followHint}）` : `（process${followHint}）`;

@@ -11,7 +11,12 @@ from typing import Dict, List, Optional, Set
 
 from .translator import Translator
 
-from .watch.rollout_paths import _ROLLOUT_RE, _find_rollout_file_for_thread, _parse_thread_id_from_filename
+from .watch.rollout_paths import (
+    _ROLLOUT_RE,
+    _find_rollout_file_for_thread,
+    _latest_rollout_files,
+    _parse_thread_id_from_filename,
+)
 from .watch.rollout_extract import extract_rollout_items
 from .watch.translation_pump import TranslationPump
 from .watch.follow_picker import FollowPicker
@@ -19,6 +24,19 @@ from .watch.tui_gate import TuiGateTailer
 
 def _sha1_hex(s: str) -> str:
     return hashlib.sha1(s.encode("utf-8", errors="replace")).hexdigest()
+
+
+@dataclass
+class _FileCursor:
+    path: Path
+    thread_id: str
+    offset: int = 0
+    line_no: int = 0
+    active: bool = False
+    last_active_ts: float = 0.0
+    inited: bool = False
+
+
 @dataclass
 class HttpIngestClient:
     server_url: str
@@ -43,6 +61,7 @@ class RolloutWatcher:
         ingest: HttpIngestClient,
         translator: Translator,
         replay_last_lines: int,
+        watch_max_sessions: int,
         poll_interval_s: float,
         file_scan_interval_s: float,
         include_agent_reasoning: bool,
@@ -54,6 +73,7 @@ class RolloutWatcher:
         self._ingest = ingest
         self._translator = translator
         self._replay_last_lines = max(0, int(replay_last_lines))
+        self._watch_max_sessions = max(1, int(watch_max_sessions or 3))
         self._poll_interval_s = max(0.05, float(poll_interval_s))
         self._file_scan_interval_s = max(0.2, float(file_scan_interval_s))
         self._include_agent_reasoning = include_agent_reasoning
@@ -63,6 +83,10 @@ class RolloutWatcher:
             codex_process_regex=str(codex_process_regex or "codex"),
             only_follow_when_process=bool(only_follow_when_process),
         )
+
+        # Follow targets (multi-session).
+        self._cursors: Dict[Path, _FileCursor] = {}
+        self._follow_files: List[Path] = []
 
         self._current_file: Optional[Path] = None
         self._offset: int = 0
@@ -142,16 +166,29 @@ class RolloutWatcher:
                 pin_file = str(self._pinned_file) if self._pinned_file is not None else ""
         except Exception:
             sel = "auto"
+        primary_offset = self._offset
+        primary_line_no = self._line_no
+        try:
+            if self._current_file is not None:
+                cur = self._cursors.get(self._current_file)
+                if cur is not None:
+                    primary_offset = int(cur.offset)
+                    primary_line_no = int(cur.line_no)
+        except Exception:
+            primary_offset = self._offset
+            primary_line_no = self._line_no
         out: Dict[str, object] = {
             "current_file": str(self._current_file) if self._current_file is not None else "",
             "thread_id": self._thread_id or "",
-            "offset": str(self._offset),
-            "line_no": str(self._line_no),
+            "offset": str(primary_offset),
+            "line_no": str(primary_line_no),
             "last_error": self._last_error or "",
             "follow_mode": self._follow_mode or "",
             "selection_mode": sel,
             "pinned_thread_id": pin_tid,
             "pinned_file": pin_file,
+            "watch_max_sessions": str(self._watch_max_sessions),
+            "follow_files": [str(p) for p in (self._follow_files or [])][:12],
             "codex_detected": "1" if self._codex_detected else "0",
             "codex_pids": ",".join(str(x) for x in self._codex_pids[:8]),
             "codex_process_regex": self._follow_picker.codex_process_regex,
@@ -213,8 +250,8 @@ class RolloutWatcher:
         self._stop_event = stop_event
         self._translate.start(stop_event)
         # Initial pick
-        self._switch_to_latest_if_needed(force=True)
-        if self._current_file is None and not self._warned_missing:
+        self._sync_follow_targets(force=True)
+        if not self._follow_files and not self._warned_missing:
             if self._follow_mode == "idle":
                 print("[sidecar] 等待 Codex 进程（尚未开始跟随会话文件）", file=sys.stderr)
             else:
@@ -235,12 +272,12 @@ class RolloutWatcher:
             except Exception:
                 force_switch = False
             if force_switch:
-                self._switch_to_latest_if_needed(force=True)
+                self._sync_follow_targets(force=True)
                 self._last_file_scan_ts = now
             if now - self._last_file_scan_ts >= self._file_scan_interval_s:
-                self._switch_to_latest_if_needed(force=False)
+                self._sync_follow_targets(force=False)
                 self._last_file_scan_ts = now
-            self._poll_once()
+            self._poll_follow_files()
             try:
                 self._tui.poll(
                     thread_id=self._thread_id or "",
@@ -254,38 +291,122 @@ class RolloutWatcher:
             stop_event.wait(self._poll_interval_s)
 
 
-    def _switch_to_latest_if_needed(self, force: bool) -> None:
-        pick = self._follow_picker.pick(
-            selection_mode=self._selection_mode,
-            pinned_thread_id=self._pinned_thread_id,
-            pinned_file=self._pinned_file,
-        )
+    def _sync_follow_targets(self, force: bool) -> None:
+        """
+        Keep a stable set of followed session files.
+
+        - auto: follow primary picked by FollowPicker + fill to N latest session files.
+        - pin : primary pinned file, but still keep monitoring other latest sessions up to N
+                (so new threads appear without requiring a manual "全部" refresh).
+        """
+        try:
+            with self._follow_lock:
+                sel = str(self._selection_mode or "auto").strip().lower()
+                pin_tid = str(self._pinned_thread_id or "").strip()
+                pin_file = self._pinned_file
+        except Exception:
+            sel = "auto"
+            pin_tid = ""
+            pin_file = None
+
+        pick = self._follow_picker.pick(selection_mode=sel, pinned_thread_id=pin_tid, pinned_file=pin_file)
         picked = pick.picked
         self._process_file = pick.process_file
         self._codex_detected = bool(pick.codex_detected)
         self._codex_pids = list(pick.codex_pids or [])
         self._follow_mode = str(pick.follow_mode or "")
-        if self._selection_mode == "pin" and picked is not None and self._pinned_file is None:
-            self._pinned_file = picked
-            tid = _parse_thread_id_from_filename(picked)
-            if tid:
-                self._pinned_thread_id = tid
-        if picked is None:
+
+        # If UI pins by thread id only, resolve to a concrete file path for later.
+        if sel == "pin" and picked is not None:
+            try:
+                with self._follow_lock:
+                    if self._pinned_file is None:
+                        self._pinned_file = picked
+                    if not self._pinned_thread_id:
+                        tid = _parse_thread_id_from_filename(picked)
+                        if tid:
+                            self._pinned_thread_id = tid
+            except Exception:
+                pass
+
+        # When we are explicitly in "idle / wait_codex" mode, do not follow any file.
+        if picked is None and self._follow_mode in ("idle", "wait_codex"):
+            if force or self._follow_files:
+                self._follow_files = []
+                self._current_file = None
+                self._thread_id = None
+                self._offset = 0
+                self._line_no = 0
+                for cur in self._cursors.values():
+                    cur.active = False
             return
-        if force or self._current_file is None or picked != self._current_file:
-            self._current_file = picked
-            self._thread_id = _parse_thread_id_from_filename(picked)
-            self._offset = 0
-            self._line_no = 0
-            print(f"[sidecar] follow_file={picked}", file=sys.stderr)
-            if self._replay_last_lines > 0:
-                self._replay_tail(picked, self._replay_last_lines)
-            else:
-                # Seek to end (follow only new writes)
+
+        targets: List[Path] = []
+        if picked is not None:
+            targets.append(picked)
+
+        n = max(1, int(self._watch_max_sessions or 1))
+        if len(targets) < n:
+            try:
+                cands = _latest_rollout_files(self._codex_home, limit=max(n * 3, n))
+            except Exception:
+                cands = []
+            for p in cands:
+                if len(targets) >= n:
+                    break
+                if p in targets:
+                    continue
+                targets.append(p)
+
+        changed = force or (targets != self._follow_files)
+        if not changed:
+            return
+
+        self._follow_files = targets
+
+        keep = set(targets)
+        now = time.time()
+        for p, cur in list(self._cursors.items()):
+            cur.active = p in keep
+            if cur.active:
+                cur.last_active_ts = now
+
+        for p in targets:
+            cur = self._cursors.get(p)
+            if cur is None:
+                tid = _parse_thread_id_from_filename(p) or ""
+                cur = _FileCursor(path=p, thread_id=tid)
+                self._cursors[p] = cur
+            cur.active = True
+            cur.last_active_ts = now
+            if not cur.inited:
+                cur.inited = True
+                # Seek to end (follow only new writes), optionally replay last N lines.
                 try:
-                    self._offset = picked.stat().st_size
+                    cur.offset = int(p.stat().st_size)
                 except Exception:
-                    self._offset = 0
+                    cur.offset = 0
+                if self._replay_last_lines > 0:
+                    self._replay_tail(cur, self._replay_last_lines)
+
+        # Update "primary" fields for status and tool gate tagging.
+        self._current_file = targets[0] if targets else None
+        self._thread_id = _parse_thread_id_from_filename(targets[0]) if targets else None
+        if self._current_file is not None:
+            try:
+                cur = self._cursors.get(self._current_file)
+                if cur is not None:
+                    self._offset = int(cur.offset)
+                    self._line_no = int(cur.line_no)
+            except Exception:
+                pass
+
+        try:
+            if targets:
+                joined = " | ".join(str(p) for p in targets[:6])
+                print(f"[sidecar] follow_files={len(targets)} primary={targets[0]} | {joined}", file=sys.stderr)
+        except Exception:
+            pass
 
 
     def _read_tail_lines(self, path: Path, last_lines: int, max_bytes: int = 32 * 1024 * 1024) -> List[bytes]:
@@ -327,39 +448,63 @@ class RolloutWatcher:
             lines = lines[1:]
         return lines[-last_lines:] if last_lines > 0 else lines
 
-    def _replay_tail(self, path: Path, last_lines: int) -> None:
-        # After replay, continue following from EOF.
-        try:
-            self._offset = path.stat().st_size
-        except Exception:
-            self._offset = 0
-
+    def _replay_tail(self, cur: _FileCursor, last_lines: int) -> None:
+        path = cur.path
         # Respect the user's configured replay window strictly.
         replay_lines = max(0, int(last_lines))
         if replay_lines == 0:
             return
-
         tail = self._read_tail_lines(path, last_lines=replay_lines)
         for bline in tail:
-            self._line_no += 1
-            self._handle_line(bline, file_path=path, line_no=self._line_no, is_replay=True)
+            if self._stop_requested():
+                break
+            cur.line_no += 1
+            self._handle_line(
+                bline,
+                file_path=path,
+                line_no=cur.line_no,
+                is_replay=True,
+                thread_id=cur.thread_id,
+            )
 
-    def _poll_once(self) -> None:
-        path = self._current_file
-        if path is None:
+    def _poll_follow_files(self) -> None:
+        for path in list(self._follow_files):
+            if self._stop_requested():
+                break
+            cur = self._cursors.get(path)
+            if cur is None or not cur.active:
+                continue
+            self._poll_one(cur)
+
+    def _poll_one(self, cur: _FileCursor) -> None:
+        path = cur.path
+        try:
+            size = int(path.stat().st_size)
+        except Exception:
             return
+        if cur.offset > size:
+            cur.offset = 0
         try:
             with path.open("rb") as f:
-                f.seek(self._offset)
+                f.seek(cur.offset)
                 while True:
                     if self._stop_requested():
                         break
                     bline = f.readline()
                     if not bline:
                         break
-                    self._offset = f.tell()
-                    self._line_no += 1
-                    self._handle_line(bline.rstrip(b"\n"), file_path=path, line_no=self._line_no, is_replay=False)
+                    cur.offset = int(f.tell())
+                    cur.line_no += 1
+                    if self._current_file == path:
+                        self._offset = cur.offset
+                        self._line_no = cur.line_no
+                    self._handle_line(
+                        bline.rstrip(b"\n"),
+                        file_path=path,
+                        line_no=cur.line_no,
+                        is_replay=False,
+                        thread_id=cur.thread_id,
+                    )
         except Exception:
             try:
                 self._last_error = "poll_failed"
@@ -367,7 +512,7 @@ class RolloutWatcher:
                 pass
             return
 
-    def _handle_line(self, bline: bytes, file_path: Path, line_no: int, is_replay: bool) -> int:
+    def _handle_line(self, bline: bytes, file_path: Path, line_no: int, is_replay: bool, *, thread_id: str) -> int:
         # If user clicked “停止监听”, avoid ingesting more lines even if we're still finishing in-flight work.
         if self._stop_requested():
             return 0
@@ -405,7 +550,7 @@ class RolloutWatcher:
                 "kind": kind,
                 "text": text,
                 "zh": "",
-                "thread_id": self._thread_id or "",
+                "thread_id": str(thread_id or ""),
                 "file": str(file_path),
                 "line": line_no,
             }
@@ -413,7 +558,7 @@ class RolloutWatcher:
                 ingested += 1
                 if is_thinking and text.strip():
                     # 翻译走后台支路：回放阶段可聚合，实时阶段按单条慢慢补齐。
-                    thread_key = (self._thread_id or "") or str(file_path)
+                    thread_key = str(thread_id or "") or str(file_path)
                     self._translate.enqueue(mid=mid, text=text, thread_key=thread_key, batchable=is_replay)
         return ingested
 
