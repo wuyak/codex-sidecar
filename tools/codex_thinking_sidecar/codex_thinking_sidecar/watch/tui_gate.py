@@ -1,6 +1,7 @@
 import json
 import re
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -166,16 +167,23 @@ class TuiGateTailer:
         # If we're only doing a synthetic init scan, emit a single "still waiting" message.
         if synthetic_only and gate_waiting and last_wait is not None:
             ts, tc = last_wait
-            self._emit_tool_gate(
-                ts,
-                waiting=True,
-                toolcall=tc,
-                thread_id=thread_id,
-                sha1_hex=sha1_hex,
-                dedupe=dedupe,
-                ingest=ingest,
-                synthetic=True,
-            )
+            # Avoid reporting stale "waiting" states from old sessions/log tails.
+            # This can happen if a previous Codex run crashed while waiting, leaving the last line as "waiting".
+            age_s = self._ts_age_s(ts)
+            if age_s is not None and age_s > 90.0:
+                gate_waiting = False
+                last_wait = None
+            else:
+                self._emit_tool_gate(
+                    ts,
+                    waiting=True,
+                    toolcall=tc,
+                    thread_id=thread_id,
+                    sha1_hex=sha1_hex,
+                    dedupe=dedupe,
+                    ingest=ingest,
+                    synthetic=True,
+                )
 
         self._last_toolcall = last_toolcall
         self._gate_waiting = gate_waiting
@@ -220,6 +228,25 @@ class TuiGateTailer:
             return None
 
     @staticmethod
+    def _ts_age_s(ts: str) -> Optional[float]:
+        """
+        Return age in seconds for a codex-tui.log timestamp like:
+          2026-01-14T12:34:56.123Z
+        """
+        s = str(ts or "").strip()
+        if not s:
+            return None
+        try:
+            if s.endswith("Z"):
+                s = s[:-1] + "+00:00"
+            dt = datetime.fromisoformat(s)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return max(0.0, time.time() - dt.timestamp())
+        except Exception:
+            return None
+
+    @staticmethod
     def _map_tool_name(tool: str) -> str:
         t = str(tool or "").strip()
         if t == "shell":
@@ -234,10 +261,14 @@ class TuiGateTailer:
         out = re.sub(r"\b(bearer)\s+[A-Za-z0-9._-]{12,}\b", r"\1 ***", out, flags=re.IGNORECASE)
         return out
 
-    def _format_tool_gate_md(self, waiting: bool, toolcall: Optional[Dict[str, object]]) -> str:
+    def _format_tool_gate_md(self, waiting: bool, toolcall: Optional[Dict[str, object]], *, synthetic: bool) -> str:
         icon = "⏸️" if waiting else "▶️"
         title = "终端等待确认（tool gate）" if waiting else "终端已确认（tool gate released）"
         lines = [f"{icon} {title}"]
+
+        if synthetic:
+            lines.append("")
+            lines.append("注：这条状态来自启动时对 `codex-tui.log` 的尾部扫描；若你的终端没有确认提示，可能是历史残留，可忽略。")
 
         if toolcall:
             tool = self._map_tool_name(str(toolcall.get("tool") or ""))
@@ -268,6 +299,7 @@ class TuiGateTailer:
         if waiting:
             lines.append("")
             lines.append("请回到终端完成确认/授权后，UI 才会继续刷新后续输出。")
+            lines.append("（多会话场景下：tool gate 事件来自全局日志，可能并非当前会话。）")
         return "\n".join(lines).strip()
 
     def _emit_tool_gate(
@@ -287,7 +319,7 @@ class TuiGateTailer:
                 ts = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())
             except Exception:
                 ts = ""
-        text = self._format_tool_gate_md(waiting=waiting, toolcall=toolcall)
+        text = self._format_tool_gate_md(waiting=waiting, toolcall=toolcall, synthetic=synthetic)
         # Synthetic init scan: avoid spamming a "released" event, only show if waiting.
         if synthetic and not waiting:
             return

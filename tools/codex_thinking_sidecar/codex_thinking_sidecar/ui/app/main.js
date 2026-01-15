@@ -17,20 +17,8 @@ export async function initApp() {
     const v = localStorage.getItem("codex_sidecar_pin_on_select");
     if (dom.pinOnSelect) dom.pinOnSelect.checked = (v === "1");
   } catch (_) {}
-  try {
-    if (dom.pinOnSelect) dom.pinOnSelect.addEventListener("change", () => {
-      try { localStorage.setItem("codex_sidecar_pin_on_select", dom.pinOnSelect.checked ? "1" : "0"); } catch (_) {}
-    });
-  } catch (_) {}
 
-  const onSelectKey = async (key) => {
-    state.currentKey = key;
-    const { needsRefresh } = activateView(dom, state, key);
-    // 快速 UI 反馈：先更新选中态，再异步拉取/重绘消息列表。
-    try { renderTabsWrapper(dom, state); } catch (_) {}
-    // Follow policy:
-    // - "全部" always releases pin (auto-follow).
-    // - Selecting a session can optionally pin, controlled by the sidebar toggle.
+  const applyFollowPolicy = async (key) => {
     try {
       const pinOnSelect = !!(dom.pinOnSelect && dom.pinOnSelect.checked);
       if (key === "all") {
@@ -39,17 +27,45 @@ export async function initApp() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ mode: "auto" }),
         });
-      } else if (pinOnSelect) {
-        const t = state.threadIndex.get(key) || {};
-        const threadId = (t.thread_id || key || "").toString();
-        const file = (t.file || "").toString();
-        await fetch("/api/control/follow", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mode: "pin", thread_id: threadId, file }),
-        });
+        return;
       }
+      if (!pinOnSelect) return;
+      const t = state.threadIndex.get(key) || {};
+      const threadId = (t.thread_id || key || "").toString();
+      const file = (t.file || "").toString();
+      await fetch("/api/control/follow", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "pin", thread_id: threadId, file }),
+      });
     } catch (_) {}
+  };
+
+  try {
+    if (dom.pinOnSelect) dom.pinOnSelect.addEventListener("change", () => {
+      try { localStorage.setItem("codex_sidecar_pin_on_select", dom.pinOnSelect.checked ? "1" : "0"); } catch (_) {}
+      // If user turns pin off, release watcher so new sessions can be discovered.
+      // If user turns pin on while viewing a session, pin immediately.
+      try {
+        if (!dom.pinOnSelect.checked) {
+          Promise.resolve(fetch("/api/control/follow", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode: "auto" }),
+          })).catch(() => {});
+        } else {
+          Promise.resolve(applyFollowPolicy(state.currentKey || "all")).catch(() => {});
+        }
+      } catch (_) {}
+    });
+  } catch (_) {}
+
+  const onSelectKey = async (key) => {
+    state.currentKey = key;
+    const { needsRefresh } = activateView(dom, state, key);
+    // 快速 UI 反馈：先更新选中态，再异步拉取/重绘消息列表。
+    try { renderTabsWrapper(dom, state); } catch (_) {}
+    await applyFollowPolicy(key);
     // 优先回放后台缓冲的 SSE（避免频繁切换时每次都全量 refreshList）。
     let overflow = false;
     try {
