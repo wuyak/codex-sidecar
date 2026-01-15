@@ -5,7 +5,26 @@ import { isCodexEditSummary, renderCodexEditSummary } from "../format.js";
 import { renderMarkdownCached } from "./md_cache.js";
 import { getThinkingVisibility, isThinkingKind, renderThinkingBlock, tryPatchThinkingRow } from "./thinking.js";
 import { renderToolCall, renderToolOutput } from "./tool.js";
-import { escapeHtml, formatTs, safeDomId } from "../utils.js";
+import { colorForKey, escapeHtml, formatTs, keyOf, rolloutStampFromFile, safeDomId, shortId } from "../utils.js";
+
+function _sessionPill(state, msg) {
+  try {
+    if (!state || state.currentKey !== "all") return "";
+    const key = keyOf(msg);
+    if (!key || key === "unknown") return "";
+    const file = String(msg && msg.file ? msg.file : "");
+    const tid = String(msg && msg.thread_id ? msg.thread_id : "");
+    const stamp = rolloutStampFromFile(file);
+    const idPart = tid ? shortId(tid) : shortId((file.split("/").slice(-1)[0]) || key);
+    const label = (stamp && idPart) ? `${stamp} · ${idPart}` : (idPart || stamp || "unknown");
+    const title = escapeHtml(tid || file || key);
+    const clr = colorForKey(key);
+    const style = ` style="border-color:${escapeHtml(clr.border)}; background:${escapeHtml(clr.dotBg)}; color:${escapeHtml(clr.fg)};"`;
+    return `<span class="pill pill-session"${style} title="${title}">${escapeHtml(label)}</span>`;
+  } catch (_) {
+    return "";
+  }
+}
 
 export function clearList(dom) {
   const list = dom.list;
@@ -74,25 +93,26 @@ export function renderMessage(dom, state, msg, opts = {}) {
   let body = "";
   let metaLeftExtra = "";
   let metaRightExtra = "";
+  const sessionPill = _sessionPill(state, msg);
 
   if (kind === "tool_output") {
     const r = renderToolOutput(dom, state, msg, { mid });
     if (!r) return;
-    metaLeftExtra = r.metaLeftExtra || "";
+    metaLeftExtra = `${sessionPill}${r.metaLeftExtra || ""}`;
     metaRightExtra = r.metaRightExtra || "";
     body = r.body || "";
   } else if (kind === "tool_call") {
     const r = renderToolCall(dom, state, msg, { mid });
     if (!r) return;
-    metaLeftExtra = r.metaLeftExtra || "";
+    metaLeftExtra = `${sessionPill}${r.metaLeftExtra || ""}`;
     metaRightExtra = r.metaRightExtra || "";
     body = r.body || "";
   } else if (kind === "tool_gate") {
-    metaLeftExtra = `<span class="pill">终端确认</span>`;
+    metaLeftExtra = `${sessionPill}<span class="pill">终端确认</span>`;
     const txt = String(msg.text || "");
     body = `<div class="md">${renderMarkdownCached(state, `md:${mid}:tool_gate`, txt)}</div>`;
   } else if (kind === "user_message") {
-    metaLeftExtra = `<span class="pill">用户输入</span>`;
+    metaLeftExtra = `${sessionPill}<span class="pill">用户输入</span>`;
     const txt = String(msg.text || "");
     const split = splitLeadingCodeBlock(txt);
     if (split && split.code) {
@@ -101,7 +121,7 @@ export function renderMessage(dom, state, msg, opts = {}) {
       body = `<div class="md">${renderMarkdownCached(state, `md:${mid}:user`, txt)}</div>`;
     }
   } else if (kind === "assistant_message") {
-    metaLeftExtra = `<span class="pill">回答</span>`;
+    metaLeftExtra = `${sessionPill}<span class="pill">回答</span>`;
     const txt = String(msg.text || "");
     if (isCodexEditSummary(txt)) {
       body = renderCodexEditSummary(txt) || `<pre>${escapeHtml(txt)}</pre>`;
@@ -113,7 +133,7 @@ export function renderMessage(dom, state, msg, opts = {}) {
     const translateError = (typeof msg.translate_error === "string") ? msg.translate_error : "";
     const vis = getThinkingVisibility(dom, state, mid, zhText);
     const r = renderThinkingBlock(state, msg, { mid, zhText, translateError, translatorProvider: state.translatorProvider || "", ...vis });
-    metaLeftExtra = r.metaLeftExtra || "";
+    metaLeftExtra = `${sessionPill}${r.metaLeftExtra || ""}`;
     metaRightExtra = r.metaRightExtra || "";
     body = r.body || "";
     if (r.rowModeClass) {
@@ -121,6 +141,7 @@ export function renderMessage(dom, state, msg, opts = {}) {
     }
     try { row.dataset.translateError = translateError || ""; } catch (_) {}
   } else {
+    metaLeftExtra = sessionPill;
     body = `<pre>${escapeHtml(msg.text || "")}</pre>`;
   }
 
