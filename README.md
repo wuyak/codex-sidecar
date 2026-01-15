@@ -56,9 +56,11 @@ cd ~/src/codex-thinking-sidecar-zh
 ## 目录结构（概览）
 
 - `tools/codex_thinking_sidecar/codex_thinking_sidecar/`
+  - `controller.py`: 监听线程生命周期与配置控制（供 HTTP handler 调用）
   - `watcher.py`: 跟随 rollout 读取→`/ingest`；TUI tool gate 提示；翻译通过 `watch/` 子模块异步回填
   - `watch/`: watcher 侧子模块（rollout 路径/进程扫描/跟随策略/翻译批处理与队列）
     - `watch/rollout_extract.py`: rollout JSONL 单条记录 → UI 事件提取（assistant/user/tool/reasoning）
+  - `control/`: 控制面子模块（translator schema / translator 构建 / 配置校验）
   - `server.py`: HTTP+SSE 启动器（绑定 state/controller，启动 ThreadingHTTPServer）
   - `http/`: 服务端子模块（内存 state / HTTP 路由与 SSE / UI 静态资源）
     - `ui/`: 纯静态 UI（无构建）

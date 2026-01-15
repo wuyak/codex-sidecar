@@ -26,3 +26,4 @@
 - 202601151455_ui_sse_update_coalesce
 - 202601151501_ui_events_modules
 - 202601151506_server_refactor_http_modules
+- 202601151523_controller_refactor_control_modules
