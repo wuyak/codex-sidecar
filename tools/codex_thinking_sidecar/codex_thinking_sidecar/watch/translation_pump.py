@@ -1,5 +1,6 @@
 import queue
 import threading
+import time
 from collections import deque
 from typing import Any, Callable, Deque, Dict, List, Optional, Set, Tuple
 
@@ -44,6 +45,18 @@ class TranslationPump:
         self._seen_order: Deque[str] = deque()
         self._seen_max = max(1000, int(max_seen_ids or 6000))
 
+        # Observability (best-effort; approximate counters are fine for a sidecar).
+        self._drop_old_hi = 0
+        self._drop_old_lo = 0
+        self._drop_new_hi = 0
+        self._drop_new_lo = 0
+        self._done_items = 0
+        self._done_batches = 0
+        self._last_batch_n = 0
+        self._last_translate_ms = 0.0
+        self._last_key = ""
+        self._last_ts = 0.0
+
     def start(self, stop_event: threading.Event) -> None:
         if self._thread is not None and self._thread.is_alive():
             return
@@ -79,10 +92,9 @@ class TranslationPump:
         }
 
         q = self._lo if batchable else self._hi
-        self._put_drop_oldest(q, item)
+        self._put_drop_oldest(q, item, is_hi=(not batchable))
 
-    @staticmethod
-    def _put_drop_oldest(q: "queue.Queue[Dict[str, Any]]", item: Dict[str, Any]) -> None:
+    def _put_drop_oldest(self, q: "queue.Queue[Dict[str, Any]]", item: Dict[str, Any], *, is_hi: bool) -> None:
         try:
             q.put_nowait(item)
             return
@@ -93,12 +105,58 @@ class TranslationPump:
         # Backpressure: drop one oldest item and retry once.
         try:
             _ = q.get_nowait()
+            if is_hi:
+                self._drop_old_hi += 1
+            else:
+                self._drop_old_lo += 1
         except Exception:
             return
         try:
             q.put_nowait(item)
         except Exception:
+            if is_hi:
+                self._drop_new_hi += 1
+            else:
+                self._drop_new_lo += 1
             return
+
+    def stats(self) -> Dict[str, Any]:
+        try:
+            hi = int(self._hi.qsize())
+        except Exception:
+            hi = -1
+        try:
+            lo = int(self._lo.qsize())
+        except Exception:
+            lo = -1
+        try:
+            pending = len(self._pending)
+        except Exception:
+            pending = 0
+        try:
+            seen = len(self._seen)
+        except Exception:
+            seen = 0
+        try:
+            last_err = str(getattr(self._translator, "last_error", "") or "")
+        except Exception:
+            last_err = ""
+        return {
+            "hi_q": hi,
+            "lo_q": lo,
+            "pending": pending,
+            "seen": seen,
+            "drop_old_hi": int(self._drop_old_hi),
+            "drop_old_lo": int(self._drop_old_lo),
+            "drop_new_hi": int(self._drop_new_hi),
+            "drop_new_lo": int(self._drop_new_lo),
+            "done_items": int(self._done_items),
+            "done_batches": int(self._done_batches),
+            "last_batch_n": int(self._last_batch_n),
+            "last_translate_ms": float(self._last_translate_ms),
+            "last_key": str(self._last_key or ""),
+            "last_error": last_err,
+        }
 
     def _normalize_translation(self, src: str, zh: str) -> str:
         s = str(src or "")
@@ -161,12 +219,19 @@ class TranslationPump:
                     except Exception:
                         pending.append(nxt)
 
+            t0 = time.monotonic()
             try:
                 if len(batch) == 1:
                     zh = self._normalize_translation(text, self._translator.translate(text))
                     if stop_event.is_set():
                         continue
                     self._emit_zh(mid, text, zh)
+                    self._done_items += 1
+                    self._done_batches += 1
+                    self._last_batch_n = 1
+                    self._last_translate_ms = (time.monotonic() - t0) * 1000.0
+                    self._last_key = key
+                    self._last_ts = time.time()
                     continue
 
                 pairs: List[Tuple[str, str]] = []
@@ -197,5 +262,11 @@ class TranslationPump:
                         zh = self._translator.translate(itxt)
                     zh = self._normalize_translation(itxt, zh)
                     self._emit_zh(iid, itxt, zh)
+                    self._done_items += 1
+                self._done_batches += 1
+                self._last_batch_n = len(pairs)
+                self._last_translate_ms = (time.monotonic() - t0) * 1000.0
+                self._last_key = key
+                self._last_ts = time.time()
             except Exception:
                 continue

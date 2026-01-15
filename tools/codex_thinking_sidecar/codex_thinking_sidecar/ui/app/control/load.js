@@ -186,9 +186,30 @@ export async function loadControl(dom, state) {
       const model = String(openaiTc.model || "");
       debugLines.splice(5, 0, `openai_base_url: ${base}`, `openai_model: ${model}`);
     }
+    // Translation worker stats (help diagnose "ZH 翻译中…" delays).
+    try {
+      const ws = st && typeof st === "object" ? (st.watcher || {}) : {};
+      const tr = ws && typeof ws === "object" ? (ws.translate || {}) : {};
+      if (tr && typeof tr === "object") {
+        const hi = Number(tr.hi_q);
+        const lo = Number(tr.lo_q);
+        const lastMs = Number(tr.last_translate_ms);
+        const lastN = Number(tr.last_batch_n);
+        const dropOld = Number(tr.drop_old_hi || 0) + Number(tr.drop_old_lo || 0);
+        const dropNew = Number(tr.drop_new_hi || 0) + Number(tr.drop_new_lo || 0);
+        const done = Number(tr.done_items);
+        const err = String(tr.last_error || "");
+        const lines = [
+          `translate_q: hi=${Number.isFinite(hi) ? hi : ""} lo=${Number.isFinite(lo) ? lo : ""}`,
+          `translate_last: ${Number.isFinite(lastMs) ? lastMs.toFixed(0) : ""}ms batch_n=${Number.isFinite(lastN) ? lastN : ""}`,
+          `translate_done: ${Number.isFinite(done) ? done : ""} drop_old=${Number.isFinite(dropOld) ? dropOld : ""} drop_new=${Number.isFinite(dropNew) ? dropNew : ""}`,
+        ];
+        if (err) lines.push(`translate_last_error: ${err}`);
+        debugLines.push(...lines);
+      }
+    } catch (_) {}
   } catch (e) {
     debugLines.push(`[warn] debug: ${fmtErr(e)}`);
   }
   if (debugLines.length) setDebug(dom, debugLines.join("\n"));
 }
-

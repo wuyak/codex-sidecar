@@ -110,7 +110,7 @@ class RolloutWatcher:
         except Exception:
             return False
 
-    def status(self) -> Dict[str, str]:
+    def status(self) -> Dict[str, object]:
         sel = "auto"
         pin_tid = ""
         pin_file = ""
@@ -121,7 +121,7 @@ class RolloutWatcher:
                 pin_file = str(self._pinned_file) if self._pinned_file is not None else ""
         except Exception:
             sel = "auto"
-        return {
+        out: Dict[str, object] = {
             "current_file": str(self._current_file) if self._current_file is not None else "",
             "thread_id": self._thread_id or "",
             "offset": str(self._offset),
@@ -136,6 +136,12 @@ class RolloutWatcher:
             "codex_process_regex": self._follow_picker.codex_process_regex,
             "process_file": str(self._process_file) if self._process_file is not None else "",
         }
+        try:
+            if self._translate is not None:
+                out["translate"] = self._translate.stats()
+        except Exception:
+            pass
+        return out
 
     def set_follow(self, mode: str, thread_id: str = "", file: str = "") -> None:
         """
