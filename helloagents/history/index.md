@@ -36,3 +36,4 @@
 - 202601151629_ui_render_tool_modules
 - 202601151635_ui_render_thinking_modules
 - 202601151652_translate_batch_openai_prompt
+- 202601151730_tui_gate_spam_guard

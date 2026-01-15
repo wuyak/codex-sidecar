@@ -128,18 +128,21 @@ class TuiGateTailer:
                 continue
 
             if "waiting for tool gate" in msg:
-                gate_waiting = True
                 last_wait = (ts, last_toolcall)
-                if not synthetic_only:
-                    self._emit_tool_gate(
-                        ts,
-                        waiting=True,
-                        toolcall=last_toolcall,
-                        thread_id=thread_id,
-                        sha1_hex=sha1_hex,
-                        dedupe=dedupe,
-                        ingest=ingest,
-                    )
+                # codex-tui.log may emit repeated "waiting" lines while blocked.
+                # Only emit when the state changes (avoid spamming the UI).
+                if not gate_waiting:
+                    gate_waiting = True
+                    if not synthetic_only:
+                        self._emit_tool_gate(
+                            ts,
+                            waiting=True,
+                            toolcall=last_toolcall,
+                            thread_id=thread_id,
+                            sha1_hex=sha1_hex,
+                            dedupe=dedupe,
+                            ingest=ingest,
+                        )
                 continue
 
             if "tool gate released" in msg:
