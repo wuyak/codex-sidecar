@@ -12,6 +12,14 @@ export function createState() {
     uiEventSource: null,
     lastRenderedMs: NaN,
 
+    // 多会话频繁切换：视图缓存（key -> DOM+索引），避免每次切换都全量 refreshList。
+    listHost: null, // 原始 #list 容器（作为 view host）
+    activeList: null, // 当前激活的 list-view 容器
+    activeViewKey: "", // 当前激活 view 的 key（用于切换时保存滚动位置）
+    viewCache: new Map(), // key -> { key, el, rowIndex, callIndex, timeline, lastRenderedMs, scrollY }
+    viewLru: [], // keys by recency (oldest -> newest)
+    viewMax: 4,
+
     // 刷新/渲染控制（用于频繁切换会话与长时间挂着时的稳定性/性能）
     isRefreshing: false,
     refreshToken: 0,
@@ -19,7 +27,17 @@ export function createState() {
     ssePending: [],
     sseFlushTimer: 0,
 
+    // 非当前会话的 SSE 缓冲：切回该会话时回放到缓存视图；溢出则强制 refreshList 回源。
+    sseByKey: new Map(), // key -> [msg...]
+    sseOverflow: new Set(), // key -> true
+
     // Markdown 渲染缓存（用于频繁切换/重绘加速）
     mdCache: new Map(), // key -> { text, html }
+
+    // SDK 控制模式状态（避免 undefined 带来的分支噪音）
+    sdkAvailable: false,
+    sdkCsrfToken: "",
+    sdkThreadId: "",
+    sdkBusy: false,
   };
 }

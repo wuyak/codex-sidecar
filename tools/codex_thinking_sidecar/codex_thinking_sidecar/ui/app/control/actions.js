@@ -1,6 +1,7 @@
 import { api, healthPid, waitForRestartCycle } from "./api.js";
 import { loadControl } from "./load.js";
 import { closeDrawer, setStatus } from "./ui.js";
+import { clearViews } from "../views.js";
 
 export async function startWatch(dom, state) {
   const r = await api("POST", "/api/control/start");
@@ -57,8 +58,14 @@ export async function clearView(dom, state, refreshList) {
     await api("POST", "/api/control/follow", { mode: "auto" });
   } catch (_) {}
   state.threadIndex.clear();
-  state.callIndex.clear();
   state.currentKey = "all";
+  try { if (state.sseByKey && typeof state.sseByKey.clear === "function") state.sseByKey.clear(); } catch (_) {}
+  try { if (state.sseOverflow && typeof state.sseOverflow.clear === "function") state.sseOverflow.clear(); } catch (_) {}
+  try { if (state.callIndex && typeof state.callIndex.clear === "function") state.callIndex.clear(); } catch (_) {}
+  try { if (state.rowIndex && typeof state.rowIndex.clear === "function") state.rowIndex.clear(); } catch (_) {}
+  try { if (state.timeline && Array.isArray(state.timeline)) state.timeline.length = 0; } catch (_) {}
+  try { state.lastRenderedMs = NaN; } catch (_) {}
+  try { clearViews(dom, state); } catch (_) {}
   await refreshList();
   setStatus(dom, "已清空显示");
 }
@@ -76,4 +83,3 @@ export async function maybeAutoStartOnce(dom, state) {
     await api("POST", "/api/control/start");
   } catch (e) {}
 }
-

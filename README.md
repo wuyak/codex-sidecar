@@ -7,6 +7,7 @@
 - **翻译解耦**：翻译在后台队列慢慢补齐，完成后以 `op=update` 回填到原消息块（不改变时间线位置）。
 - **时间线稳定**：服务端为新增消息附加单调递增 `seq`，UI 按 `(timestamp, seq)` 插入渲染，避免“时间倒退/回跳”。
 - **切换稳定**：UI 刷新列表期间暂存 SSE 消息，刷新结束后批量回放，避免清空/插入并发导致错位或闪烁。
+- **切换加速**：消息列表按会话 `key` 做视图缓存；切换时优先复用已渲染 DOM，并回放该会话的 SSE 缓冲（溢出或切到 `all` 时再回源 `refreshList()`）。
 - **渲染加速**：Markdown 渲染按消息缓存；翻译回填优先原位更新 ZH 区块，减少重绘与上下文丢失。
 
 ## 快速开始
@@ -55,4 +56,5 @@ cd ~/src/codex-thinking-sidecar-zh
     - `ui/app/render.js`: 时间线渲染门面（实现：`ui/app/render/core.js`）
     - `ui/app/markdown.js`: Markdown 门面；实现位于 `ui/app/markdown/*`
     - `ui/app/decorate.js`: 行装饰门面；实现位于 `ui/app/decorate/core.js`
+    - `ui/app/views.js`: 多会话 list 视图缓存（切换复用 DOM + 还原滚动）
 - `helloagents/`: 知识库（CHANGELOG / wiki / history）

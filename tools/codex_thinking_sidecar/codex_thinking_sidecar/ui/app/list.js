@@ -1,5 +1,6 @@
 import { inferToolName, parseToolCallText } from "./format.js";
 import { keyOf, safeJsonParse, tsToMs } from "./utils.js";
+import { activateView } from "./views.js";
 
 export async function refreshList(dom, state, renderTabs, renderMessage, renderEmpty) {
   const token = (state && typeof state === "object")
@@ -7,6 +8,12 @@ export async function refreshList(dom, state, renderTabs, renderMessage, renderE
     : 0;
   const wasAtBottom = (window.innerHeight + window.scrollY) >= (document.body.scrollHeight - 80);
   if (state && typeof state === "object") state.isRefreshing = true;
+  // 全量回源会覆盖当前视图：清理该 key 的 SSE 缓冲，避免回放重复插入。
+  try {
+    const k = String(state && state.currentKey ? state.currentKey : "");
+    if (k && state.sseByKey && typeof state.sseByKey.delete === "function") state.sseByKey.delete(k);
+    if (k && state.sseOverflow && typeof state.sseOverflow.delete === "function") state.sseOverflow.delete(k);
+  } catch (_) {}
   let ac = null;
   try {
     try { if (state && state.refreshAbort) state.refreshAbort.abort(); } catch (_) {}
@@ -129,6 +136,12 @@ export async function bootstrap(dom, state, renderTabs, renderMessage, renderEmp
         if (key) state.currentKey = key;
       }
     } catch (e) {}
+
+    // bootstrap 可能根据 follow 状态修改 currentKey：同步切换到对应视图容器。
+    try {
+      const k = String(state && state.currentKey ? state.currentKey : "all");
+      if (k && state && typeof state === "object") activateView(dom, state, k);
+    } catch (_) {}
 
     await refreshList(dom, state, renderTabs, renderMessage, renderEmpty);
   } catch (e) {

@@ -1,5 +1,7 @@
 import { keyOf, tsToMs } from "./utils.js";
 
+const _SSE_BUFFER_MAX = 200;
+
 function _cmpKey(a, b) {
   const ta = a && a.ms;
   const tb = b && b.ms;
@@ -37,6 +39,81 @@ function _findInsertIndex(timeline, item) {
   return lo;
 }
 
+function _bufferForKey(state, key, msg) {
+  if (!state || typeof state !== "object") return;
+  const k = String(key || "");
+  if (!k || k === "all") return;
+
+  if (!state.sseByKey || typeof state.sseByKey.get !== "function") state.sseByKey = new Map();
+  if (!state.sseOverflow || typeof state.sseOverflow.has !== "function") state.sseOverflow = new Set();
+  if (state.sseOverflow.has(k)) return;
+
+  let buf = state.sseByKey.get(k);
+  if (!Array.isArray(buf)) buf = [];
+  if (buf.length >= _SSE_BUFFER_MAX) {
+    state.sseOverflow.add(k);
+    state.sseByKey.delete(k);
+    return;
+  }
+  buf.push(msg);
+  state.sseByKey.set(k, buf);
+}
+
+function _applyMsgToList(dom, state, msg, renderMessage) {
+  const op = String((msg && msg.op) ? msg.op : "").trim().toLowerCase();
+  const mid = (msg && typeof msg.id === "string") ? msg.id : "";
+
+  if (op === "update" && mid && state.rowIndex && state.rowIndex.has(mid)) {
+    const oldRow = state.rowIndex.get(mid);
+    renderMessage(dom, state, msg, { patchEl: oldRow });
+    return;
+  }
+  if (op === "update") return;
+
+  // Keep a strict ordering invariant: insert by (timestamp, seq) instead of append+refresh.
+  if (!state.timeline || !Array.isArray(state.timeline)) state.timeline = [];
+  const ms = tsToMs(msg && msg.ts);
+  const seq = Number.isFinite(Number(msg && msg.seq)) ? Number(msg.seq) : NaN;
+  const item = { id: mid, ms, seq };
+  if (mid && state.rowIndex && state.rowIndex.has(mid)) {
+    const oldRow = state.rowIndex.get(mid);
+    renderMessage(dom, state, msg, { patchEl: oldRow });
+  } else {
+    const idx = _findInsertIndex(state.timeline, item);
+    let beforeEl = null;
+    if (idx < state.timeline.length) {
+      const beforeId = state.timeline[idx] && state.timeline[idx].id;
+      beforeEl = (beforeId && state.rowIndex) ? state.rowIndex.get(beforeId) : null;
+    }
+    renderMessage(dom, state, msg, { insertBefore: beforeEl });
+    if (mid && state.rowIndex && state.rowIndex.has(mid)) state.timeline.splice(idx, 0, item);
+  }
+  if (Number.isFinite(ms)) state.lastRenderedMs = Math.max(Number(state.lastRenderedMs) || 0, ms);
+}
+
+export function drainBufferedForKey(dom, state, key, renderMessage, renderTabs) {
+  const k = String(key || "");
+  if (!k || k === "all") return { overflow: true, count: 0 };
+  if (!state || typeof state !== "object") return { overflow: true, count: 0 };
+
+  try {
+    if (state.sseOverflow && typeof state.sseOverflow.has === "function" && state.sseOverflow.has(k)) {
+      return { overflow: true, count: 0 };
+    }
+  } catch (_) {}
+
+  const buf = (state.sseByKey && typeof state.sseByKey.get === "function") ? state.sseByKey.get(k) : null;
+  if (!Array.isArray(buf) || buf.length === 0) return { overflow: false, count: 0 };
+
+  try { state.sseByKey.delete(k); } catch (_) {}
+
+  for (const msg of buf) {
+    try { _applyMsgToList(dom, state, msg, renderMessage); } catch (_) {}
+  }
+  try { renderTabs(dom, state); } catch (_) {}
+  return { overflow: false, count: buf.length };
+}
+
 export function connectEventStream(dom, state, upsertThread, renderTabs, renderMessage, setStatus, refreshList) {
   state.uiEventSource = new EventSource("/events");
 
@@ -64,7 +141,6 @@ export function connectEventStream(dom, state, upsertThread, renderTabs, renderM
   function _handleMsg(msg) {
     try {
       const op = String((msg && msg.op) ? msg.op : "").trim().toLowerCase();
-      const mid = (msg && typeof msg.id === "string") ? msg.id : "";
 
       // Updates should not bump thread counts.
       if (op !== "update") upsertThread(state, msg);
@@ -72,30 +148,9 @@ export function connectEventStream(dom, state, upsertThread, renderTabs, renderM
       const k = keyOf(msg);
       const shouldRender = (state.currentKey === "all" || state.currentKey === k);
       if (shouldRender) {
-        if (op === "update" && mid && state.rowIndex && state.rowIndex.has(mid)) {
-          const oldRow = state.rowIndex.get(mid);
-          renderMessage(dom, state, msg, { patchEl: oldRow });
-        } else if (op !== "update") {
-          // Keep a strict ordering invariant: insert by (timestamp, seq) instead of append+refresh.
-          if (!state.timeline || !Array.isArray(state.timeline)) state.timeline = [];
-          const ms = tsToMs(msg && msg.ts);
-          const seq = Number.isFinite(Number(msg && msg.seq)) ? Number(msg.seq) : NaN;
-          const item = { id: mid, ms, seq };
-          if (mid && state.rowIndex && state.rowIndex.has(mid)) {
-            const oldRow = state.rowIndex.get(mid);
-            renderMessage(dom, state, msg, { patchEl: oldRow });
-          } else {
-            const idx = _findInsertIndex(state.timeline, item);
-            let beforeEl = null;
-            if (idx < state.timeline.length) {
-              const beforeId = state.timeline[idx] && state.timeline[idx].id;
-              beforeEl = (beforeId && state.rowIndex) ? state.rowIndex.get(beforeId) : null;
-            }
-            renderMessage(dom, state, msg, { insertBefore: beforeEl });
-            if (mid && state.rowIndex && state.rowIndex.has(mid)) state.timeline.splice(idx, 0, item);
-          }
-          if (Number.isFinite(ms)) state.lastRenderedMs = Math.max(Number(state.lastRenderedMs) || 0, ms);
-        }
+        _applyMsgToList(dom, state, msg, renderMessage);
+      } else {
+        _bufferForKey(state, k, msg);
       }
       renderTabs(dom, state);
     } catch (e) {}

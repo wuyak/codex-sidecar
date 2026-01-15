@@ -16,3 +16,4 @@
 - 202601150958_ui_refactor_modules
 - 202601151037_ui_perf_translation
 - 202601151050_ui_cache_patch_update
+- 202601151230_ui_view_cache_sse_buffer

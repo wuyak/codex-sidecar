@@ -1,18 +1,21 @@
 import { getDom } from "./dom.js";
-import { connectEventStream } from "./events.js";
+import { connectEventStream, drainBufferedForKey } from "./events.js";
 import { loadControl, maybeAutoStartOnce, setStatus, wireControlEvents } from "./control.js";
 import { bootstrap, refreshList } from "./list.js";
 import { renderEmpty, renderMessage } from "./render.js";
 import { createState } from "./state.js";
 import { renderTabs, upsertThread } from "./sidebar.js";
 import { initSdkComposer, syncSdkSelection } from "./sdk.js";
+import { activateView, initViews } from "./views.js";
 
 export async function initApp() {
   const dom = getDom();
   const state = createState();
+  initViews(dom, state);
 
   const onSelectKey = async (key) => {
     state.currentKey = key;
+    const { needsRefresh } = activateView(dom, state, key);
     syncSdkSelection(dom, state);
     // 快速 UI 反馈：先更新选中态，再异步拉取/重绘消息列表。
     try { renderTabsWrapper(dom, state); } catch (_) {}
@@ -37,7 +40,17 @@ export async function initApp() {
         });
       }
     } catch (_) {}
-    await refreshList(dom, state, renderTabsWrapper, renderMessage, renderEmpty);
+    // 优先回放后台缓冲的 SSE（避免频繁切换时每次都全量 refreshList）。
+    let overflow = false;
+    try {
+      if (!needsRefresh && key !== "all") {
+        const r = drainBufferedForKey(dom, state, key, renderMessage, renderTabsWrapper);
+        overflow = !!(r && r.overflow);
+      }
+    } catch (_) {}
+    if (key === "all" || needsRefresh || overflow) {
+      await refreshList(dom, state, renderTabsWrapper, renderMessage, renderEmpty);
+    }
   };
 
   const renderTabsWrapper = (d, s) => renderTabs(d, s, onSelectKey);
