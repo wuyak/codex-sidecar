@@ -1,5 +1,6 @@
 import { colorForKey, keyOf, shortId } from "../utils.js";
 import { getCustomLabel, setCustomLabel } from "./labels.js";
+import { loadHiddenThreads } from "./hidden.js";
 
 const _ROLLOUT_STAMP_RE = /^rollout-(\d{4}-\d{2}-\d{2})T(\d{2}-\d{2}-\d{2})-/;
 
@@ -84,6 +85,11 @@ export function renderTabs(dom, state, onSelectKey) {
     if (sa !== sb) return sb - sa;
     return String(b.last_ts || "").localeCompare(String(a.last_ts || ""));
   });
+
+  const hidden = (state && state.hiddenThreads && typeof state.hiddenThreads.has === "function")
+    ? state.hiddenThreads
+    : loadHiddenThreads();
+  const showHidden = !!(state && state.showHiddenThreads);
   const frag = document.createDocumentFragment();
 
   const allBtn = _getOrCreateTab(tabs, existing, "all", () => document.createElement("button"));
@@ -94,8 +100,10 @@ export function renderTabs(dom, state, onSelectKey) {
   frag.appendChild(allBtn);
 
   for (const t of items) {
+    const isHidden = !!(hidden && typeof hidden.has === "function" && hidden.has(t.key));
+    if (isHidden && !showHidden) continue;
     const btn = _getOrCreateTab(tabs, existing, t.key, () => document.createElement("button"));
-    btn.className = "tab" + (state.currentKey === t.key ? " active" : "");
+    btn.className = "tab" + (isHidden ? " tab-hidden" : "") + (state.currentKey === t.key ? " active" : "");
     const clr = colorForKey(t.key || "");
     const defaultLabel = threadLabel(t);
     const custom = getCustomLabel(t.key);
@@ -132,4 +140,3 @@ export function renderTabs(dom, state, onSelectKey) {
     tabs.appendChild(frag);
   }
 }
-

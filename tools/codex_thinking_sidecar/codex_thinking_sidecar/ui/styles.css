@@ -8,6 +8,7 @@
 
 			      #main { margin: 16px 60px 16px 16px; padding-bottom: 16px; }
 		      .sidebar-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+		      .sidebar-actions { display:flex; align-items:center; gap:6px; }
 		      .pin-toggle { display:flex; align-items:center; gap:6px; user-select:none; cursor:pointer; padding:2px 6px; border-radius: 10px; border: 1px solid transparent; }
 		      .pin-toggle:hover { background:#f8fafc; border-color:#e2e8f0; }
 		      .pin-toggle input { width: 14px; height: 14px; margin: 0; accent-color:#111827; }
@@ -136,5 +137,7 @@
 	      .profile-row { display:flex; gap: 6px; align-items:center; }
 	      .mini-btn { width: 30px; height: 30px; padding: 0; border-radius: 10px; border: 1px solid #e2e8f0; background:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 14px; line-height: 1; }
 	      .mini-btn:hover { background:#f1f5f9; }
+	      .mini-btn.active { background:#111827; color:#fff; border-color:#111827; }
 	      .mini-btn.danger { border-color:#fecaca; }
 	      .mini-btn.danger:hover { background:#fff1f2; }
+	      .tab.tab-hidden { opacity: .55; filter: saturate(.8); }

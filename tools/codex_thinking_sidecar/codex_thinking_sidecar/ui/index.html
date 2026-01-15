@@ -11,10 +11,15 @@
 		    <div id="sidebar">
 		      <div class="sidebar-head">
 		        <div class="meta"><b>会话切换</b></div>
-		        <label class="meta pin-toggle" title="开启后：点击会话会锁定跟随（不会自动跳到新会话）；关闭后：只切换视图，不影响 watcher 跟随策略">
-		          <input id="pinOnSelect" type="checkbox" />
-		          <span>锁定</span>
-		        </label>
+		        <div class="sidebar-actions">
+		          <button id="exportThreadBtn" class="mini-btn" type="button" title="导出当前会话（Markdown）">⤓</button>
+		          <button id="hideThreadBtn" class="mini-btn" type="button" title="隐藏/取消隐藏当前会话">🙈</button>
+		          <button id="showHiddenBtn" class="mini-btn" type="button" title="显示隐藏会话">👁</button>
+		          <label class="meta pin-toggle" title="开启后：点击会话会锁定跟随（不会自动跳到新会话）；关闭后：只切换视图，不影响 watcher 跟随策略">
+		            <input id="pinOnSelect" type="checkbox" />
+		            <span>锁定</span>
+		          </label>
+		        </div>
 		      </div>
 		      <div id="tabs" class="tabs"></div>
 		    </div>

@@ -54,6 +54,9 @@ export function getDom() {
 
     tabs: byId("tabs"),
     pinOnSelect: byId("pinOnSelect"),
+    exportThreadBtn: byId("exportThreadBtn"),
+    hideThreadBtn: byId("hideThreadBtn"),
+    showHiddenBtn: byId("showHiddenBtn"),
     list: byId("list"),
   };
 }
