@@ -33,11 +33,5 @@ export function createState() {
 
     // Markdown 渲染缓存（用于频繁切换/重绘加速）
     mdCache: new Map(), // key -> { text, html }
-
-    // SDK 控制模式状态（避免 undefined 带来的分支噪音）
-    sdkAvailable: false,
-    sdkCsrfToken: "",
-    sdkThreadId: "",
-    sdkBusy: false,
   };
 }

@@ -5,7 +5,6 @@ import { bootstrap, refreshList } from "./list.js";
 import { renderEmpty, renderMessage } from "./render.js";
 import { createState } from "./state.js";
 import { renderTabs, upsertThread } from "./sidebar.js";
-import { initSdkComposer, syncSdkSelection } from "./sdk.js";
 import { activateView, initViews } from "./views.js";
 
 export async function initApp() {
@@ -16,7 +15,6 @@ export async function initApp() {
   const onSelectKey = async (key) => {
     state.currentKey = key;
     const { needsRefresh } = activateView(dom, state, key);
-    syncSdkSelection(dom, state);
     // 快速 UI 反馈：先更新选中态，再异步拉取/重绘消息列表。
     try { renderTabsWrapper(dom, state); } catch (_) {}
     // When multiple Codex sessions exist, auto-follow may jump between rollout files.
@@ -66,6 +64,5 @@ export async function initApp() {
   await loadControl(dom, state);
 
   await bootstrap(dom, state, renderTabsWrapper, renderMessage, renderEmpty);
-  initSdkComposer(dom, state, setStatus).catch(() => {});
   connectEventStream(dom, state, upsertThread, renderTabsWrapper, renderMessage, setStatus, refreshListWrapper);
 }

@@ -52,17 +52,5 @@ export function getDom() {
 
     tabs: byId("tabs"),
     list: byId("list"),
-
-    // SDK 控制模式（浏览器输入 → 本机对话 thread）
-    sdkComposer: byId("sdkComposer"),
-    sdkStatus: byId("sdkStatus"),
-    sdkThreadId: byId("sdkThreadId"),
-    sdkNewBtn: byId("sdkNewBtn"),
-    sdkInput: byId("sdkInput"),
-    sdkSendBtn: byId("sdkSendBtn"),
-    sdkHintText: byId("sdkHintText"),
-    sdkHintSelected: byId("sdkHintSelected"),
-    sdkSelectedThreadId: byId("sdkSelectedThreadId"),
-    sdkUseSelectedBtn: byId("sdkUseSelectedBtn"),
   };
 }

@@ -6,7 +6,7 @@
 	      body.sidebar-auto #sidebar:focus-within,
 	      body.sidebar-auto #sidebarHotzone:hover + #sidebar { transform: translateX(0); }
 
-		      #main { margin: 16px 60px 16px 16px; padding-bottom: 110px; }
+			      #main { margin: 16px 60px 16px 16px; padding-bottom: 16px; }
 		      .sidebar-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
 	      .row { border: 1px solid #ddd; border-left: 4px solid #e5e7eb; border-radius: 8px; padding: 12px; margin: 10px 0; }
 	      .row.kind-user_message { border-left-color:#38bdf8; }
@@ -113,17 +113,3 @@
 	      .mini-btn:hover { background:#f1f5f9; }
 	      .mini-btn.danger { border-color:#fecaca; }
 	      .mini-btn.danger:hover { background:#fff1f2; }
-
-        /* SDK 控制模式输入区（固定底部） */
-        .composer { position: fixed; left: 16px; right: 86px; bottom: 16px; z-index: 900; border: 1px solid #e2e8f0; border-radius: 14px; background: rgba(255,255,255,.96); box-shadow: 0 16px 40px rgba(0,0,0,.12); padding: 10px 10px 8px; backdrop-filter: blur(6px); }
-        .composer-top { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-        .composer-spacer { flex: 1 1 auto; min-width: 0; }
-        .composer-thread { width: 260px; max-width: 62vw; padding: 6px 8px; border: 1px solid #e2e8f0; border-radius: 10px; background:#fff; }
-        .composer-thread:focus { outline: none; border-color: #93c5fd; box-shadow: 0 0 0 3px rgba(59,130,246,.12); }
-        .composer-row { margin-top: 8px; display:flex; align-items:stretch; gap:8px; }
-        .composer-row textarea { flex: 1 1 auto; width: 100%; resize: vertical; min-height: 44px; max-height: 240px; padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 12px; background:#fff; font-size: 13px; line-height: 1.4; }
-        .composer-row textarea:focus { outline: none; border-color: #93c5fd; box-shadow: 0 0 0 3px rgba(59,130,246,.12); }
-        .composer-row button { flex: 0 0 auto; min-width: 72px; }
-        .composer-hint { margin-top: 6px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-        .tiny-btn { border: 1px solid #e2e8f0; background:#fff; padding: 3px 8px; border-radius: 999px; cursor:pointer; font-size: 12px; color:#334155; }
-        .tiny-btn:hover { background:#f1f5f9; }

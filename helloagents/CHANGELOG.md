@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- 移除：内置 SDK 控制模式（`src/codex-sdk`、`/api/sdk/*`、UI 底部 composer），聚焦旁路只读并降低代码复杂度。
 - UI: 拆分 `ui/app/render.js`，引入子目录实现（保持纯静态，无构建）
 - 重构：进一步拆分渲染/Markdown：`ui/app/render/*`（core/thinking/tool/md_cache）与 `ui/app/markdown/*`（inline/table）
 - UI: 优化列表刷新/切换性能：使用 `DocumentFragment`，刷新期间暂存 SSE 并在结束后回放；思考区增加“ZH 翻译中”占位提示（对照/英文模式可见）。

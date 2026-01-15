@@ -25,30 +25,9 @@
 			      <div id="list"></div>
 			    </div>
 
-          <div id="sdkComposer" class="composer hidden" aria-label="SDK 控制模式">
-            <div class="composer-top">
-              <span class="pill">SDK 控制</span>
-              <span id="sdkStatus" class="meta"></span>
-              <div class="composer-spacer"></div>
-              <input id="sdkThreadId" class="composer-thread" placeholder="threadId（留空=新对话）" />
-              <button id="sdkNewBtn" type="button" title="新对话">新对话</button>
-            </div>
-            <div class="composer-row">
-              <textarea id="sdkInput" rows="2" placeholder="输入后回车发送（Shift+Enter 换行）"></textarea>
-              <button id="sdkSendBtn" class="primary" type="button">发送</button>
-            </div>
-            <div class="meta composer-hint">
-              <span id="sdkHintText"></span>
-              <span id="sdkHintSelected" class="hidden">
-                · 选中会话: <code id="sdkSelectedThreadId"></code>
-                <button id="sdkUseSelectedBtn" type="button" class="tiny-btn">使用</button>
-              </span>
-            </div>
-          </div>
-
-			    <div id="rightbar" class="rightbar" aria-label="actions">
-			      <button id="configToggleBtn" class="icon-btn" type="button" title="配置" aria-label="配置">⚙️</button>
-			      <button id="startBtn" class="icon-btn" type="button" title="开始监听" aria-label="开始监听">▶️</button>
+				    <div id="rightbar" class="rightbar" aria-label="actions">
+				      <button id="configToggleBtn" class="icon-btn" type="button" title="配置" aria-label="配置">⚙️</button>
+				      <button id="startBtn" class="icon-btn" type="button" title="开始监听" aria-label="开始监听">▶️</button>
 			      <button id="stopBtn" class="icon-btn" type="button" title="停止监听" aria-label="停止监听">⏹️</button>
 			      <button id="restartBtn" class="icon-btn" type="button" title="重启 Sidecar" aria-label="重启 Sidecar">🔄</button>
 			      <button id="clearBtn" class="icon-btn danger" type="button" title="清空显示" aria-label="清空显示">🧹</button>

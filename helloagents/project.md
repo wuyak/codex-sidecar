@@ -2,16 +2,11 @@
 
 ## 范围
 - 默认模式：旁路展示/翻译（读取 `CODEX_HOME/sessions/**/rollout-*.jsonl` 并在本地 UI 渲染）。
-- 可选模式：SDK 控制（通过 Codex SDK 在本机启动/恢复 thread，使浏览器可直接输入并驱动 Codex 执行）。
-- 不修改 Codex 官方二进制；控制模式不尝试向既有 TUI 进程注入 stdin/pty。
+- 不修改 Codex 官方二进制；不提供 Web 执行入口（只读旁路）。
 
 ## 运行环境
 - Python 3（旁路模式：使用标准库即可运行）
-- Node.js ≥ 18（可选：SDK 控制模式的 bridge 子服务）
 
 ## 安全与隐私
 - 默认仅监听本地文件并在 `127.0.0.1` 提供服务。
 - 若使用翻译 Provider（如 `http`），请自行评估将文本发送到第三方服务的风险。
-- 若启用 SDK 控制模式：它等价于“在本机执行命令/修改文件”的入口，必须确保服务仅本机可访问，并启用 CSRF/token 等防护；切勿暴露到局域网/公网。
-  - 默认策略：仅 loopback 可用；`POST /api/sdk/turn/run` 需携带 `X-CSRF-Token`（由 `GET /api/sdk/status` 下发，仅驻内存）。
-  - 如需对外开放必须显式设置 `CODEX_SDK_ALLOW_REMOTE=1`（强烈不建议）。
