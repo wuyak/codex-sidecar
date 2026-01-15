@@ -27,3 +27,4 @@
 - 202601151501_ui_events_modules
 - 202601151506_server_refactor_http_modules
 - 202601151523_controller_refactor_control_modules
+- 202601151527_ui_pending_overflow_guard

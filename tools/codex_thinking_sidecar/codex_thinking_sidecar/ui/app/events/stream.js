@@ -37,6 +37,12 @@ export function connectEventStream(dom, state, upsertThread, renderTabs, renderM
       _scheduleFlush(50);
       return;
     }
+    if (state.ssePendingOverflow) {
+      state.ssePendingOverflow = false;
+      try { if (Array.isArray(state.ssePending)) state.ssePending.length = 0; } catch (_) {}
+      try { Promise.resolve(refreshList()).catch(() => {}); } catch (_) {}
+      return;
+    }
     const pending = Array.isArray(state.ssePending) ? state.ssePending.splice(0) : [];
     if (!pending.length) return;
     for (const msg of pending) _handleMsg(msg);
@@ -120,4 +126,3 @@ export function connectEventStream(dom, state, upsertThread, renderTabs, renderM
     } catch (_) {}
   });
 }
-

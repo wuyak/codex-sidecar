@@ -1,6 +1,8 @@
 import { applyMsgToList } from "./timeline.js";
 
 const _SSE_BUFFER_MAX = 200;
+const _SSE_PENDING_MAX = 600;
+const _SSE_PENDING_KEEP = 200;
 
 export function shouldBufferKey(state, key) {
   const k = String(key || "");
@@ -74,6 +76,10 @@ export function pushPending(state, msg) {
   } catch (_) {}
 
   state.ssePending.push(msg);
+  if (state.ssePending.length > _SSE_PENDING_MAX) {
+    state.ssePendingOverflow = true;
+    try { state.ssePending.splice(0, Math.max(0, state.ssePending.length - _SSE_PENDING_KEEP)); } catch (_) {}
+  }
 }
 
 export function drainBufferedForKey(dom, state, key, renderMessage, renderTabs) {
@@ -98,4 +104,3 @@ export function drainBufferedForKey(dom, state, key, renderMessage, renderTabs) 
   try { renderTabs(dom, state); } catch (_) {}
   return { overflow: false, count: buf.length };
 }
-

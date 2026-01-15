@@ -29,6 +29,7 @@ export function createState() {
     refreshToken: 0,
     refreshAbort: null,
     ssePending: [],
+    ssePendingOverflow: false,
     sseFlushTimer: 0,
 
     // 非当前会话的 SSE 缓冲：切回该会话时回放到缓存视图；溢出则强制 refreshList 回源。
