@@ -44,6 +44,7 @@ export function getDom() {
     restartBtn: byId("restartBtn"),
     clearBtn: byId("clearBtn"),
     configToggleBtn: byId("configToggleBtn"),
+    quickViewBtn: byId("quickViewBtn"),
     drawerOverlay: byId("drawerOverlay"),
     drawer: byId("drawer"),
     drawerCloseBtn: byId("drawerCloseBtn"),

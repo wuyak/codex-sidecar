@@ -7,12 +7,14 @@ import { createState } from "./state.js";
 import { renderTabs, upsertThread } from "./sidebar.js";
 import { escapeHtml } from "./utils.js";
 import { flashToastAt } from "./utils/toast.js";
+import { initViewMode } from "./view_mode.js";
 import { activateView, initViews } from "./views.js";
 
 export async function initApp() {
   const dom = getDom();
   const state = createState();
   initViews(dom, state);
+  initViewMode(dom, state);
 
   // UI preference: whether selecting a session tab should pin the watcher.
   try {

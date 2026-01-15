@@ -4,6 +4,7 @@ import { recoverConfig, saveConfig } from "./config.js";
 import { applyProfileToInputs, readHttpInputs, refreshHttpProfileSelect, upsertSelectedProfileFromInputs } from "./http_profiles.js";
 import { closeDrawer, openDrawer, setStatus, showProviderBlocks } from "./ui.js";
 import { showShutdownScreen } from "../shutdown.js";
+import { toggleViewMode } from "../view_mode.js";
 
 export function wireControlEvents(dom, state, helpers) {
   const { refreshList } = helpers;
@@ -32,6 +33,7 @@ export function wireControlEvents(dom, state, helpers) {
   if (dom.stopBtn) dom.stopBtn.addEventListener("click", async () => { await stopWatch(dom, state); });
   if (dom.restartBtn) dom.restartBtn.addEventListener("click", async () => { await restartProcess(dom, state); });
   if (dom.clearBtn) dom.clearBtn.addEventListener("click", async () => { await clearView(dom, state, refreshList); });
+  if (dom.quickViewBtn) dom.quickViewBtn.addEventListener("click", () => { toggleViewMode(dom, state); });
 
   if (dom.shutdownBtn) dom.shutdownBtn.addEventListener("click", async () => {
     if (!confirm("确定要退出 sidecar 进程？（将停止监听并关闭服务）")) return;

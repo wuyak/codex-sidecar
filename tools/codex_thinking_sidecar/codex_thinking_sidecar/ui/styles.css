@@ -40,6 +40,7 @@
       .rightbar { position: fixed; top: 16px; right: 16px; display:flex; flex-direction:column; gap:8px; z-index: 850; }
       .icon-btn { width: 38px; height: 38px; padding: 0; border-radius: 999px; display:flex; align-items:center; justify-content:center; border: 1px solid #e2e8f0; background:#fff; cursor:pointer; box-shadow: 0 6px 20px rgba(0,0,0,.06); font-size: 16px; line-height: 1; }
       .icon-btn:hover { background:#f8fafc; }
+      .icon-btn.active { background:#111827; color:#fff; border-color:#111827; }
       .icon-btn:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
       .icon-btn.danger { background:#fff; border-color:#fecaca; }
       .icon-btn.danger:hover { background:#fff1f2; }
@@ -119,6 +120,7 @@
 	      .row.think-mode-en .think-zh { display: none; }
 	      .row.think-mode-en .think-wait { display: none; }
 	      .row.think-mode-zh .think-en { display: none; }
+	      body.quick-view .row:not(#topbar):not(.row-empty):not(.kind-user_message):not(.kind-assistant_message):not(.kind-reasoning_summary):not(.kind-agent_reasoning) { display: none; }
 	      .profile-row { display:flex; gap: 6px; align-items:center; }
 	      .mini-btn { width: 30px; height: 30px; padding: 0; border-radius: 10px; border: 1px solid #e2e8f0; background:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 14px; line-height: 1; }
 	      .mini-btn:hover { background:#f1f5f9; }

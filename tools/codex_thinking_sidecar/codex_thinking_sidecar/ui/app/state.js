@@ -16,6 +16,9 @@ export function createState() {
     sseHadError: false,
     lastRenderedMs: NaN,
 
+    // 显示模式：full=全量；quick=仅输入/输出/思考（快速浏览）
+    viewMode: "full",
+
     // 翻译模式（来自服务端 config）：auto | manual
     translateMode: "auto",
     translatorProvider: "stub",

@@ -17,7 +17,7 @@ export function renderEmpty(dom) {
   const list = dom.list;
   if (!list) return;
   const row = document.createElement("div");
-  row.className = "row";
+  row.className = "row row-empty";
   row.innerHTML = `<div class="meta">暂无数据（或仍在回放中）：先等待 2-5 秒；如仍为空，请确认 sidecar 的 <code>--codex-home</code> 指向包含 <code>sessions/**/rollout-*.jsonl</code> 的目录，然后在 Codex 里发一条消息。也可以打开 <code>/api/messages</code> 验证是否已采集到数据。</div>`;
   list.appendChild(row);
 }
