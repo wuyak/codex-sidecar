@@ -59,6 +59,14 @@ function _bufferForKey(state, key, msg) {
   state.sseByKey.set(k, buf);
 }
 
+function _shouldBufferKey(state, key) {
+  const k = String(key || "");
+  if (!k || k === "all") return false;
+  const cache = state && state.viewCache;
+  if (!cache || typeof cache.has !== "function") return false;
+  return cache.has(k);
+}
+
 function _applyMsgToList(dom, state, msg, renderMessage) {
   const op = String((msg && msg.op) ? msg.op : "").trim().toLowerCase();
   const mid = (msg && typeof msg.id === "string") ? msg.id : "";
@@ -149,10 +157,16 @@ export function connectEventStream(dom, state, upsertThread, renderTabs, renderM
       const shouldRender = (state.currentKey === "all" || state.currentKey === k);
       if (shouldRender) {
         _applyMsgToList(dom, state, msg, renderMessage);
+        // 当前在 all 视图时，其他已缓存会话的视图仍需要“慢慢跟上”，否则切回会显示旧内容。
+        if (state.currentKey === "all" && _shouldBufferKey(state, k)) {
+          _bufferForKey(state, k, msg);
+        }
       } else {
-        _bufferForKey(state, k, msg);
+        // 仅为“已缓存的会话视图”缓冲，避免长时间挂着时对大量冷门 key 无限占用内存。
+        if (_shouldBufferKey(state, k)) _bufferForKey(state, k, msg);
       }
-      renderTabs(dom, state);
+      // 译文回填（op=update）不影响会话计数/排序，避免每条 update 都重绘侧栏。
+      if (op !== "update") renderTabs(dom, state);
     } catch (e) {}
   }
 
