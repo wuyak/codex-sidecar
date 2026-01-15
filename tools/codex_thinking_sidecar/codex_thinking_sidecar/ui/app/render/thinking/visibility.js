@@ -10,14 +10,17 @@ function _sanitizeMode(mode) {
 export function getThinkingVisibility(dom, state, mid, zhText) {
   const hasZh = !!String(zhText || "").trim();
   let mode = hasZh ? "zh" : "en";
-  try {
-    const k = String(mid || "").trim();
-    if (k && state && state.thinkModeById && typeof state.thinkModeById.get === "function") {
-      const v = state.thinkModeById.get(k);
-      const vv = _sanitizeMode(v);
-      if (vv) mode = vv;
-    }
-  } catch (_) {}
+  // Only apply per-row overrides when ZH exists; otherwise forcing mode=zh would hide EN and show an empty block.
+  if (hasZh) {
+    try {
+      const k = String(mid || "").trim();
+      if (k && state && state.thinkModeById && typeof state.thinkModeById.get === "function") {
+        const v = state.thinkModeById.get(k);
+        const vv = _sanitizeMode(v);
+        if (vv) mode = vv;
+      }
+    } catch (_) {}
+  }
   let translateMode = "auto";
   try {
     const v = String((state && state.translateMode) ? state.translateMode : "").trim().toLowerCase();

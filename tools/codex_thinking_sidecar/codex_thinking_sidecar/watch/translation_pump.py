@@ -185,21 +185,46 @@ class TranslationPump:
             "last_error": last_err,
         }
 
-    def _normalize_translation(self, src: str, zh: str) -> str:
-        s = str(src or "")
-        z = str(zh or "")
-        if s.strip() and (not z.strip()) and not isinstance(self._translator, NoneTranslator):
-            err = str(getattr(self._translator, "last_error", "") or "").strip()
-            hint = err if err else "WARN: 翻译失败（返回空译文）"
-            return f"⚠️ {hint}\n\n{s}"
-        return z
+    def _translate_one(self, text: str) -> Tuple[str, str]:
+        """
+        Return (zh, error).
 
-    def _emit_zh(self, mid: str, src: str, zh: str) -> None:
-        # NoneTranslator: avoid emitting no-op updates that only cause extra DOM work.
-        if isinstance(self._translator, NoneTranslator) and (not str(zh or "").strip()):
+        Important:
+        - 翻译失败时不要把告警文本写入 `zh`（否则 UI 会把失败当作“已就绪”，污染内容区）
+        - error 作为单独字段回填给 UI，用于状态 pill/重试提示
+        """
+        if not str(text or "").strip():
+            return ("", "")
+        if isinstance(self._translator, NoneTranslator):
+            return ("", "未启用翻译（Provider=none）")
+        try:
+            out = self._translator.translate(text)
+        except Exception as e:
+            return ("", f"翻译异常：{type(e).__name__}")
+        z = str(out or "").strip()
+        if z:
+            return (z, "")
+        return ("", self._normalize_err("翻译失败（返回空译文）"))
+
+    def _normalize_err(self, fallback: str) -> str:
+        err = str(getattr(self._translator, "last_error", "") or "").strip()
+        if err.startswith("WARN:"):
+            err = err[len("WARN:") :].strip()
+        if not err:
+            err = str(fallback or "").strip()
+        if not err:
+            err = "翻译失败"
+        # Keep it bounded (UI uses it as a tooltip; overlong strings are noisy).
+        if len(err) > 240:
+            err = err[:240] + "…"
+        return err
+
+    def _emit_translate(self, mid: str, zh: str, err: str) -> None:
+        # NoneTranslator: still emit an error for manual "retranslate" so UI can clear in-flight and show a hint.
+        if isinstance(self._translator, NoneTranslator) and (not str(zh or "").strip()) and (not str(err or "").strip()):
             return
         try:
-            self._emit_update({"op": "update", "id": mid, "zh": zh})
+            self._emit_update({"op": "update", "id": mid, "zh": zh, "translate_error": err})
         except Exception:
             return
 
@@ -249,10 +274,10 @@ class TranslationPump:
             t0 = time.monotonic()
             try:
                 if len(batch) == 1:
-                    zh = self._normalize_translation(text, self._translator.translate(text))
+                    zh, err = self._translate_one(text)
                     if stop_event.is_set():
                         continue
-                    self._emit_zh(mid, text, zh)
+                    self._emit_translate(mid, zh, err)
                     self._done_items += 1
                     self._done_batches += 1
                     self._last_batch_n = 1
@@ -275,24 +300,55 @@ class TranslationPump:
                     pairs.append((iid, itxt))
                     wanted.add(iid)
                 if len(pairs) <= 1:
-                    zh = self._normalize_translation(text, self._translator.translate(text))
+                    zh, err = self._translate_one(text)
                     if stop_event.is_set():
                         continue
-                    self._emit_zh(mid, text, zh)
+                    self._emit_translate(mid, zh, err)
                     continue
 
                 packed = _pack_translate_batch(pairs)
-                out = self._translator.translate(packed)
+                out = ""
+                try:
+                    out = self._translator.translate(packed)
+                except Exception:
+                    out = ""
+                if not str(out or "").strip():
+                    # Batch request failed; mark all as error (do not fallback to per-item to avoid request storms).
+                    berr = self._normalize_err("批量翻译失败")
+                    for iid, _itxt in pairs:
+                        if stop_event.is_set():
+                            break
+                        self._emit_translate(iid, "", berr)
+                        self._done_items += 1
+                        try:
+                            self._inflight.discard(iid)
+                        except Exception:
+                            pass
+                    self._done_batches += 1
+                    self._last_batch_n = len(pairs)
+                    self._last_translate_ms = (time.monotonic() - t0) * 1000.0
+                    self._last_key = key
+                    self._last_ts = time.time()
+                    continue
+
                 mapping = _unpack_translate_batch(out, wanted_ids=wanted)
+                fallback_budget = 1
 
                 for iid, itxt in pairs:
                     if stop_event.is_set():
                         break
-                    zh = mapping.get(iid)
-                    if zh is None:
-                        zh = self._translator.translate(itxt)
-                    zh = self._normalize_translation(itxt, zh)
-                    self._emit_zh(iid, itxt, zh)
+                    raw = mapping.get(iid) if isinstance(mapping, dict) else None
+                    z = str(raw or "").strip()
+                    if z:
+                        self._emit_translate(iid, z, "")
+                    else:
+                        # Missing/empty unpack: do a very limited fallback; otherwise surface an error for manual retry.
+                        if fallback_budget > 0:
+                            fallback_budget -= 1
+                            z2, e2 = self._translate_one(itxt)
+                            self._emit_translate(iid, z2, e2)
+                        else:
+                            self._emit_translate(iid, "", "批量翻译解包缺失")
                     self._done_items += 1
                     try:
                         self._inflight.discard(iid)

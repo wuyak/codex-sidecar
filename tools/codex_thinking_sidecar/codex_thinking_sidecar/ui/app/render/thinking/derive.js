@@ -1,4 +1,5 @@
 import { cleanThinkingText } from "../../markdown.js";
+import { escapeHtml } from "../../utils.js";
 
 export function deriveThinkingData(msgText, zhText, vis) {
   const mid = String((vis && (vis.mid || vis.msgId)) ? (vis.mid || vis.msgId) : "");
@@ -13,6 +14,7 @@ export function deriveThinkingData(msgText, zhText, vis) {
   const hasZh = !!String(zhText || "").trim();
   const zhClean = hasZh ? cleanThinkingText(zhText) : "";
   const hasZhClean = !!String(zhClean || "").trim();
+  const err = String((vis && vis.translateError) ? vis.translateError : "").trim();
   const translateMode = String((vis && vis.translateMode) ? vis.translateMode : "").trim().toLowerCase();
   const inFlight = !!(vis && vis.inFlight);
 
@@ -20,13 +22,18 @@ export function deriveThinkingData(msgText, zhText, vis) {
   pills.push(`<span class="pill">思考</span>`);
 
   const stPills = [];
-  if (hasZhClean) stPills.push(`<span class="pill">ZH 已就绪</span>`);
-  else if (translateMode === "manual") stPills.push(`<span class="pill">${inFlight ? "ZH 翻译中…" : "ZH 待翻译（点击思考）"}</span>`);
-  else stPills.push(`<span class="pill">ZH 翻译中…</span>`);
+  let statusText = "";
+  let statusTitle = "";
+  if (hasZhClean) statusText = "ZH 已就绪";
+  else if (err) { statusText = "ZH 翻译失败（点重试）"; statusTitle = err; }
+  else if (translateMode === "manual") statusText = (inFlight ? "ZH 翻译中…" : "ZH 待翻译（点击思考）");
+  else statusText = "ZH 翻译中…";
+  const titleAttr = statusTitle ? ` title="${escapeHtml(statusTitle)}"` : "";
+  stPills.push(`<span class="pill"${titleAttr}>${statusText}</span>`);
 
   let trBtn = "";
   if (mid) {
-    const tLabel = hasZhClean ? "重译" : "翻译";
+    const tLabel = hasZhClean ? "重译" : (err ? "重试" : "翻译");
     const dis = inFlight ? " disabled" : "";
     trBtn = `<button type="button" class="pill pill-btn think-translate" data-think-act="retranslate" data-mid="${mid}" title="翻译/重新翻译这条思考"${dis}>${tLabel}</button>`;
   }

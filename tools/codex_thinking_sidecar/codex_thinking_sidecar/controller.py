@@ -182,7 +182,7 @@ class SidecarController:
 
         # Clear existing zh to make the UI show "ZH…" while re-translation is in-flight.
         try:
-            self._state.add({"op": "update", "id": m, "zh": ""})
+            self._state.add({"op": "update", "id": m, "zh": "", "translate_error": ""})
         except Exception:
             pass
 

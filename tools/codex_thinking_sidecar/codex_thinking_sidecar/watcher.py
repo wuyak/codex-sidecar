@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
-from .translator import Translator
+from .translator import NoneTranslator, Translator
 
 from .watch.rollout_paths import (
     _ROLLOUT_RE,
@@ -640,7 +640,7 @@ class RolloutWatcher:
                         pass
                 if is_thinking and text.strip():
                     # 翻译走后台支路：回放阶段可聚合，实时阶段按单条慢慢补齐。
-                    if self._translate_mode == "auto":
+                    if self._translate_mode == "auto" and not isinstance(self._translator, NoneTranslator):
                         thread_key = str(thread_id or "") or str(file_path)
                         self._translate.enqueue(mid=mid, text=text, thread_key=thread_key, batchable=is_replay)
         return ingested

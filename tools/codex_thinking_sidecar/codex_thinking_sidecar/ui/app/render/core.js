@@ -57,9 +57,11 @@ export function renderMessage(dom, state, msg, opts = {}) {
   // 翻译回填：优先原位更新（保留行内状态），失败则回退为整行 replace。
   if (canPatch) {
     const zhText = (typeof msg.zh === "string") ? msg.zh : "";
+    const translateError = (typeof msg.translate_error === "string") ? msg.translate_error : "";
     const vis = getThinkingVisibility(dom, state, mid, zhText);
     const isUpdate = String((msg && msg.op) ? msg.op : "").trim().toLowerCase() === "update";
-    const ok = tryPatchThinkingRow(dom, state, msg, row, { mid, t, zhText, isUpdate, ...vis });
+    try { row.dataset.translateError = translateError || ""; } catch (_) {}
+    const ok = tryPatchThinkingRow(dom, state, msg, row, { mid, t, zhText, translateError, isUpdate, ...vis });
     if (ok) {
       // Translation backfill updates can be bursty; decorate lazily to avoid blocking UI.
       if (isUpdate || opt.deferDecorate) queueDecorateRow(row);
@@ -108,14 +110,16 @@ export function renderMessage(dom, state, msg, opts = {}) {
     }
   } else if (isThinking) {
     const zhText = (typeof msg.zh === "string") ? msg.zh : "";
+    const translateError = (typeof msg.translate_error === "string") ? msg.translate_error : "";
     const vis = getThinkingVisibility(dom, state, mid, zhText);
-    const r = renderThinkingBlock(state, msg, { mid, zhText, ...vis });
+    const r = renderThinkingBlock(state, msg, { mid, zhText, translateError, ...vis });
     metaLeftExtra = r.metaLeftExtra || "";
     metaRightExtra = r.metaRightExtra || "";
     body = r.body || "";
     if (r.rowModeClass) {
       try { row.className = `${row.className} ${r.rowModeClass}`.trim(); } catch (_) {}
     }
+    try { row.dataset.translateError = translateError || ""; } catch (_) {}
   } else {
     body = `<pre>${escapeHtml(msg.text || "")}</pre>`;
   }

@@ -88,6 +88,7 @@
 ## 翻译模式（auto/manual）
 - `auto`：自动翻译思考内容（`reasoning_summary` / 可选 `agent_reasoning`）。未译时默认显示英文原文；译文回填后默认切到中文；单击思考块可在 EN/ZH 间切换。
 - `manual`：不自动翻译；仅当你单击思考块或点击“翻译/重译”按钮时才会发起翻译请求。UI 侧会做 in-flight 防抖，避免重复触发导致多次请求。
+- 失败处理：翻译失败（超时/空译文等）不会把告警写进 `zh` 内容区；会以 `translate_error` 字段回填，UI 状态 pill 显示“失败/重试”，可点击按钮重新发起翻译。
 
 ## GPT（Responses API 兼容）配置（right.codes 中转站）
 当翻译 Provider 选择 `GPT（Responses API 兼容）`（`openai`）时，sidecar 会按 OpenAI Responses API 兼容格式发起翻译请求。

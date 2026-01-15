@@ -56,7 +56,8 @@ export function connectEventStream(dom, state, upsertThread, renderTabs, renderM
       try {
         if (op === "update" && msg && typeof msg.id === "string" && state && state.translateInFlight && typeof state.translateInFlight.delete === "function") {
           const hasZh = (typeof msg.zh === "string") && String(msg.zh || "").trim();
-          if (hasZh) state.translateInFlight.delete(msg.id);
+          const hasErr = (typeof msg.translate_error === "string") && String(msg.translate_error || "").trim();
+          if (hasZh || hasErr) state.translateInFlight.delete(msg.id);
         }
       } catch (_) {}
 

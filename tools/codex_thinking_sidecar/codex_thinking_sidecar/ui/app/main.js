@@ -5,6 +5,7 @@ import { bootstrap, refreshList } from "./list.js";
 import { renderEmpty, renderMessage } from "./render.js";
 import { createState } from "./state.js";
 import { renderTabs, upsertThread } from "./sidebar.js";
+import { escapeHtml } from "./utils.js";
 import { flashToastAt } from "./utils/toast.js";
 import { activateView, initViews } from "./views.js";
 
@@ -101,17 +102,21 @@ export async function initApp() {
     const metaRight = row.querySelector ? row.querySelector(".meta-right") : null;
     if (!metaRight) return;
     const hasZh = _hasZhReady(row);
+    const err = String((row.dataset && row.dataset.translateError) ? row.dataset.translateError : "").trim();
     const inFlight = !!(state.translateInFlight && typeof state.translateInFlight.has === "function" && state.translateInFlight.has(mid));
     const tmode = (String(state.translateMode || "").toLowerCase() === "manual") ? "manual" : "auto";
     const statusText = hasZh
       ? "ZH 已就绪"
-      : (tmode === "manual"
-        ? (inFlight ? "ZH 翻译中…" : "ZH 待翻译（点击思考）")
-        : "ZH 翻译中…");
-    const btnLabel = hasZh ? "重译" : "翻译";
+      : (err
+        ? "ZH 翻译失败（点重试）"
+        : (tmode === "manual"
+          ? (inFlight ? "ZH 翻译中…" : "ZH 待翻译（点击思考）")
+          : "ZH 翻译中…"));
+    const btnLabel = hasZh ? "重译" : (err ? "重试" : "翻译");
     const dis = inFlight ? " disabled" : "";
     try {
-      metaRight.innerHTML = `<span class="pill">${statusText}</span><button type="button" class="pill pill-btn think-translate" data-think-act="retranslate" data-mid="${mid}" title="翻译/重新翻译这条思考"${dis}>${btnLabel}</button>`;
+      const titleAttr = err ? ` title="${escapeHtml(err)}"` : "";
+      metaRight.innerHTML = `<span class="pill"${titleAttr}>${statusText}</span><button type="button" class="pill pill-btn think-translate" data-think-act="retranslate" data-mid="${mid}" title="翻译/重新翻译这条思考"${dis}>${btnLabel}</button>`;
     } catch (_) {}
   }
 
@@ -148,6 +153,7 @@ export async function initApp() {
           if (!state.translateInFlight || typeof state.translateInFlight.add !== "function") state.translateInFlight = new Set();
           state.translateInFlight.add(mid);
         } catch (_) {}
+        try { if (row && row.dataset) row.dataset.translateError = ""; } catch (_) {}
         _updateThinkingMetaRight(row, mid);
         flashToastAt(Number(e.clientX) || 0, Number(e.clientY) || 0, "正在翻译…", { isLight: true });
         try {
@@ -158,6 +164,7 @@ export async function initApp() {
           });
         } catch (_) {
           try { state.translateInFlight.delete(mid); } catch (_) {}
+          try { if (row && row.dataset) row.dataset.translateError = "翻译请求失败"; } catch (_) {}
           _updateThinkingMetaRight(row, mid);
           flashToastAt(Number(e.clientX) || 0, Number(e.clientY) || 0, "翻译请求失败", { isLight: true });
         }
@@ -179,7 +186,13 @@ export async function initApp() {
       if (!hasZh) {
         const tmode = (String(state.translateMode || "").toLowerCase() === "manual") ? "manual" : "auto";
         if (tmode !== "manual") {
-          flashToastAt(Number(e.clientX) || 0, Number(e.clientY) || 0, "等待翻译…", { isLight: true });
+          const err = String((row.dataset && row.dataset.translateError) ? row.dataset.translateError : "").trim();
+          flashToastAt(
+            Number(e.clientX) || 0,
+            Number(e.clientY) || 0,
+            err ? "翻译失败，点“翻译/重试”重发" : "等待翻译…",
+            { isLight: true },
+          );
           return;
         }
         try {
@@ -198,6 +211,7 @@ export async function initApp() {
           if (!state.translateInFlight || typeof state.translateInFlight.add !== "function") state.translateInFlight = new Set();
           state.translateInFlight.add(mid);
         } catch (_) {}
+        try { if (row && row.dataset) row.dataset.translateError = ""; } catch (_) {}
         _updateThinkingMetaRight(row, mid);
         flashToastAt(Number(e.clientX) || 0, Number(e.clientY) || 0, "正在翻译…", { isLight: true });
         try {
@@ -208,6 +222,7 @@ export async function initApp() {
           });
         } catch (_) {
           try { state.translateInFlight.delete(mid); } catch (_) {}
+          try { if (row && row.dataset) row.dataset.translateError = "翻译请求失败"; } catch (_) {}
           _updateThinkingMetaRight(row, mid);
           flashToastAt(Number(e.clientX) || 0, Number(e.clientY) || 0, "翻译请求失败", { isLight: true });
         }
