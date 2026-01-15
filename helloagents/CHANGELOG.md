@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+- UI: 拆分 `ui/app/markdown.js` / `ui/app/decorate.js`，引入子目录实现（保持纯静态，无构建）
 - 新增：SDK 控制模式（浏览器输入栏 → `/api/sdk/turn/run` → Codex SDK 执行一次 turn，并写回 `/events` 统一展示；`/api/sdk/status` 提供依赖/权限诊断与 CSRF token）。
 - 新增：UI 控制面（保存配置、开始/停止监听、清空显示）+ 短命令 `./ui.sh`。
 - 优化：`./ui.sh` 当端口已有健康服务时直接打开已有 UI 并退出，避免端口占用反复报错。

@@ -52,12 +52,13 @@ cd ~/src/codex-thinking-sidecar-zh
 - 首次使用需在 `src/codex-sdk` 安装依赖：`npm install`
 
 ## 目录结构（概览）
-- 后端（Python）：`tools/codex_thinking_sidecar/codex_thinking_sidecar/`
-  - `cli.py`：CLI 入口（`--ui`/自动监听/推送到已有 server）
-  - `server.py`：HTTP API + SSE `/events`（内存态、`seq`、`op=update`）
-  - `watcher.py`：rollout 跟随/解析/入库；翻译后台队列与批量策略
-  - `controller.py` / `config.py`：配置落盘与运行态控制
-  - `translators/*`：翻译实现
-- 前端（静态 ES Modules）：`tools/codex_thinking_sidecar/codex_thinking_sidecar/ui/`
-  - `index.html` + `app.js`（入口）
-  - `ui/app/`（模块化 UI：`control/*`、`format/*`、`events.js`、`render.js` 等）
+
+- `tools/codex_thinking_sidecar/codex_thinking_sidecar/`
+  - `watcher.py`: 跟随 rollout 读取→`/ingest`；翻译后台队列（批量仅用于回放导入）
+  - `server.py`: HTTP+SSE；消息 `seq`；`op=add/update`
+  - `ui/`: 纯静态 UI（无构建）
+    - `ui/app/render.js`: 时间线渲染（按 `(timestamp, seq)` 插入 + `op=update` 原位回填）
+    - `ui/app/markdown.js`: Markdown 门面；实现位于 `ui/app/markdown/*`
+    - `ui/app/decorate.js`: 行装饰门面；实现位于 `ui/app/decorate/core.js`
+- `src/codex-sdk/`: SDK 控制模式（实验性）
+- `helloagents/`: 知识库（CHANGELOG / wiki / history）
