@@ -27,9 +27,10 @@
   - 扫描 `/proc/<pid>/fd`，优先锁定匹配到的 Codex 进程（及其子进程）正在写入的 `sessions/**/rollout-*.jsonl`
   - 并保留 sessions 扫描作为回退（用于进程已启动但文件尚未被发现的窗口期）
 - UI 顶栏：标题与运行状态
-- UI 右侧工具栏：⚙️ 配置、▶️ 开始监听、⏹️ 停止监听、🔄 重启 Sidecar、🧹 清空显示、⏻ 退出 Sidecar
+- UI 右侧工具栏：⚙️ 配置、⚡ 快速浏览（仅输入/输出/思考）、▶️ 开始监听、⏹️ 停止监听、🔄 重启 Sidecar、🧹 清空显示、⏻ 退出 Sidecar
 - UI 配置抽屉：保存配置、恢复配置
 - UI 会话切换：会话列表固定在左侧 sidebar（默认自动隐藏，鼠标移到最左侧热区浮现），支持会话自定义标签（右键/双击会话项设置）
+- 侧栏会话管理（安全优先）：⤓ 导出当前会话为 Markdown、🙈 隐藏当前会话（仅本机 localStorage）、👁 临时显示隐藏会话
 - 侧栏性能：会话列表渲染做了降频与增量更新（复用 tab 节点），降低高频 SSE 下的重排/重绘
 - UI 事件流分层：`ui/app/events/*`（timeline/buffer/stream）拆分，便于维护与进一步优化
 - 刷新期保护：刷新列表期间 SSE 会暂存到 `ssePending`；若积压过大则触发溢出兜底，刷新结束后自动回源同步一次
@@ -43,6 +44,7 @@
 - 多会话切换性能：消息列表按会话 key 做视图缓存；非当前会话的 SSE 仅对“已缓存视图”的会话进行缓冲，切回时回放到对应视图（溢出/切到 all 时自动回源刷新）；其中 `op=update`（译文回填）会按消息 id 覆盖合并，避免缓冲被大量回填顶爆
 - 断线恢复：浏览器 SSE 重连后会自动回源同步当前视图，并标记缓存视图在下次切换时回源刷新（避免长时间挂着漏消息）
 - 会话列表同步：断线恢复后会标记 `threadsDirty`，下一次列表回源时同步 `/api/threads`，避免侧栏漏会话/排序漂移
+- 多会话不串线：在 `all` 视图下，每条消息会显示所属会话标识（来源于 rollout 文件时间戳 + thread_id 片段），降低“多会话混在一起像错乱”的困惑
 - 翻译 Provider 可插拔并可在 UI 中切换：`stub/none/http/openai`
 - `--include-agent-reasoning` 说明：
   - 该类型通常是“流式推理文本”，同一段内容可能重复出现（模型/客户端实现差异）。
@@ -53,7 +55,14 @@
 - 翻译策略：仅对“思考内容”（`reasoning_summary` / 可选 `agent_reasoning`）进行翻译；工具输出与最终回答不翻译。
 - 展示顺序：列表按时间从上到下（新内容在底部）；工具输出默认折叠展示。
 - tool_call/tool_output 会做友好格式化（例如 `update_plan` 计划分行、`shell_command` 命令块展示）；原始参数/输出仍可展开查看，便于排障。
-- UI 辅助：右下角悬浮“↑ 顶部 / ↓ 底部”按钮，便于快速跳转。
+- 快速浏览：开启 ⚡ 后仅显示 输入/输出/思考 三类块，其余类型隐藏（不影响摄取与时间线）。
+- Tool gate 提示来源：
+  - ✅ 优先：`codex-tui.log`（真实 “waiting for tool gate / released”）
+  - ⚠️ 辅助：tool_call 参数中出现权限升级字段时的“可能需要终端确认”提示（不等同于 tool gate 状态，是否需要批准以终端为准）
+  - `justification` 字段来源：来自 tool_call 的参数（由 Codex 生成，用于解释“为什么要执行该命令/操作”）
+- UI 辅助：
+  - 右下角悬浮“↑ 顶部 / ↓ 底部”按钮，便于快速跳转
+  - 右下角通知：tool gate / 新输出等关键状态弹出提醒（含“可能是历史残留”的提示）
 
 ## 关于“在页面内输入并让 Codex 执行”
 本 sidecar 的核心原则是**不修改 Codex、只读监听**（旁路查看/调试）。因此：
@@ -89,6 +98,12 @@
 - `auto`：自动翻译思考内容（`reasoning_summary` / 可选 `agent_reasoning`）。未译时默认显示英文原文；译文回填后默认切到中文；单击思考块可在 EN/ZH 间切换。
 - `manual`：不自动翻译；仅当你单击思考块或点击“翻译/重译”按钮时才会发起翻译请求。UI 侧会做 in-flight 防抖，避免重复触发导致多次请求。
 - 失败处理：翻译失败（超时/空译文等）不会把告警写进 `zh` 内容区；会以 `translate_error` 字段回填，UI 状态 pill 显示“失败/重试”，可点击按钮重新发起翻译。
+
+常见失败原因与建议：
+- timeout 太小：会导致大量 `translate_error=timeout` 并让 UI 长时间显示“ZH 翻译中…”。建议：
+  - `HTTP`：`3s~8s` 起步（取决于上游接口）
+  - `openai`：`8s~20s` 起步（取决于模型/网关）
+- 批量翻译解包缺失：通常来自上游把 marker 行改写/翻译。`openai` Provider 已对 marker prompt 做“原样发送”以降低该风险；如仍出现，可先调大 timeout 或改用更稳定的上游翻译接口。
 
 ## GPT（Responses API 兼容）配置（right.codes 中转站）
 当翻译 Provider 选择 `GPT（Responses API 兼容）`（`openai`）时，sidecar 会按 OpenAI Responses API 兼容格式发起翻译请求。
