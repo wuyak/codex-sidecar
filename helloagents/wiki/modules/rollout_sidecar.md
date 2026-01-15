@@ -37,6 +37,7 @@
 - UI 工具函数分层：`utils/*`（time/id/color/json/clipboard/error），`utils.js` 作为 facade
 - UI 格式化分层：`format/wrap/*`（command/lines/tree/rg/output），`format/wrap.js` 作为 facade
 - UI 列表分层：`list/*`（threads/refresh/bootstrap），`list.js` 作为 facade
+- UI 工具渲染分层：`render/tool/*`（call/output），`render/tool.js` 作为 facade
 - 长列表刷新：对较早消息行延后装饰（idle 分片 `decorateRow`），避免一次性加载/切换时卡顿
 - 多会话切换性能：消息列表按会话 key 做视图缓存；非当前会话的 SSE 仅对“已缓存视图”的会话进行缓冲，切回时回放到对应视图（溢出/切到 all 时自动回源刷新）；其中 `op=update`（译文回填）会按消息 id 覆盖合并，避免缓冲被大量回填顶爆
 - 断线恢复：浏览器 SSE 重连后会自动回源同步当前视图，并标记缓存视图在下次切换时回源刷新（避免长时间挂着漏消息）
