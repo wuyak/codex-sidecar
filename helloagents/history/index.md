@@ -31,3 +31,4 @@
 - 202601151530_ui_decorate_split_tool_toggle
 - 202601151543_ui_sidebar_modules
 - 202601151546_ui_utils_modules
+- 202601151550_ui_format_wrap_modules
