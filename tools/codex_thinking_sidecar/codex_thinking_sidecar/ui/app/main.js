@@ -7,9 +7,9 @@ import { renderEmpty, renderMessage } from "./render.js";
 import { createState } from "./state.js";
 import { renderTabs, upsertThread } from "./sidebar.js";
 import { loadHiddenThreads, loadShowHiddenFlag, saveHiddenThreads, saveShowHiddenFlag } from "./sidebar/hidden.js";
-import { escapeHtml } from "./utils.js";
 import { flashToastAt } from "./utils/toast.js";
 import { stabilizeClickWithin } from "./utils/anchor.js";
+import { buildThinkingMetaRight } from "./thinking/meta.js";
 import { initViewMode } from "./view_mode.js";
 import { activateView, initViews } from "./views.js";
 
@@ -136,23 +136,8 @@ export async function initApp() {
     const inFlight = !!(state.translateInFlight && typeof state.translateInFlight.has === "function" && state.translateInFlight.has(mid));
     const tmode = (String(state.translateMode || "").toLowerCase() === "manual") ? "manual" : "auto";
     const provider = String(state.translatorProvider || "").trim().toLowerCase();
-    const statusText = hasZh
-      ? "ZH 已就绪"
-      : (err
-        ? "ZH 翻译失败（点重试）"
-        : (provider === "none"
-          ? "未启用翻译"
-          : (tmode === "manual"
-          ? (inFlight ? "ZH 翻译中…" : "ZH 待翻译（点击思考）")
-          : "ZH 翻译中…")));
-    const btnLabel = hasZh ? "重译" : (err ? "重试" : "翻译");
-    const dis = inFlight ? " disabled" : "";
     try {
-      const titleAttr = err ? ` title="${escapeHtml(err)}"` : "";
-      const btnHtml = (provider === "none")
-        ? ""
-        : `<button type="button" class="pill pill-btn think-translate" data-think-act="retranslate" data-mid="${mid}" title="翻译/重新翻译这条思考"${dis}>${btnLabel}</button>`;
-      metaRight.innerHTML = `<span class="pill"${titleAttr}>${statusText}</span>${btnHtml}`;
+      metaRight.innerHTML = buildThinkingMetaRight({ mid, provider, hasZh, err, translateMode: tmode, inFlight });
     } catch (_) {}
   }
 
