@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import Iterable, List, Set
+from typing import Iterable, List, Optional, Set
 
 _PROC_ROOT = Path("/proc")
 

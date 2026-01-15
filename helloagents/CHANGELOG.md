@@ -126,5 +126,6 @@
 - 修复：OpenAI/Responses 翻译器在批量翻译（`<<<SIDECAR_TRANSLATE_BATCH_V1>>>`）场景下不再额外包裹“只输出译文”的通用翻译 prompt，避免标记行被翻译/改动导致批量解包失败与性能退化。
 - 新增：监听 `codex-tui.log` 的 tool gate 状态（`waiting for tool gate` / `tool gate released`），在 UI 中提示“终端等待确认/已确认”，避免需要授权时 UI 看起来卡住。
 - 修复：tool gate 长时间等待时不再反复推送“waiting”消息刷屏（仅在状态变化时发一条），避免会话计数膨胀与列表被挤满。
+- 修复：`watch/procfs.py` 缺少 `Optional` 导入导致 sidecar 无法启动（`NameError: Optional is not defined`）。
 - 新增：多会话场景下支持“锁定跟随”——点击侧边栏会话会将 watcher 固定到该 thread/file（不再按最新文件跳转），避免同时开多个 Codex 会话时 UI 看起来“不是最新”。
 - 修复：Markdown 渲染对终端换行更友好（中文不再出现“会 话”这类断词空格），并将 `────` 分隔行独立成块，避免与下一行合并导致结构错乱。
