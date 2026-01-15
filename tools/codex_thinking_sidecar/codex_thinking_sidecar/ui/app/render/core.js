@@ -1,4 +1,5 @@
 import { decorateRow } from "../decorate.js";
+import { queueDecorateRow } from "../decorate/queue.js";
 import { splitLeadingCodeBlock } from "../markdown.js";
 import { isCodexEditSummary, renderCodexEditSummary } from "../format.js";
 import { renderMarkdownCached } from "./md_cache.js";
@@ -59,7 +60,8 @@ export function renderMessage(dom, state, msg, opts = {}) {
     const vis = getThinkingVisibility(dom);
     const ok = tryPatchThinkingRow(dom, state, msg, row, { mid, t, zhText, ...vis });
     if (ok) {
-      decorateRow(row);
+      if (opt.deferDecorate) queueDecorateRow(row);
+      else decorateRow(row);
       if (autoscroll) window.scrollTo(0, document.body.scrollHeight);
       return;
     }
@@ -125,7 +127,8 @@ export function renderMessage(dom, state, msg, opts = {}) {
     </div>
     ${body}
   `;
-  decorateRow(row);
+  if (opt.deferDecorate) queueDecorateRow(row);
+  else decorateRow(row);
   if (mid) {
     row.dataset.msgId = mid;
     try { row.id = `msg_${safeDomId(mid)}`; } catch (_) {}

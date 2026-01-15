@@ -80,8 +80,11 @@ export async function refreshList(dom, state, renderTabs, renderMessage, renderE
     if (filtered.length === 0) renderEmpty(dom);
     else {
       const frag = document.createDocumentFragment();
-      for (const m of filtered) {
-        renderMessage(dom, state, m, { list: frag, autoscroll: false });
+      const tailImmediate = 80;
+      for (let i = 0; i < filtered.length; i++) {
+        const m = filtered[i];
+        const deferDecorate = (filtered.length - i) > tailImmediate;
+        renderMessage(dom, state, m, { list: frag, autoscroll: false, deferDecorate });
         const ms = tsToMs(m && m.ts);
         if (Number.isFinite(ms)) state.lastRenderedMs = ms;
         const mid = (m && typeof m.id === "string") ? m.id : "";

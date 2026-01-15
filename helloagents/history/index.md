@@ -21,3 +21,4 @@
 - 202601151228_ui_render_markdown_refactor
 - 202601151230_ui_view_cache_sse_buffer
 - 202601151301_ui_sidebar_incremental_tabs
+- 202601151307_ui_lazy_decorate
