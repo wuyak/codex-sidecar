@@ -3,6 +3,7 @@ import { escapeHtml } from "../../utils.js";
 
 export function deriveThinkingData(msgText, zhText, vis) {
   const mid = String((vis && (vis.mid || vis.msgId)) ? (vis.mid || vis.msgId) : "");
+  const provider = String((vis && vis.translatorProvider) ? vis.translatorProvider : "").trim().toLowerCase();
 
   const mode0 = String((vis && vis.mode) ? vis.mode : "").trim().toLowerCase();
   const mode = (mode0 === "en" || mode0 === "zh") ? mode0 : "en";
@@ -24,7 +25,8 @@ export function deriveThinkingData(msgText, zhText, vis) {
   const stPills = [];
   let statusText = "";
   let statusTitle = "";
-  if (hasZhClean) statusText = "ZH 已就绪";
+  if (provider === "none") statusText = "未启用翻译";
+  else if (hasZhClean) statusText = "ZH 已就绪";
   else if (err) { statusText = "ZH 翻译失败（点重试）"; statusTitle = err; }
   else if (translateMode === "manual") statusText = (inFlight ? "ZH 翻译中…" : "ZH 待翻译（点击思考）");
   else statusText = "ZH 翻译中…";
@@ -32,7 +34,7 @@ export function deriveThinkingData(msgText, zhText, vis) {
   stPills.push(`<span class="pill"${titleAttr}>${statusText}</span>`);
 
   let trBtn = "";
-  if (mid) {
+  if (mid && provider !== "none") {
     const tLabel = hasZhClean ? "重译" : (err ? "重试" : "翻译");
     const dis = inFlight ? " disabled" : "";
     trBtn = `<button type="button" class="pill pill-btn think-translate" data-think-act="retranslate" data-mid="${mid}" title="翻译/重新翻译这条思考"${dis}>${tLabel}</button>`;

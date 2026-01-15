@@ -108,18 +108,24 @@ export async function initApp() {
     const err = String((row.dataset && row.dataset.translateError) ? row.dataset.translateError : "").trim();
     const inFlight = !!(state.translateInFlight && typeof state.translateInFlight.has === "function" && state.translateInFlight.has(mid));
     const tmode = (String(state.translateMode || "").toLowerCase() === "manual") ? "manual" : "auto";
+    const provider = String(state.translatorProvider || "").trim().toLowerCase();
     const statusText = hasZh
       ? "ZH 已就绪"
       : (err
         ? "ZH 翻译失败（点重试）"
-        : (tmode === "manual"
+        : (provider === "none"
+          ? "未启用翻译"
+          : (tmode === "manual"
           ? (inFlight ? "ZH 翻译中…" : "ZH 待翻译（点击思考）")
-          : "ZH 翻译中…"));
+          : "ZH 翻译中…")));
     const btnLabel = hasZh ? "重译" : (err ? "重试" : "翻译");
     const dis = inFlight ? " disabled" : "";
     try {
       const titleAttr = err ? ` title="${escapeHtml(err)}"` : "";
-      metaRight.innerHTML = `<span class="pill"${titleAttr}>${statusText}</span><button type="button" class="pill pill-btn think-translate" data-think-act="retranslate" data-mid="${mid}" title="翻译/重新翻译这条思考"${dis}>${btnLabel}</button>`;
+      const btnHtml = (provider === "none")
+        ? ""
+        : `<button type="button" class="pill pill-btn think-translate" data-think-act="retranslate" data-mid="${mid}" title="翻译/重新翻译这条思考"${dis}>${btnLabel}</button>`;
+      metaRight.innerHTML = `<span class="pill"${titleAttr}>${statusText}</span>${btnHtml}`;
     } catch (_) {}
   }
 

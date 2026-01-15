@@ -1,5 +1,6 @@
 import hashlib
 import json
+import re
 import threading
 import sys
 import time
@@ -24,6 +25,15 @@ from .watch.tui_gate import TuiGateTailer
 
 def _sha1_hex(s: str) -> str:
     return hashlib.sha1(s.encode("utf-8", errors="replace")).hexdigest()
+
+_TOKEN_RE = re.compile(r"\b(sk-[A-Za-z0-9]{8,})\b")
+_BEARER_RE = re.compile(r"\b(bearer)\s+[A-Za-z0-9._-]{12,}\b", re.IGNORECASE)
+
+def _redact_secrets(s: str) -> str:
+    out = str(s or "")
+    out = _TOKEN_RE.sub("sk-***", out)
+    out = _BEARER_RE.sub(r"\1 ***", out)
+    return out
 
 def _tool_call_needs_approval(text: str) -> bool:
     """
@@ -70,11 +80,11 @@ def _format_approval_hint(tool_call_text: str) -> str:
     head = "⏸️ 终端等待确认（需要批准）"
     parts = [head, "", f"- 工具：`{title}`"]
     if just:
-        parts.append(f"- 原因（justification）：{just}")
+        parts.append(f"- 原因（justification）：{_redact_secrets(just)}")
     if cmd.strip():
         parts.append("")
         parts.append("```")
-        parts.append(cmd.strip())
+        parts.append(_redact_secrets(cmd.strip()))
         parts.append("```")
     parts.append("")
     parts.append("请回到终端完成确认/授权后，工具输出才会继续出现。")
