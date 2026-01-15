@@ -20,6 +20,7 @@
 - 轮询 + 增量读取（按 offset tail），支持启动时回放尾部 N 行
 - 代码分层：`watcher.py` 聚焦主流程；`watch/*` 承载“跟随策略/进程扫描/翻译批处理与队列”等可复用组件
   - 其中 `watch/rollout_extract.py` 负责“单条 JSONL 记录 → UI 事件块”提取（assistant/user/tool/reasoning）
+- 服务端分层：`server.py` 仅负责启动/绑定；HTTP 路由、SSE 与静态资源拆分到 `http/*`
 - 可选：WSL2/Linux 下支持“进程优先定位”当前会话文件
   - 扫描 `/proc/<pid>/fd`，优先锁定匹配到的 Codex 进程（及其子进程）正在写入的 `sessions/**/rollout-*.jsonl`
   - 并保留 sessions 扫描作为回退（用于进程已启动但文件尚未被发现的窗口期）

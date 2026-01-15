@@ -59,7 +59,8 @@ cd ~/src/codex-thinking-sidecar-zh
   - `watcher.py`: 跟随 rollout 读取→`/ingest`；TUI tool gate 提示；翻译通过 `watch/` 子模块异步回填
   - `watch/`: watcher 侧子模块（rollout 路径/进程扫描/跟随策略/翻译批处理与队列）
     - `watch/rollout_extract.py`: rollout JSONL 单条记录 → UI 事件提取（assistant/user/tool/reasoning）
-  - `server.py`: HTTP+SSE；消息 `seq`；`op=add/update`
+  - `server.py`: HTTP+SSE 启动器（绑定 state/controller，启动 ThreadingHTTPServer）
+  - `http/`: 服务端子模块（内存 state / HTTP 路由与 SSE / UI 静态资源）
     - `ui/`: 纯静态 UI（无构建）
     - `ui/app/render.js`: 消息渲染门面（实现：`ui/app/render/*`）
     - `ui/app/markdown.js`: Markdown 门面；实现位于 `ui/app/markdown/*`（含 inline/table 子模块）

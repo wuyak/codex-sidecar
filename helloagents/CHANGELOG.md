@@ -4,6 +4,7 @@
 - 移除：内置 SDK 控制模式（`src/codex-sdk`、`/api/sdk/*`、UI 底部 composer），聚焦旁路只读并降低代码复杂度。
 - 重构：拆分 `watcher.py`，抽离 `watch/*`（rollout 路径/进程扫描/跟随策略/翻译批处理与队列），提升可读性与可维护性。
 - 重构：进一步抽离 rollout JSONL 单条记录解析/提取到 `watch/rollout_extract.py`，Watcher 更聚焦“读行→入库→翻译入队”。
+- 重构：拆分 `server.py`，抽离 `http/*`（内存 state / HTTP 路由与 SSE / UI 静态资源），提升可读性与后续演进空间。
 - 重构：TUI tool gate tail/解析抽离到 `watch/tui_gate.py`；UI 在 SSE 断线重连后自动回源同步，提升长时间挂着稳定性。
 - UI：断线恢复/长时间挂着时回源同步会话列表（`/api/threads`），避免侧栏漏会话/排序漂移。
 - UI: 拆分 `ui/app/render.js`，引入子目录实现（保持纯静态，无构建）
