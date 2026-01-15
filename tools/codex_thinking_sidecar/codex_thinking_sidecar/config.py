@@ -51,6 +51,39 @@ class SidecarConfig:
 
     @staticmethod
     def from_dict(d: Dict[str, Any]) -> "SidecarConfig":
+        def _to_int(v: Any, default: int) -> int:
+            try:
+                if v is None:
+                    return int(default)
+                if isinstance(v, bool):
+                    return int(v)
+                if isinstance(v, (int, float)):
+                    return int(v)
+                s = str(v).strip()
+                if not s:
+                    return int(default)
+                try:
+                    return int(s)
+                except Exception:
+                    return int(float(s))
+            except Exception:
+                return int(default)
+
+        def _to_float(v: Any, default: float) -> float:
+            try:
+                if v is None:
+                    return float(default)
+                if isinstance(v, bool):
+                    return float(int(v))
+                if isinstance(v, (int, float)):
+                    return float(v)
+                s = str(v).strip()
+                if not s:
+                    return float(default)
+                return float(s)
+            except Exception:
+                return float(default)
+
         cfg_home = str(d.get("config_home") or "")
         watch_home = str(d.get("watch_codex_home") or _default_watch_codex_home())
         translator_config = d.get("translator_config")
@@ -67,12 +100,12 @@ class SidecarConfig:
         return SidecarConfig(
             config_home=cfg_home,
             watch_codex_home=watch_home,
-            replay_last_lines=int(d.get("replay_last_lines") or 0),
-            watch_max_sessions=int(d.get("watch_max_sessions") or d.get("max_sessions") or 3),
-            poll_interval=float(d.get("poll_interval") or 0.5),
-            file_scan_interval=float(d.get("file_scan_interval") or 2.0),
+            replay_last_lines=_to_int(d.get("replay_last_lines"), 0),
+            watch_max_sessions=_to_int(d.get("watch_max_sessions") or d.get("max_sessions"), 3),
+            poll_interval=_to_float(d.get("poll_interval"), 0.5),
+            file_scan_interval=_to_float(d.get("file_scan_interval"), 2.0),
             include_agent_reasoning=bool(d.get("include_agent_reasoning") or False),
-            max_messages=int(d.get("max_messages") or 1000),
+            max_messages=_to_int(d.get("max_messages"), 1000),
             auto_start=bool(d.get("auto_start") or False),
             follow_codex_process=bool(d.get("follow_codex_process") or False),
             codex_process_regex=str(d.get("codex_process_regex") or "codex"),
