@@ -125,6 +125,23 @@ export function drainBufferedForKey(dom, state, key, renderMessage, renderTabs) 
 export function connectEventStream(dom, state, upsertThread, renderTabs, renderMessage, setStatus, refreshList) {
   state.uiEventSource = new EventSource("/events");
 
+  let _tabsTimer = 0;
+  let _tabsDirty = false;
+  function _scheduleTabs(delayMs = 80) {
+    if (!state || typeof state !== "object") return;
+    _tabsDirty = true;
+    const delay = (state.isRefreshing && Number.isFinite(Number(delayMs)))
+      ? Math.max(Number(delayMs) || 0, 160)
+      : (Number(delayMs) || 0);
+    if (_tabsTimer) return;
+    _tabsTimer = setTimeout(() => {
+      _tabsTimer = 0;
+      if (!_tabsDirty) return;
+      _tabsDirty = false;
+      try { renderTabs(dom, state); } catch (_) {}
+    }, delay);
+  }
+
   function _scheduleFlush(delayMs = 0) {
     if (!state || typeof state !== "object") return;
     if (state.sseFlushTimer) return;
@@ -166,7 +183,7 @@ export function connectEventStream(dom, state, upsertThread, renderTabs, renderM
         if (_shouldBufferKey(state, k)) _bufferForKey(state, k, msg);
       }
       // 译文回填（op=update）不影响会话计数/排序，避免每条 update 都重绘侧栏。
-      if (op !== "update") renderTabs(dom, state);
+      if (op !== "update") _scheduleTabs(80);
     } catch (e) {}
   }
 
