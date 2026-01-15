@@ -24,3 +24,4 @@
 - 202601151307_ui_lazy_decorate
 - 202601151448_rollout_extract_threads_sync
 - 202601151455_ui_sse_update_coalesce
+- 202601151501_ui_events_modules

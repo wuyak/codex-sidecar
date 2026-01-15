@@ -64,5 +64,6 @@ cd ~/src/codex-thinking-sidecar-zh
     - `ui/app/render.js`: 消息渲染门面（实现：`ui/app/render/*`）
     - `ui/app/markdown.js`: Markdown 门面；实现位于 `ui/app/markdown/*`（含 inline/table 子模块）
     - `ui/app/decorate.js`: 行装饰门面；实现位于 `ui/app/decorate/core.js`
+    - `ui/app/events.js`: SSE/事件流门面；实现位于 `ui/app/events/*`（timeline/buffer/stream）
     - `ui/app/views.js`: 多会话 list 视图缓存（切换复用 DOM + 还原滚动）
 - `helloagents/`: 知识库（CHANGELOG / wiki / history）
