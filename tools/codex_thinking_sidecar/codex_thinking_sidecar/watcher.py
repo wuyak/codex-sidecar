@@ -46,10 +46,8 @@ def _tool_call_needs_approval(text: str) -> bool:
 def _format_approval_hint(tool_call_text: str) -> str:
     lines = [ln for ln in str(tool_call_text or "").splitlines() if ln is not None]
     title = (lines[0].strip() if lines else "") or "tool_call"
-    call_id = ""
     args_raw = ""
     if len(lines) >= 2 and lines[1].startswith("call_id="):
-        call_id = lines[1].split("=", 1)[1].strip()
         args_raw = "\n".join(lines[2:]).strip()
     else:
         args_raw = "\n".join(lines[1:]).strip()
@@ -71,10 +69,8 @@ def _format_approval_hint(tool_call_text: str) -> str:
 
     head = "⏸️ 终端等待确认（需要批准）"
     parts = [head, "", f"- 工具：`{title}`"]
-    if call_id:
-        parts.append(f"- call_id：`{call_id}`")
     if just:
-        parts.append(f"- 理由：{just}")
+        parts.append(f"- 原因（justification）：{just}")
     if cmd.strip():
         parts.append("")
         parts.append("```")

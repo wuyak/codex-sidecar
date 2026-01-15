@@ -145,3 +145,4 @@
 - 新增：对 `require_escalated` 等需要终端批准的工具调用，Watcher 会主动推送一条 `tool_gate` 提示到 UI（不依赖 codex-tui.log），降低“终端在等你确认但 UI 看起来没反应”的困惑。
 - 修复：翻译失败（超时/空译文）不再把告警文本写入 `zh`（避免 UI 误判“ZH 已就绪”并污染内容区）；改为回填 `translate_error`，UI 用状态 pill 展示失败并支持“重试”。
 - 修复：重新翻译会清空 `zh` 时，UI 不再被旧的“单条显示模式”覆盖导致英文被隐藏（无 `zh` 时强制显示 EN）。
+- 优化：工具“需要终端批准”提示（`tool_gate`）不再展示 `call_id`，并把“原因”明确标注为 `justification`（来自 tool_call 参数）。
