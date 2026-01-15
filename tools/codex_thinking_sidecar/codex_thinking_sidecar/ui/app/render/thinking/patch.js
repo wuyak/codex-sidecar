@@ -19,7 +19,7 @@ export function tryPatchThinkingRow(dom, state, msg, row, ctx) {
     // Sync mode class so per-row display toggles remain stable across updates.
     try {
       row.classList.remove("think-mode-en", "think-mode-zh", "think-mode-both");
-      row.classList.add(`think-mode-${d.mode || "both"}`);
+      row.classList.add(`think-mode-${d.mode || "en"}`);
     } catch (_) {}
 
     metaLeft.innerHTML = `
@@ -41,26 +41,8 @@ export function tryPatchThinkingRow(dom, state, msg, row, ctx) {
     const zhRendered = d.hasZhClean ? renderMarkdownCached(state, `md:${mid}:think_zh`, d.zhClean) : "";
     const zhEl = row.querySelector(".think-zh");
     if (!zhEl) throw new Error("missing zh container");
-    const split = (d.mode === "both" && String(d.enText || "").trim()) ? " think-split" : "";
-    zhEl.className = `think-zh md${split}`;
+    zhEl.className = `think-zh md`;
     zhEl.innerHTML = zhRendered || "";
-
-    let waitEl = row.querySelector(".think-wait");
-    if (!d.hasZhClean) {
-      if (!waitEl) {
-        waitEl = document.createElement("div");
-        waitEl.className = "think-wait meta";
-        waitEl.textContent = "（ZH 翻译中…）";
-        try {
-          const anchor = (zhEl.closest && zhEl.closest(".pre-wrap")) ? zhEl.closest(".pre-wrap") : zhEl;
-          anchor.parentNode && anchor.parentNode.insertBefore(waitEl, anchor.nextSibling);
-        } catch (_) {}
-      } else {
-        waitEl.textContent = "（ZH 翻译中…）";
-      }
-    } else if (waitEl && waitEl.parentNode) {
-      try { waitEl.parentNode.removeChild(waitEl); } catch (_) {}
-    }
 
     return true;
   } catch (_) {

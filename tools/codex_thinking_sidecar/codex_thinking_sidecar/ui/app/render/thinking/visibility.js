@@ -4,22 +4,37 @@ export function isThinkingKind(kind) {
 
 function _sanitizeMode(mode) {
   const m = String(mode || "").trim().toLowerCase();
-  return (m === "en" || m === "zh" || m === "both") ? m : "both";
+  return (m === "en" || m === "zh") ? m : "";
 }
 
-export function getThinkingVisibility(dom, state, mid) {
-  const global = (dom && dom.displayMode && dom.displayMode.value) ? dom.displayMode.value : "both";
-  let mode = _sanitizeMode(global);
+export function getThinkingVisibility(dom, state, mid, zhText) {
+  const hasZh = !!String(zhText || "").trim();
+  let mode = hasZh ? "zh" : "en";
   try {
     const k = String(mid || "").trim();
     if (k && state && state.thinkModeById && typeof state.thinkModeById.get === "function") {
       const v = state.thinkModeById.get(k);
-      if (v) mode = _sanitizeMode(v);
+      const vv = _sanitizeMode(v);
+      if (vv) mode = vv;
     }
   } catch (_) {}
+  let translateMode = "auto";
+  try {
+    const v = String((state && state.translateMode) ? state.translateMode : "").trim().toLowerCase();
+    if (v === "manual") translateMode = "manual";
+  } catch (_) {}
+  let inFlight = false;
+  try {
+    const k = String(mid || "").trim();
+    inFlight = !!(k && state && state.translateInFlight && typeof state.translateInFlight.has === "function" && state.translateInFlight.has(k));
+  } catch (_) {
+    inFlight = false;
+  }
   return {
     mode,
     showEn: mode !== "zh",
     showZh: mode !== "en",
+    translateMode,
+    inFlight,
   };
 }

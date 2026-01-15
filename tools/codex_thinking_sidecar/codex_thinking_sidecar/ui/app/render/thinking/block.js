@@ -16,11 +16,9 @@ export function renderThinkingBlock(state, msg, ctx) {
 
   const parts = [`<div class="think">`];
   if (d.enText) parts.push(`<div class="think-en md">${enRendered || ""}</div>`);
-  const zhCls = `think-zh md${(d.mode === "both" && d.enText) ? " think-split" : ""}`;
-  parts.push(`<div class="${zhCls}">${zhRendered || ""}</div>`);
-  if (!d.hasZhClean) parts.push(`<div class="think-wait meta">（ZH 翻译中…）</div>`);
+  parts.push(`<div class="think-zh md">${zhRendered || ""}</div>`);
   parts.push(`</div>`);
   const body = parts.join("");
 
-  return { metaLeftExtra, metaRightExtra, body, rowModeClass: `think-mode-${d.mode || "both"}` };
+  return { metaLeftExtra, metaRightExtra, body, rowModeClass: `think-mode-${d.mode || "en"}` };
 }

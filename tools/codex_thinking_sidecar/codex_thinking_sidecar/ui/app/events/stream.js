@@ -52,6 +52,13 @@ export function connectEventStream(dom, state, upsertThread, renderTabs, renderM
   function _handleMsg(msg) {
     try {
       const op = String((msg && msg.op) ? msg.op : "").trim().toLowerCase();
+      // Clear manual translate in-flight state as soon as ZH arrives, so render can flip status immediately.
+      try {
+        if (op === "update" && msg && typeof msg.id === "string" && state && state.translateInFlight && typeof state.translateInFlight.delete === "function") {
+          const hasZh = (typeof msg.zh === "string") && String(msg.zh || "").trim();
+          if (hasZh) state.translateInFlight.delete(msg.id);
+        }
+      } catch (_) {}
 
       // Updates should not bump thread counts.
       if (op !== "update") upsertThread(state, msg);

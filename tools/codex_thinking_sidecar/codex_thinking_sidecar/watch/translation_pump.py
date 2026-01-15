@@ -44,6 +44,8 @@ class TranslationPump:
         self._seen: Set[str] = set()
         self._seen_order: Deque[str] = deque()
         self._seen_max = max(1000, int(max_seen_ids or 6000))
+        # In-flight guard: prevent repeated manual "force" triggers from spamming requests.
+        self._inflight: Set[str] = set()
 
         # Observability (best-effort; approximate counters are fine for a sidecar).
         self._drop_old_hi = 0
@@ -75,9 +77,15 @@ class TranslationPump:
         if not m or not t.strip():
             return
 
-        # Dedupe (bounded). "force" bypasses the early return so UI can re-translate a row.
-        if not force and m in self._seen:
-            return
+        # Dedupe (bounded).
+        # - Normal auto-translate: skip if we've seen this message id before.
+        # - Force retranslate: allow bypassing seen, but still block if a translate for this id is already queued/running.
+        if force:
+            if m in self._inflight:
+                return
+        else:
+            if m in self._seen:
+                return
         if m not in self._seen:
             self._seen.add(m)
             self._seen_order.append(m)
@@ -93,24 +101,40 @@ class TranslationPump:
         }
 
         q = self._lo if batchable else self._hi
+        self._inflight.add(m)
         self._put_drop_oldest(q, item, is_hi=(not batchable))
 
     def _put_drop_oldest(self, q: "queue.Queue[Dict[str, Any]]", item: Dict[str, Any], *, is_hi: bool) -> None:
+        iid = ""
+        try:
+            iid = str(item.get("id") or "").strip()
+        except Exception:
+            iid = ""
         try:
             q.put_nowait(item)
             return
         except queue.Full:
             pass
         except Exception:
+            if iid:
+                self._inflight.discard(iid)
             return
         # Backpressure: drop one oldest item and retry once.
         try:
-            _ = q.get_nowait()
+            old = q.get_nowait()
+            try:
+                oid = str(old.get("id") or "").strip() if isinstance(old, dict) else ""
+            except Exception:
+                oid = ""
+            if oid:
+                self._inflight.discard(oid)
             if is_hi:
                 self._drop_old_hi += 1
             else:
                 self._drop_old_lo += 1
         except Exception:
+            if iid:
+                self._inflight.discard(iid)
             return
         try:
             q.put_nowait(item)
@@ -119,6 +143,8 @@ class TranslationPump:
                 self._drop_new_hi += 1
             else:
                 self._drop_new_lo += 1
+            if iid:
+                self._inflight.discard(iid)
             return
 
     def stats(self) -> Dict[str, Any]:
@@ -233,6 +259,10 @@ class TranslationPump:
                     self._last_translate_ms = (time.monotonic() - t0) * 1000.0
                     self._last_key = key
                     self._last_ts = time.time()
+                    try:
+                        self._inflight.discard(mid)
+                    except Exception:
+                        pass
                     continue
 
                 pairs: List[Tuple[str, str]] = []
@@ -264,10 +294,28 @@ class TranslationPump:
                     zh = self._normalize_translation(itxt, zh)
                     self._emit_zh(iid, itxt, zh)
                     self._done_items += 1
+                    try:
+                        self._inflight.discard(iid)
+                    except Exception:
+                        pass
                 self._done_batches += 1
                 self._last_batch_n = len(pairs)
                 self._last_translate_ms = (time.monotonic() - t0) * 1000.0
                 self._last_key = key
                 self._last_ts = time.time()
             except Exception:
+                # Best-effort cleanup: allow future retries even if a batch fails.
+                try:
+                    self._inflight.discard(mid)
+                except Exception:
+                    pass
+                try:
+                    for it in batch:
+                        if not isinstance(it, dict):
+                            continue
+                        iid = str(it.get("id") or "").strip()
+                        if iid:
+                            self._inflight.discard(iid)
+                except Exception:
+                    pass
                 continue

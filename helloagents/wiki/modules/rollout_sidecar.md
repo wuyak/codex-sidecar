@@ -85,8 +85,9 @@
 - 如遇到“Profiles 变空/配置丢失”，UI 会提示是否从备份恢复；也可手动点击“恢复配置”。
 - 兼容说明：旧版本写入在 `CODEX_HOME/tmp/` 下的 `.lastgood` / `.bak-*` 仍会被纳入恢复候选来源（只读，不再继续写入）。
 
-## UI 显示模式
-UI 支持三种显示模式：`中英文对照 / 仅中文 / 仅英文`（保存在浏览器 localStorage，不写入配置文件）。
+## 翻译模式（auto/manual）
+- `auto`：自动翻译思考内容（`reasoning_summary` / 可选 `agent_reasoning`）。未译时默认显示英文原文；译文回填后默认切到中文；单击思考块可在 EN/ZH 间切换。
+- `manual`：不自动翻译；仅当你单击思考块或点击“翻译/重译”按钮时才会发起翻译请求。UI 侧会做 in-flight 防抖，避免重复触发导致多次请求。
 
 ## GPT（Responses API 兼容）配置（right.codes 中转站）
 当翻译 Provider 选择 `GPT（Responses API 兼容）`（`openai`）时，sidecar 会按 OpenAI Responses API 兼容格式发起翻译请求。

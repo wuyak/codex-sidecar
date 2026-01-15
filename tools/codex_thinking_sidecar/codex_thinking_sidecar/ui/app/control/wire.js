@@ -26,11 +26,6 @@ export function wireControlEvents(dom, state, helpers) {
     } catch (_) {}
   });
 
-  if (dom.displayMode) dom.displayMode.addEventListener("change", async () => {
-    try { localStorage.setItem("codex_sidecar_display_mode", dom.displayMode.value || "both"); } catch (_) {}
-    await refreshList();
-  });
-
   if (dom.saveBtn) dom.saveBtn.addEventListener("click", async () => { await saveConfig(dom, state); });
   if (dom.recoverBtn) dom.recoverBtn.addEventListener("click", async () => { await recoverConfig(dom, state); });
   if (dom.startBtn) dom.startBtn.addEventListener("click", async () => { await startWatch(dom, state); });
@@ -102,4 +97,3 @@ export function wireControlEvents(dom, state, helpers) {
     }
   });
 }
-

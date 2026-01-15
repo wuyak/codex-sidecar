@@ -16,6 +16,12 @@ export function createState() {
     sseHadError: false,
     lastRenderedMs: NaN,
 
+    // 翻译模式（来自服务端 config）：auto | manual
+    translateMode: "auto",
+    translatorProvider: "stub",
+    // 手动翻译防抖：mid -> in-flight
+    translateInFlight: new Set(),
+
     // 多会话频繁切换：视图缓存（key -> DOM+索引），避免每次切换都全量 refreshList。
     listHost: null, // 原始 #list 容器（作为 view host）
     activeList: null, // 当前激活的 list-view 容器
@@ -39,7 +45,7 @@ export function createState() {
     // Markdown 渲染缓存（用于频繁切换/重绘加速）
     mdCache: new Map(), // key -> { text, html }
 
-    // 思考行局部显示模式（mid -> "en"|"zh"|"both"），用于单条切换而不影响全局 displayMode。
+    // 思考行局部显示模式（mid -> "en"|"zh"），用于单条切换（默认：未译=EN，已译=ZH）。
     thinkModeById: new Map(),
     thinkModeOrder: [], // LRU-ish for pruning
     thinkModeMax: 600,

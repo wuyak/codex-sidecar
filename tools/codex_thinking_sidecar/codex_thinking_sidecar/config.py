@@ -35,6 +35,11 @@ class SidecarConfig:
     # 默认开启以避免 Codex 未运行时误切到历史会话文件。
     only_follow_when_process: bool = True
 
+    # 翻译模式：
+    # - auto  : 自动翻译思考内容（reasoning_summary/agent_reasoning）
+    # - manual: 仅在 UI 触发（点击思考块 / 重译按钮）时翻译
+    translate_mode: str = "auto"
+
     translator_provider: str = "stub"  # stub | none | http | openai
     translator_config: Dict[str, Any] = None  # provider-specific
 
@@ -55,6 +60,10 @@ class SidecarConfig:
         only_follow_when_process = d.get("only_follow_when_process")
         if only_follow_when_process is None:
             only_follow_when_process = True
+
+        tm = str(d.get("translate_mode") or "auto").strip().lower()
+        if tm not in ("auto", "manual"):
+            tm = "auto"
         return SidecarConfig(
             config_home=cfg_home,
             watch_codex_home=watch_home,
@@ -68,6 +77,7 @@ class SidecarConfig:
             follow_codex_process=bool(d.get("follow_codex_process") or False),
             codex_process_regex=str(d.get("codex_process_regex") or "codex"),
             only_follow_when_process=bool(only_follow_when_process),
+            translate_mode=tm,
             translator_provider=str(d.get("translator_provider") or "stub"),
             translator_config=translator_config,
         )
@@ -252,6 +262,7 @@ def default_config(config_home: Path) -> SidecarConfig:
         follow_codex_process=False,
         codex_process_regex="codex",
         only_follow_when_process=True,
+        translate_mode="auto",
         translator_provider="stub",
         translator_config={},
     )

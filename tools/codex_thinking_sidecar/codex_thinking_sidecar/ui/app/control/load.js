@@ -61,13 +61,13 @@ export async function loadControl(dom, state) {
     if (dom.cfgHome) dom.cfgHome.value = cfg.config_home || "";
     if (dom.watchHome) dom.watchHome.value = cfg.watch_codex_home || "";
     if (dom.autoStart) dom.autoStart.value = cfg.auto_start ? "1" : "0";
+    if (dom.translateMode) dom.translateMode.value = (cfg.translate_mode === "manual") ? "manual" : "auto";
     if (dom.followProc) dom.followProc.value = cfg.follow_codex_process ? "1" : "0";
     if (dom.onlyWhenProc) dom.onlyWhenProc.value = (cfg.only_follow_when_process === false) ? "0" : "1";
     if (dom.procRegex) dom.procRegex.value = cfg.codex_process_regex || "codex";
     if (dom.replayLines) dom.replayLines.value = cfg.replay_last_lines ?? 0;
     if (dom.maxSessions) dom.maxSessions.value = cfg.watch_max_sessions ?? 3;
     if (dom.includeAgent) dom.includeAgent.value = cfg.include_agent_reasoning ? "1" : "0";
-    if (dom.displayMode) dom.displayMode.value = (localStorage.getItem("codex_sidecar_display_mode") || "both");
     if (dom.pollInterval) dom.pollInterval.value = cfg.poll_interval ?? 0.5;
     if (dom.scanInterval) dom.scanInterval.value = cfg.file_scan_interval ?? 2.0;
     if (dom.translatorSel) {
@@ -100,6 +100,12 @@ export async function loadControl(dom, state) {
   } catch (e) {
     debugLines.push(`[error] apply config: ${fmtErr(e)}`);
   }
+
+  // Keep a copy on state for render logic (no need to re-fetch cfg on every click).
+  try {
+    state.translateMode = (cfg.translate_mode === "manual") ? "manual" : "auto";
+    state.translatorProvider = String(cfg.translator_provider || "stub").trim().toLowerCase() || "stub";
+  } catch (_) {}
 
   // 3.1) 提示恢复：Profiles 为空但存在可恢复备份（仅提示一次）
   try {

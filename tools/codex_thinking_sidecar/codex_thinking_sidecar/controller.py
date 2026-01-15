@@ -209,6 +209,7 @@ class SidecarController:
                 translator=build_translator(cfg),
                 replay_last_lines=int(cfg.replay_last_lines),
                 watch_max_sessions=int(getattr(cfg, "watch_max_sessions", 3) or 3),
+                translate_mode=str(getattr(cfg, "translate_mode", "auto") or "auto"),
                 poll_interval_s=float(cfg.poll_interval),
                 file_scan_interval_s=float(cfg.file_scan_interval),
                 include_agent_reasoning=bool(cfg.include_agent_reasoning),

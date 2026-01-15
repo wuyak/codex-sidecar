@@ -25,6 +25,65 @@ from .watch.tui_gate import TuiGateTailer
 def _sha1_hex(s: str) -> str:
     return hashlib.sha1(s.encode("utf-8", errors="replace")).hexdigest()
 
+def _tool_call_needs_approval(text: str) -> bool:
+    """
+    Best-effort heuristic for Codex CLI approval prompts.
+
+    When approval_policy is on-request, tool calls may require the user to confirm
+    before executing (e.g. sandbox_permissions=require_escalated). Those prompts
+    are not always visible in rollout JSONL, so we emit a UI hint proactively.
+    """
+    s = str(text or "").lower()
+    if "require_escalated" in s:
+        if "sandbox_permissions" in s or "with_escalated_permissions" in s:
+            return True
+        # Some variants only keep the value; still treat as likely approval.
+        return True
+    if "with_escalated_permissions" in s and ("true" in s or ": true" in s):
+        return True
+    return False
+
+def _format_approval_hint(tool_call_text: str) -> str:
+    lines = [ln for ln in str(tool_call_text or "").splitlines() if ln is not None]
+    title = (lines[0].strip() if lines else "") or "tool_call"
+    call_id = ""
+    args_raw = ""
+    if len(lines) >= 2 and lines[1].startswith("call_id="):
+        call_id = lines[1].split("=", 1)[1].strip()
+        args_raw = "\n".join(lines[2:]).strip()
+    else:
+        args_raw = "\n".join(lines[1:]).strip()
+
+    cmd = ""
+    just = ""
+    try:
+        if args_raw.startswith("{") and args_raw.endswith("}"):
+            obj = json.loads(args_raw)
+            if isinstance(obj, dict):
+                c = obj.get("command")
+                if isinstance(c, str):
+                    cmd = c
+                j = obj.get("justification")
+                if isinstance(j, str):
+                    just = j.strip()
+    except Exception:
+        pass
+
+    head = "⏸️ 终端等待确认（需要批准）"
+    parts = [head, "", f"- 工具：`{title}`"]
+    if call_id:
+        parts.append(f"- call_id：`{call_id}`")
+    if just:
+        parts.append(f"- 理由：{just}")
+    if cmd.strip():
+        parts.append("")
+        parts.append("```")
+        parts.append(cmd.strip())
+        parts.append("```")
+    parts.append("")
+    parts.append("请回到终端完成确认/授权后，工具输出才会继续出现。")
+    return "\n".join(parts).strip()
+
 
 @dataclass
 class _FileCursor:
@@ -62,6 +121,7 @@ class RolloutWatcher:
         translator: Translator,
         replay_last_lines: int,
         watch_max_sessions: int,
+        translate_mode: str,
         poll_interval_s: float,
         file_scan_interval_s: float,
         include_agent_reasoning: bool,
@@ -74,6 +134,8 @@ class RolloutWatcher:
         self._translator = translator
         self._replay_last_lines = max(0, int(replay_last_lines))
         self._watch_max_sessions = max(1, int(watch_max_sessions or 3))
+        tm = str(translate_mode or "auto").strip().lower()
+        self._translate_mode = tm if tm in ("auto", "manual") else "auto"
         self._poll_interval_s = max(0.05, float(poll_interval_s))
         self._file_scan_interval_s = max(0.2, float(file_scan_interval_s))
         self._include_agent_reasoning = include_agent_reasoning
@@ -556,10 +618,31 @@ class RolloutWatcher:
             }
             if self._ingest.ingest(msg):
                 ingested += 1
+                # Proactively hint when a tool call likely requires terminal approval (Codex CLI on-request).
+                if kind == "tool_call" and _tool_call_needs_approval(text):
+                    try:
+                        hint = _format_approval_hint(text)
+                        hid2 = _sha1_hex(f"{file_path}:approval_gate:{ts}:{hint}")
+                        if not self._dedupe(hid2, kind="tool_gate"):
+                            self._ingest.ingest(
+                                {
+                                    "id": hid2[:16],
+                                    "ts": ts,
+                                    "kind": "tool_gate",
+                                    "text": hint,
+                                    "zh": "",
+                                    "thread_id": str(thread_id or ""),
+                                    "file": str(file_path),
+                                    "line": line_no,
+                                }
+                            )
+                    except Exception:
+                        pass
                 if is_thinking and text.strip():
                     # 翻译走后台支路：回放阶段可聚合，实时阶段按单条慢慢补齐。
-                    thread_key = str(thread_id or "") or str(file_path)
-                    self._translate.enqueue(mid=mid, text=text, thread_key=thread_key, batchable=is_replay)
+                    if self._translate_mode == "auto":
+                        thread_key = str(thread_id or "") or str(file_path)
+                        self._translate.enqueue(mid=mid, text=text, thread_key=thread_key, batchable=is_replay)
         return ingested
 
 
