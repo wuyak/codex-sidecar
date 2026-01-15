@@ -23,6 +23,7 @@
 - UI: 格式化分层：拆分 `format/wrap.js` → `format/wrap/*`（command/lines/tree/rg/output），保留 facade 导出不变。
 - UI: 列表分层：拆分 `list.js` → `list/*`（threads/refresh/bootstrap），保留 facade 导出不变。
 - UI: 工具渲染分层：拆分 `render/tool.js` → `render/tool/*`（call/output），保留 facade 导出不变。
+- UI: 思考渲染分层：拆分 `render/thinking.js` → `render/thinking/*`（visibility/derive/patch/block），并对 `op=update`（译文回填）优先走原位 patch 降低 DOM churn。
 - UI: 侧栏会话列表渲染降频：高频 SSE 下合并刷新，减少重排/重绘。
 - UI: 侧栏会话列表增量渲染：复用 tab 节点并仅重排/更新，进一步降低 DOM churn。
 - UI: 长列表懒渲染：刷新列表时对较早行延后装饰（idle 分片 `decorateRow`），降低一次性重绘卡顿。
@@ -109,7 +110,7 @@
 - 修复：`apply_patch` 的 tool_call 解析支持“payload 在 call_id 之前”的变体，确保 Add File/Update File 也能展开“详情”。
 - 修复：停止监听时若存在翻译请求在途，UI 会显示“停止中”并轮询直到真正停止；watcher 退出后的状态会被自动清理，避免按钮/状态卡住。
 - 优化：HTTPServer 启用端口复用（`allow_reuse_address=true`），提升重启 Sidecar 的成功率（避免 TIME_WAIT 导致 EADDRINUSE）。
-- 优化：消息列表按时间排序渲染；若 SSE 推送出现“时间倒退”的乱序消息，会自动触发全量刷新以保持时间线一致。
+- 修复：时间线“回跳”从兜底刷新改为排序不变式：UI 收到 SSE 后按 `(timestamp, seq)` 插入到正确位置；服务端为每条消息附加自增 `seq`，会话列表按 `last_seq` 排序，避免不同 timestamp 形态导致排序不稳定。
 - 修复：当 `update_plan` 的 tool_call 丢失时，其 `Plan updated` 的 tool_output 不再作为“未知工具”噪音显示。
 - 优化：翻译请求去重：Watcher 先做 dedupe 再发起翻译，避免重复消息也重复请求翻译 API。
 - 优化：OpenAI/Responses 翻译器增加 LRU 缓存（默认 64 条），减少同内容重复翻译请求。

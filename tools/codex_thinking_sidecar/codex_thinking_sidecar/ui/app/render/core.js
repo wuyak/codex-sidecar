@@ -58,9 +58,11 @@ export function renderMessage(dom, state, msg, opts = {}) {
   if (canPatch) {
     const zhText = (typeof msg.zh === "string") ? msg.zh : "";
     const vis = getThinkingVisibility(dom);
-    const ok = tryPatchThinkingRow(dom, state, msg, row, { mid, t, zhText, ...vis });
+    const isUpdate = String((msg && msg.op) ? msg.op : "").trim().toLowerCase() === "update";
+    const ok = tryPatchThinkingRow(dom, state, msg, row, { mid, t, zhText, isUpdate, ...vis });
     if (ok) {
-      if (opt.deferDecorate) queueDecorateRow(row);
+      // Translation backfill updates can be bursty; decorate lazily to avoid blocking UI.
+      if (isUpdate || opt.deferDecorate) queueDecorateRow(row);
       else decorateRow(row);
       if (autoscroll) window.scrollTo(0, document.body.scrollHeight);
       return;
