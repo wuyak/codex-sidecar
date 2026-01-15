@@ -18,4 +18,5 @@
 - 202601151050_ui_cache_patch_update
 - 202601151200_ui_sse_buffer_policy
 - 202601151215_ui_tabs_throttle
+- 202601151228_ui_render_markdown_refactor
 - 202601151230_ui_view_cache_sse_buffer

@@ -53,8 +53,8 @@ cd ~/src/codex-thinking-sidecar-zh
   - `watcher.py`: 跟随 rollout 读取→`/ingest`；翻译后台队列（批量仅用于回放导入）
   - `server.py`: HTTP+SSE；消息 `seq`；`op=add/update`
     - `ui/`: 纯静态 UI（无构建）
-    - `ui/app/render.js`: 时间线渲染门面（实现：`ui/app/render/core.js`）
-    - `ui/app/markdown.js`: Markdown 门面；实现位于 `ui/app/markdown/*`
+    - `ui/app/render.js`: 消息渲染门面（实现：`ui/app/render/*`）
+    - `ui/app/markdown.js`: Markdown 门面；实现位于 `ui/app/markdown/*`（含 inline/table 子模块）
     - `ui/app/decorate.js`: 行装饰门面；实现位于 `ui/app/decorate/core.js`
     - `ui/app/views.js`: 多会话 list 视图缓存（切换复用 DOM + 还原滚动）
 - `helloagents/`: 知识库（CHANGELOG / wiki / history）

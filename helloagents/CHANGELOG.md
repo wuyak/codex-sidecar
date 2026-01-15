@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 - UI: 拆分 `ui/app/render.js`，引入子目录实现（保持纯静态，无构建）
+- 重构：进一步拆分渲染/Markdown：`ui/app/render/*`（core/thinking/tool/md_cache）与 `ui/app/markdown/*`（inline/table）
 - UI: 优化列表刷新/切换性能：使用 `DocumentFragment`，刷新期间暂存 SSE 并在结束后回放；思考区增加“ZH 翻译中”占位提示（对照/英文模式可见）。
 - UI: 优化频繁切换时的重绘成本：Markdown 渲染按消息缓存；翻译回填尽量原位更新（不整行 replace）。
 - UI: 多会话消息列表引入“视图缓存 + 非当前会话 SSE 缓冲/切回回放”，切换更快；缓冲溢出或切到 `all` 时自动回源刷新。
