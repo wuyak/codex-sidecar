@@ -5,6 +5,9 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+_TS_HEAD_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}T\S+)\s+(.*)$")
+_WAIT_RE = re.compile(r"^INFO\s+waiting\s+for\s+tool\s+gate\s*$")
+_RELEASE_RE = re.compile(r"^INFO\s+tool\s+gate\s+released\s*$")
 
 
 class TuiGateTailer:
@@ -127,7 +130,7 @@ class TuiGateTailer:
                 last_toolcall = toolcall
                 continue
 
-            if "waiting for tool gate" in msg:
+            if ts and _WAIT_RE.match(msg):
                 last_wait = (ts, last_toolcall)
                 # codex-tui.log may emit repeated "waiting" lines while blocked.
                 # Only emit when the state changes (avoid spamming the UI).
@@ -145,7 +148,7 @@ class TuiGateTailer:
                         )
                 continue
 
-            if "tool gate released" in msg:
+            if ts and _RELEASE_RE.match(msg):
                 if gate_waiting and not synthetic_only:
                     self._emit_tool_gate(
                         ts,
@@ -186,14 +189,12 @@ class TuiGateTailer:
         s = (line or "").lstrip()
         if not s:
             return ("", "")
-        parts = s.split(" ", 1)
-        if len(parts) < 2:
+        m = _TS_HEAD_RE.match(s)
+        if not m:
             return ("", s)
-        ts = parts[0].strip()
-        rest = parts[1].strip()
-        if ts and ("T" in ts) and (ts[0:4].isdigit()):
-            return (ts, rest)
-        return ("", s)
+        ts = (m.group(1) or "").strip()
+        rest = (m.group(2) or "").strip()
+        return (ts, rest)
 
     @staticmethod
     def _parse_toolcall(msg: str) -> Optional[Dict[str, object]]:
