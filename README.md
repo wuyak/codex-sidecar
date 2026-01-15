@@ -69,5 +69,6 @@ cd ~/src/codex-thinking-sidecar-zh
     - `ui/app/decorate.js`: 行装饰门面；实现位于 `ui/app/decorate/core.js`
     - `ui/app/events.js`: SSE/事件流门面；实现位于 `ui/app/events/*`（timeline/buffer/stream）
     - `ui/app/sidebar.js`: 侧栏门面；实现位于 `ui/app/sidebar/*`（labels/tabs）
+    - `ui/app/utils.js`: 工具函数门面；实现位于 `ui/app/utils/*`（time/id/color/json/clipboard/error）
     - `ui/app/views.js`: 多会话 list 视图缓存（切换复用 DOM + 还原滚动）
 - `helloagents/`: 知识库（CHANGELOG / wiki / history）
