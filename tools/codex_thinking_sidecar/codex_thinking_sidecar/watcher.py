@@ -15,187 +15,37 @@ from typing import Any, Deque, Dict, Iterable, List, Optional, Pattern, Set, Tup
 
 from .translator import NoneTranslator, Translator
 
+from .watch.procfs import _proc_iter_fd_targets, _proc_list_pids, _proc_read_cmdline, _proc_read_ppid
+from .watch.rollout_paths import _ROLLOUT_RE, _find_rollout_file_for_thread, _latest_rollout_file, _parse_thread_id_from_filename
+from .watch.translate_batch import _pack_translate_batch, _unpack_translate_batch
+from .watch.translation_pump import TranslationPump
+from .watch.follow_picker import FollowPicker
 
-_ROLLOUT_RE = re.compile(
-    r"^rollout-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-([0-9a-fA-F-]{36})\.jsonl$"
-)
-_PROC_ROOT = Path("/proc")
+
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
-_TRANSLATE_BATCH_MAGIC = "<<<SIDECAR_TRANSLATE_BATCH_V1>>>"
-_TRANSLATE_BATCH_ITEM_RE = re.compile(r"^<<<SIDECAR_ITEM:([^>]+)>>>\\s*$")
-_TRANSLATE_BATCH_END = "<<<SIDECAR_END>>>"
 
 
-def _pack_translate_batch(items: List[Tuple[str, str]]) -> str:
-    """
-    Pack multiple items into a single translation request.
-
-    Format contract:
-    - Markers must remain verbatim (do NOT translate them).
-    - Translator should output the same markers and translated content between them.
-    """
-    lines = [
-        "请将下列内容翻译为中文。",
-        "要求：逐行原样保留所有形如 <<<SIDECAR_...>>> 的标记行（不要翻译、不要改动、不要增删）。",
-        "输出必须包含最后一行 <<<SIDECAR_END>>>。",
-        "",
-        _TRANSLATE_BATCH_MAGIC,
-    ]
-    for mid, text in items:
-        lines.append(f"<<<SIDECAR_ITEM:{mid}>>>")
-        lines.append(str(text or "").rstrip())
-    lines.append(_TRANSLATE_BATCH_END)
-    return "\n".join(lines).rstrip() + "\n"
 
 
-def _unpack_translate_batch(output: str, wanted_ids: Set[str]) -> Dict[str, str]:
-    """Extract per-item translations from a packed response."""
-    out: Dict[str, str] = {}
-    cur_id: Optional[str] = None
-    buf: List[str] = []
-
-    def _flush() -> None:
-        nonlocal cur_id, buf
-        if cur_id and cur_id in wanted_ids:
-            out[cur_id] = "\n".join(buf).strip()
-        cur_id = None
-        buf = []
-
-    for raw in str(output or "").splitlines():
-        line = raw.strip()
-        if not line:
-            if cur_id is not None:
-                buf.append("")
-            continue
-        if line == _TRANSLATE_BATCH_MAGIC:
-            continue
-        if line == _TRANSLATE_BATCH_END:
-            _flush()
-            break
-        m = _TRANSLATE_BATCH_ITEM_RE.match(line)
-        if m:
-            _flush()
-            cur_id = m.group(1).strip()
-            buf = []
-            continue
-        if cur_id is not None:
-            buf.append(raw)
-    _flush()
-    return out
 
 
-def _latest_rollout_file(codex_home: Path) -> Optional[Path]:
-    sessions = codex_home / "sessions"
-    if not sessions.exists():
-        return None
-    # Layout: sessions/YYYY/MM/DD/rollout-*.jsonl
-    globbed = list(sessions.glob("*/*/*/rollout-*.jsonl"))
-    if not globbed:
-        return None
-    globbed.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-    return globbed[0]
 
 
-def _parse_thread_id_from_filename(path: Path) -> Optional[str]:
-    m = _ROLLOUT_RE.match(path.name)
-    if not m:
-        return None
-    return m.group(1)
 
 
-def _find_rollout_file_for_thread(codex_home: Path, thread_id: str) -> Optional[Path]:
-    """
-    Locate rollout file by thread_id (uuid) inside CODEX_HOME/sessions.
-    """
-    tid = str(thread_id or "").strip()
-    if not tid:
-        return None
-    sessions = codex_home / "sessions"
-    if not sessions.exists():
-        return None
-    # Layout: sessions/YYYY/MM/DD/rollout-...-{thread_id}.jsonl
-    try:
-        hits = list(sessions.glob(f"*/*/*/rollout-*-{tid}.jsonl"))
-    except Exception:
-        hits = []
-    if not hits:
-        return None
-    try:
-        hits.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-    except Exception:
-        pass
-    return hits[0]
 
 
 def _sha1_hex(s: str) -> str:
     return hashlib.sha1(s.encode("utf-8", errors="replace")).hexdigest()
 
 
-def _proc_list_pids() -> List[int]:
-    try:
-        names = os.listdir(str(_PROC_ROOT))
-    except Exception:
-        return []
-    out: List[int] = []
-    for n in names:
-        if not n.isdigit():
-            continue
-        try:
-            out.append(int(n))
-        except Exception:
-            continue
-    return out
 
 
-def _proc_read_cmdline(pid: int, max_bytes: int = 64 * 1024) -> str:
-    try:
-        raw = (_PROC_ROOT / str(pid) / "cmdline").read_bytes()
-    except Exception:
-        return ""
-    if not raw:
-        return ""
-    if len(raw) > max_bytes:
-        raw = raw[:max_bytes]
-    parts = [p for p in raw.split(b"\x00") if p]
-    try:
-        return " ".join(p.decode("utf-8", errors="replace") for p in parts)
-    except Exception:
-        return ""
 
 
-def _proc_read_ppid(pid: int) -> Optional[int]:
-    try:
-        txt = (_PROC_ROOT / str(pid) / "status").read_text(encoding="utf-8", errors="replace")
-    except Exception:
-        return None
-    for line in txt.splitlines():
-        if line.startswith("PPid:"):
-            v = (line.split(":", 1)[1] or "").strip()
-            try:
-                return int(v)
-            except Exception:
-                return None
-    return None
 
 
-def _proc_iter_fd_targets(pid: int) -> Iterable[str]:
-    fd_dir = _PROC_ROOT / str(pid) / "fd"
-    try:
-        entries = os.listdir(str(fd_dir))
-    except Exception:
-        return []
-    out: List[str] = []
-    for ent in entries:
-        p = fd_dir / ent
-        try:
-            target = os.readlink(str(p))
-        except Exception:
-            continue
-        if target.endswith(" (deleted)"):
-            target = target[: -len(" (deleted)")]
-        out.append(target)
-    return out
 
 
 @dataclass
@@ -236,14 +86,12 @@ class RolloutWatcher:
         self._poll_interval_s = max(0.05, float(poll_interval_s))
         self._file_scan_interval_s = max(0.2, float(file_scan_interval_s))
         self._include_agent_reasoning = include_agent_reasoning
-        self._follow_codex_process = bool(follow_codex_process)
-        self._only_follow_when_process = bool(only_follow_when_process)
-        self._codex_process_regex_raw = str(codex_process_regex or "codex")
-        self._codex_process_re: Optional[Pattern[str]] = None
-        try:
-            self._codex_process_re = re.compile(self._codex_process_regex_raw, flags=re.IGNORECASE)
-        except Exception:
-            self._codex_process_re = None
+        self._follow_picker = FollowPicker(
+            codex_home=self._codex_home,
+            follow_codex_process=bool(follow_codex_process),
+            codex_process_regex=str(codex_process_regex or "codex"),
+            only_follow_when_process=bool(only_follow_when_process),
+        )
 
         self._current_file: Optional[Path] = None
         self._offset: int = 0
@@ -281,10 +129,11 @@ class RolloutWatcher:
 
         # Translation is decoupled from ingestion: watcher ingests EN first,
         # then a background worker translates and patches via op=update.
-        self._translate_q: "queue.Queue[Dict[str, Any]]" = queue.Queue(maxsize=1000)
-        self._translate_pending: Deque[Dict[str, Any]] = deque()
-        self._translate_thread: Optional[threading.Thread] = None
-        self._translate_batch_size = 5
+        self._translate = TranslationPump(
+            translator=self._translator,
+            emit_update=self._ingest.ingest,
+            batch_size=5,
+        )
 
     def _stop_requested(self) -> bool:
         ev = self._stop_event
@@ -318,7 +167,7 @@ class RolloutWatcher:
             "pinned_file": pin_file,
             "codex_detected": "1" if self._codex_detected else "0",
             "codex_pids": ",".join(str(x) for x in self._codex_pids[:8]),
-            "codex_process_regex": self._codex_process_regex_raw,
+            "codex_process_regex": self._follow_picker.codex_process_regex,
             "process_file": str(self._process_file) if self._process_file is not None else "",
         }
 
@@ -369,7 +218,7 @@ class RolloutWatcher:
     def run(self, stop_event) -> None:
         # Keep a reference so inner loops can react quickly (e.g. stop in the middle of large file reads).
         self._stop_event = stop_event
-        self._start_translation_worker(stop_event)
+        self._translate.start(stop_event)
         # Initial pick
         self._switch_to_latest_if_needed(force=True)
         if self._current_file is None and not self._warned_missing:
@@ -402,142 +251,23 @@ class RolloutWatcher:
             self._poll_tui_log()
             stop_event.wait(self._poll_interval_s)
 
-    def _start_translation_worker(self, stop_event) -> None:
-        if self._translate_thread is not None and self._translate_thread.is_alive():
-            return
-        if isinstance(self._translator, NoneTranslator):
-            return
-        try:
-            t = threading.Thread(
-                target=self._translate_worker,
-                args=(stop_event,),
-                name="sidecar-translate",
-                daemon=True,
-            )
-            self._translate_thread = t
-            t.start()
-        except Exception:
-            self._translate_thread = None
-
-    def _enqueue_translation(self, mid: str, text: str, thread_key: str, batchable: bool) -> None:
-        if isinstance(self._translator, NoneTranslator):
-            return
-        m = str(mid or "").strip()
-        if not m:
-            return
-        t = str(text or "")
-        if not t.strip():
-            return
-        item: Dict[str, Any] = {
-            "id": m,
-            "text": t,
-            "key": str(thread_key or ""),
-            "batchable": bool(batchable),
-        }
-        try:
-            self._translate_q.put_nowait(item)
-        except queue.Full:
-            # Backpressure: drop oldest to keep UI responsive.
-            try:
-                _ = self._translate_q.get_nowait()
-            except queue.Empty:
-                return
-            try:
-                self._translate_q.put_nowait(item)
-            except queue.Full:
-                return
-
-    def _normalize_translation(self, src: str, zh: str) -> str:
-        s = str(src or "")
-        z = str(zh or "")
-        if s.strip() and (not z.strip()) and not isinstance(self._translator, NoneTranslator):
-            err = str(getattr(self._translator, "last_error", "") or "").strip()
-            hint = err if err else "WARN: 翻译失败（返回空译文）"
-            return f"⚠️ {hint}\n\n{s}"
-        return z
-
-    def _translate_worker(self, stop_event) -> None:
-        pending = self._translate_pending
-        while not stop_event.is_set():
-            try:
-                if pending:
-                    item = pending.popleft()
-                else:
-                    item = self._translate_q.get(timeout=0.2)
-            except queue.Empty:
-                continue
-            except Exception:
-                continue
-
-            try:
-                mid = str(item.get("id") or "").strip()
-                text = str(item.get("text") or "")
-                key = str(item.get("key") or "")
-                batchable = bool(item.get("batchable"))
-            except Exception:
-                continue
-            if not mid or not text.strip():
-                continue
-
-            batch: List[Dict[str, Any]] = [item]
-            if batchable and key:
-                while len(batch) < int(self._translate_batch_size or 5):
-                    try:
-                        nxt = self._translate_q.get_nowait()
-                    except queue.Empty:
-                        break
-                    except Exception:
-                        break
-                    try:
-                        if bool(nxt.get("batchable")) and str(nxt.get("key") or "") == key:
-                            batch.append(nxt)
-                        else:
-                            pending.append(nxt)
-                    except Exception:
-                        pending.append(nxt)
-
-            # Translate.
-            try:
-                if len(batch) == 1:
-                    zh = self._normalize_translation(text, self._translator.translate(text))
-                    if stop_event.is_set():
-                        continue
-                    self._ingest.ingest({"op": "update", "id": mid, "zh": zh})
-                    continue
-
-                pairs: List[Tuple[str, str]] = []
-                wanted: Set[str] = set()
-                for it in batch:
-                    iid = str(it.get("id") or "").strip()
-                    itxt = str(it.get("text") or "")
-                    if not iid or not itxt.strip():
-                        continue
-                    pairs.append((iid, itxt))
-                    wanted.add(iid)
-                if len(pairs) <= 1:
-                    zh = self._normalize_translation(text, self._translator.translate(text))
-                    if stop_event.is_set():
-                        continue
-                    self._ingest.ingest({"op": "update", "id": mid, "zh": zh})
-                    continue
-
-                packed = _pack_translate_batch(pairs)
-                out = self._translator.translate(packed)
-                mapping = _unpack_translate_batch(out, wanted_ids=wanted)
-
-                for iid, itxt in pairs:
-                    if stop_event.is_set():
-                        break
-                    zh = mapping.get(iid)
-                    if zh is None:
-                        zh = self._translator.translate(itxt)
-                    zh = self._normalize_translation(itxt, zh)
-                    self._ingest.ingest({"op": "update", "id": iid, "zh": zh})
-            except Exception:
-                continue
 
     def _switch_to_latest_if_needed(self, force: bool) -> None:
-        picked = self._pick_follow_file()
+        pick = self._follow_picker.pick(
+            selection_mode=self._selection_mode,
+            pinned_thread_id=self._pinned_thread_id,
+            pinned_file=self._pinned_file,
+        )
+        picked = pick.picked
+        self._process_file = pick.process_file
+        self._codex_detected = bool(pick.codex_detected)
+        self._codex_pids = list(pick.codex_pids or [])
+        self._follow_mode = str(pick.follow_mode or "")
+        if self._selection_mode == "pin" and picked is not None and self._pinned_file is None:
+            self._pinned_file = picked
+            tid = _parse_thread_id_from_filename(picked)
+            if tid:
+                self._pinned_thread_id = tid
         if picked is None:
             return
         if force or self._current_file is None or picked != self._current_file:
@@ -555,188 +285,6 @@ class RolloutWatcher:
                 except Exception:
                     self._offset = 0
 
-    def _pick_follow_file(self) -> Optional[Path]:
-        """
-        选择要跟随的 rollout 文件。
-
-        在启用 follow_codex_process 时，优先级为：
-        1) 进程 FD 定位（更精准：正在写入的会话文件）
-        2) sessions 扫描最新文件（回退：用于“进程已启动但文件尚未打开/被发现”的窗口期）
-        3) 空闲（仅在 only_follow_when_process=true 且未检测到 Codex 时）
-        """
-        self._process_file = None
-        self._codex_detected = False
-        self._codex_pids = []
-
-        # UI pin: lock to a specific thread/file (preferred over auto selection).
-        sel = "auto"
-        pin_tid = ""
-        pin_file = None
-        try:
-            with self._follow_lock:
-                sel = self._selection_mode or "auto"
-                pin_tid = self._pinned_thread_id or ""
-                pin_file = self._pinned_file
-        except Exception:
-            sel = "auto"
-            pin_tid = ""
-            pin_file = None
-
-        if sel == "pin":
-            picked = pin_file
-            if picked is None and pin_tid:
-                picked = _find_rollout_file_for_thread(self._codex_home, pin_tid)
-                if picked is not None:
-                    try:
-                        with self._follow_lock:
-                            self._pinned_file = picked
-                    except Exception:
-                        pass
-            if picked is not None:
-                self._follow_mode = "pinned"
-                self._last_error = ""
-                return picked
-            # Keep auto as a fallback, but surface status.
-            self._follow_mode = "pinned_missing"
-            self._last_error = "pinned_missing"
-
-        if not self._follow_codex_process:
-            self._follow_mode = "legacy"
-            if self._last_error != "pinned_missing":
-                self._last_error = ""
-            return _latest_rollout_file(self._codex_home)
-
-        detected, root_pids = self._detect_codex_processes()
-        self._codex_detected = detected
-        self._codex_pids = root_pids
-
-        if not detected:
-            self._follow_mode = "idle" if self._only_follow_when_process else "fallback"
-            if self._only_follow_when_process:
-                self._last_error = "wait_codex"
-                return None
-            self._last_error = ""
-            return _latest_rollout_file(self._codex_home)
-
-        # Codex 已检测到：优先从进程打开的 FD 中找当前会话文件。
-        tree = self._collect_process_tree(root_pids)
-        proc_file = self._find_rollout_opened_by_pids(tree)
-        if proc_file is not None:
-            self._follow_mode = "process"
-            self._process_file = proc_file
-            self._last_error = ""
-            return proc_file
-
-        # 进程存在但暂未定位到文件：回退到 sessions 最新文件（等待窗口期）。
-        latest = _latest_rollout_file(self._codex_home)
-        if latest is None:
-            self._follow_mode = "fallback"
-            self._last_error = "wait_rollout"
-            return None
-        self._follow_mode = "fallback"
-        self._last_error = ""
-        return latest
-
-    def _detect_codex_processes(self) -> Tuple[bool, List[int]]:
-        if self._codex_process_re is None:
-            return False, []
-        me = os.getpid()
-        hits: List[int] = []
-        for pid in _proc_list_pids():
-            if pid == me:
-                continue
-            cmd = _proc_read_cmdline(pid)
-            if not cmd:
-                continue
-            try:
-                if self._codex_process_re.search(cmd):
-                    hits.append(pid)
-            except Exception:
-                continue
-        hits.sort()
-        return (len(hits) > 0), hits
-
-    def _collect_process_tree(self, root_pids: List[int], max_pids: int = 512) -> List[int]:
-        """
-        从 root_pids 扩展子进程，形成进程树集合（用于覆盖“写入发生在子进程”的情况）。
-        """
-        roots = [p for p in root_pids if p > 0]
-        if not roots:
-            return []
-
-        # 每隔 file_scan_interval 扫描一次，成本可控。
-        all_pids = _proc_list_pids()
-        children: Dict[int, List[int]] = {}
-        for pid in all_pids:
-            ppid = _proc_read_ppid(pid)
-            if ppid is None:
-                continue
-            children.setdefault(ppid, []).append(pid)
-
-        out: List[int] = []
-        seen: Set[int] = set()
-        q: List[int] = list(roots)
-        while q and len(out) < max_pids:
-            pid = q.pop(0)
-            if pid in seen:
-                continue
-            seen.add(pid)
-            out.append(pid)
-            for c in children.get(pid, []):
-                if c not in seen:
-                    q.append(c)
-        return out
-
-    def _find_rollout_opened_by_pids(self, pids: List[int]) -> Optional[Path]:
-        sessions_root = (self._codex_home / "sessions").resolve()
-        candidates: List[Path] = []
-        for pid in pids:
-            for target in _proc_iter_fd_targets(pid):
-                if "rollout-" not in target or not target.endswith(".jsonl"):
-                    continue
-                try:
-                    p = Path(target)
-                except Exception:
-                    continue
-                # 限定为当前 watch_codex_home 下的 sessions 文件，避免误命中其它 jsonl。
-                try:
-                    _ = p.resolve().relative_to(sessions_root)
-                except Exception:
-                    continue
-                if not _ROLLOUT_RE.match(p.name):
-                    continue
-                try:
-                    if not p.exists():
-                        continue
-                except Exception:
-                    continue
-                candidates.append(p)
-
-        if not candidates:
-            return None
-
-        # 若当前已跟随文件仍在候选中，优先保持，避免在多个 FD 之间抖动切换。
-        if self._current_file is not None:
-            try:
-                cur = self._current_file.resolve()
-                for c in candidates:
-                    if c.resolve() == cur:
-                        return c
-            except Exception:
-                pass
-
-        best: Optional[Path] = None
-        best_mtime: float = -1.0
-        for c in candidates:
-            try:
-                st = c.stat()
-                mtime = float(st.st_mtime)
-            except Exception:
-                continue
-            if mtime > best_mtime:
-                best = c
-                best_mtime = mtime
-        return best
 
     def _read_tail_lines(self, path: Path, last_lines: int, max_bytes: int = 32 * 1024 * 1024) -> List[bytes]:
         """
@@ -958,7 +506,7 @@ class RolloutWatcher:
                 if is_thinking and text.strip():
                     # 翻译走后台支路：回放阶段可聚合，实时阶段按单条慢慢补齐。
                     thread_key = (self._thread_id or "") or str(file_path)
-                    self._enqueue_translation(mid=mid, text=text, thread_key=thread_key, batchable=is_replay)
+                    self._translate.enqueue(mid=mid, text=text, thread_key=thread_key, batchable=is_replay)
         return ingested
 
     def _poll_tui_log(self) -> None:

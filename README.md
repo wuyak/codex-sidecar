@@ -54,7 +54,8 @@ cd ~/src/codex-thinking-sidecar-zh
 ## 目录结构（概览）
 
 - `tools/codex_thinking_sidecar/codex_thinking_sidecar/`
-  - `watcher.py`: 跟随 rollout 读取→`/ingest`；翻译后台队列（批量仅用于回放导入）
+  - `watcher.py`: 跟随 rollout 读取→`/ingest`；TUI tool gate 提示；翻译通过 `watch/` 子模块异步回填
+  - `watch/`: watcher 侧子模块（rollout 路径/进程扫描/跟随策略/翻译批处理与队列）
   - `server.py`: HTTP+SSE；消息 `seq`；`op=add/update`
     - `ui/`: 纯静态 UI（无构建）
     - `ui/app/render.js`: 消息渲染门面（实现：`ui/app/render/*`）
