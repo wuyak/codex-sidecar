@@ -17,6 +17,7 @@
 - UI: SSE 会话缓冲对 `op=update` 做按消息 id 覆盖合并，减少翻译回填期间的缓冲溢出与不必要的回源刷新。
 - UI: 事件流分层：拆分 `ui/app/events.js` → `ui/app/events/*`（timeline/buffer/stream），并对刷新期间 `ssePending` 的 `op=update` 做按 id 合并，降低译文回填压力。
 - UI: 刷新期 SSE `ssePending` 增加长度上限与溢出兜底（溢出后自动回源 `refreshList()`），提升长时间挂着稳定性。
+- UI: 装饰分层：`decorate/core.js` 复用 `decorate/copy_hold.js` 并抽离 `decorate/tool_toggle.js`，去重并提升可读性。
 - UI: 侧栏会话列表渲染降频：高频 SSE 下合并刷新，减少重排/重绘。
 - UI: 侧栏会话列表增量渲染：复用 tab 节点并仅重排/更新，进一步降低 DOM churn。
 - UI: 长列表懒渲染：刷新列表时对较早行延后装饰（idle 分片 `decorateRow`），降低一次性重绘卡顿。
