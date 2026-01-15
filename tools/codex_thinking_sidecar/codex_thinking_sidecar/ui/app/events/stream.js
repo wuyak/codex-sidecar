@@ -1,6 +1,38 @@
 import { keyOf } from "../utils.js";
 import { applyMsgToList } from "./timeline.js";
 import { bufferForKey, pushPending, shouldBufferKey } from "./buffer.js";
+import { dismissCorner, notifyCorner } from "../utils/notify.js";
+
+function _toolGateWaiting(text) {
+  const s = String(text || "");
+  return s.includes("等待确认") || s.toLowerCase().includes("waiting for tool gate");
+}
+
+function _toolGateReleased(text) {
+  const s = String(text || "");
+  return s.includes("已确认") || s.toLowerCase().includes("tool gate released");
+}
+
+function _summarizeToolGate(text) {
+  const lines = String(text || "").split("\n");
+  let tool = "";
+  let just = "";
+  let cmd = "";
+  let inCode = false;
+  for (const raw of lines) {
+    const ln = String(raw || "").trim();
+    if (!ln) continue;
+    if (ln.startsWith("```")) { inCode = !inCode; continue; }
+    if (inCode && !cmd) { cmd = ln; continue; }
+    if (!tool && ln.startsWith("- 工具")) tool = ln.replace(/^-\\s*工具\\s*[:：]\\s*/g, "").replaceAll("`", "").trim();
+    if (!just && (ln.startsWith("- 原因") || ln.startsWith("- 理由"))) just = ln.replace(/^-\\s*(原因|理由)[^:：]*[:：]\\s*/g, "").trim();
+  }
+  const parts = [];
+  if (tool) parts.push(`工具：${tool}`);
+  if (just) parts.push(`原因：${just}`);
+  if (cmd) parts.push(`命令：${cmd}`);
+  return parts.join("\n");
+}
 
 export function connectEventStream(dom, state, upsertThread, renderTabs, renderMessage, setStatus, refreshList) {
   state.uiEventSource = new EventSource("/events");
@@ -52,6 +84,32 @@ export function connectEventStream(dom, state, upsertThread, renderTabs, renderM
   function _handleMsg(msg) {
     try {
       const op = String((msg && msg.op) ? msg.op : "").trim().toLowerCase();
+      // 右下角提醒（不依赖当前会话/是否可见，避免错过关键状态）
+      try {
+        const kind = String((msg && msg.kind) ? msg.kind : "").trim();
+        if (kind === "tool_gate") {
+          const txt = String(msg.text || "");
+          if (_toolGateWaiting(txt)) {
+            notifyCorner("tool_gate", "终端等待确认", _summarizeToolGate(txt) || "请回到终端完成确认/授权后继续。", { level: "warn", sticky: true });
+          } else if (_toolGateReleased(txt)) {
+            // 已确认：提示一下并自动消退
+            notifyCorner("tool_gate", "终端已确认", _summarizeToolGate(txt) || "tool gate 已解除。", { level: "success", ttlMs: 1600 });
+          }
+        } else if (kind === "assistant_message") {
+          // 可选提醒：用户不在底部且当前视图会渲染到该输出时提示“有新输出”
+          const atBottom = (window.innerHeight + window.scrollY) >= (document.body.scrollHeight - 80);
+          if (!atBottom) {
+            const k = keyOf(msg);
+            const shouldNotify = (state.currentKey === "all" || state.currentKey === k);
+            if (shouldNotify && op !== "update") {
+              notifyCorner("new_output", "有新输出", "你不在页面底部，可点击 ↓ 跳转。", { level: "info", ttlMs: 2200 });
+            }
+          } else {
+            // 在底部时不需要提醒，且可清理旧提示
+            dismissCorner("new_output");
+          }
+        }
+      } catch (_) {}
       // Clear manual translate in-flight state as soon as ZH arrives, so render can flip status immediately.
       try {
         if (op === "update" && msg && typeof msg.id === "string" && state && state.translateInFlight && typeof state.translateInFlight.delete === "function") {

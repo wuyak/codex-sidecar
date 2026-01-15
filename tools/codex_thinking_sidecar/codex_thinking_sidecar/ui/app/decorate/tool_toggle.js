@@ -1,4 +1,6 @@
-export function toggleToolDetailsFromPre(pre) {
+import { stabilizeClickWithin } from "../utils/anchor.js";
+
+export function toggleToolDetailsFromPre(pre, ev) {
   try {
     const row = pre && pre.closest ? pre.closest(".row") : null;
     if (!row || !row.querySelector) return false;
@@ -13,7 +15,26 @@ export function toggleToolDetailsFromPre(pre) {
       if (all && all.length === 1) btn = all[0];
     }
     if (!btn) return false;
+    const y = Number(ev && ev.clientY) || 0;
+    const targetId = btn.getAttribute ? String(btn.getAttribute("data-target") || "") : "";
+    const swapId = btn.getAttribute ? String(btn.getAttribute("data-swap") || "") : "";
+    let targetWrap = null;
+    let swapWrap = null;
+    if (targetId) {
+      try { const el = document.getElementById(targetId); targetWrap = (el && el.closest) ? (el.closest(".pre-wrap") || el) : el; } catch (_) {}
+    }
+    if (swapId) {
+      try { const el = document.getElementById(swapId); swapWrap = (el && el.closest) ? (el.closest(".pre-wrap") || el) : el; } catch (_) {}
+    }
     btn.click();
+    try {
+      // Keep the click landing inside the visible code block after toggle (avoid "click misses" due to height changes).
+      let anchor = null;
+      if (swapWrap && swapWrap.classList && !swapWrap.classList.contains("hidden")) anchor = swapWrap;
+      else if (targetWrap && targetWrap.classList && !targetWrap.classList.contains("hidden")) anchor = targetWrap;
+      else anchor = (pre && pre.closest) ? (pre.closest(".pre-wrap") || row) : row;
+      stabilizeClickWithin(anchor, y);
+    } catch (_) {}
     return true;
   } catch (_) {
     return false;
@@ -29,6 +50,7 @@ export function wireToolToggles(root) {
       btn.__wired = true;
       btn.onclick = (e) => {
         try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+        const y = Number(e && e.clientY) || 0;
         const id = btn.getAttribute("data-target") || "";
         if (!id) return;
         let el = null;
@@ -52,8 +74,13 @@ export function wireToolToggles(root) {
           else swapWrap.classList.add("hidden");
         }
         btn.textContent = willHide ? "详情" : "收起";
+        try {
+          const anchor = (swapWrap && swapWrap.classList && !swapWrap.classList.contains("hidden"))
+            ? swapWrap
+            : elWrap;
+          stabilizeClickWithin(anchor || row || elWrap || btn, y);
+        } catch (_) {}
       };
     } catch (_) {}
   }
 }
-

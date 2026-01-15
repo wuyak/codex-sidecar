@@ -56,7 +56,7 @@ function decoratePreBlocks(root) {
       wireHoldCopy(pre, {
         getText: () => pre.textContent || "",
         toastIsLight: !isCode,
-        onTap: isCode ? () => toggleToolDetailsFromPre(pre) : null,
+        onTap: isCode ? (e) => toggleToolDetailsFromPre(pre, e) : null,
       });
     } catch (_) {}
   }

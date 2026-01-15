@@ -7,6 +7,7 @@ import { createState } from "./state.js";
 import { renderTabs, upsertThread } from "./sidebar.js";
 import { escapeHtml } from "./utils.js";
 import { flashToastAt } from "./utils/toast.js";
+import { stabilizeClickWithin } from "./utils/anchor.js";
 import { initViewMode } from "./view_mode.js";
 import { activateView, initViews } from "./views.js";
 
@@ -240,6 +241,7 @@ export async function initApp() {
         row.classList.add(`think-mode-${next}`);
       } catch (_) {}
       _updateThinkingMetaRight(row, mid);
+      try { stabilizeClickWithin(row, Number(e && e.clientY) || 0); } catch (_) {}
     });
   }
 
