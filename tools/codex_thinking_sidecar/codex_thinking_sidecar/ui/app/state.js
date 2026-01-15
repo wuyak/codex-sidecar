@@ -4,6 +4,8 @@ export function createState() {
     httpSelected: "",
     currentKey: "all",
     threadIndex: new Map(), // key -> { key, thread_id, file, count, last_ts }
+    threadsDirty: false,
+    threadsLastSyncMs: 0,
     callIndex: new Map(), // call_id -> { tool_name, args_raw, args_obj }
     rowIndex: new Map(), // msg.id -> rendered DOM element
     timeline: [], // [{ id, ms, seq }] for rendered rows (sorted)

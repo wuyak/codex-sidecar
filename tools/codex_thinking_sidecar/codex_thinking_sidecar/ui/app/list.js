@@ -2,6 +2,26 @@ import { inferToolName, parseToolCallText } from "./format.js";
 import { keyOf, safeJsonParse, tsToMs } from "./utils.js";
 import { activateView } from "./views.js";
 
+async function _refreshThreads(state, signal) {
+  if (!state || typeof state !== "object") return;
+  try {
+    const resp = await fetch("/api/threads", { signal, cache: "no-store" });
+    const data = await resp.json();
+    const threads = Array.isArray(data && data.threads) ? data.threads : [];
+    const next = new Map();
+    for (const t of threads) {
+      const k = (t && typeof t.key === "string") ? t.key : "";
+      if (k) next.set(k, t);
+    }
+    if (state.threadIndex && typeof state.threadIndex.clear === "function") {
+      state.threadIndex.clear();
+      for (const [k, v] of next.entries()) state.threadIndex.set(k, v);
+    }
+    state.threadsLastSyncMs = Date.now();
+    state.threadsDirty = false;
+  } catch (e) {}
+}
+
 export async function refreshList(dom, state, renderTabs, renderMessage, renderEmpty) {
   const token = (state && typeof state === "object")
     ? (state.refreshToken = (Number(state.refreshToken) || 0) + 1)
@@ -96,6 +116,16 @@ export async function refreshList(dom, state, renderTabs, renderMessage, renderE
       if (dom.list) dom.list.appendChild(frag);
       if (wasAtBottom) window.scrollTo(0, document.body.scrollHeight);
     }
+
+    // Keep thread list in sync after reconnect or occasional long-running use.
+    try {
+      const now = Date.now();
+      const last = Number(state.threadsLastSyncMs) || 0;
+      const needs = !!state.threadsDirty
+        || (state.threadIndex && typeof state.threadIndex.size === "number" && state.threadIndex.size === 0)
+        || (state.currentKey === "all" && (now - last) > 60000);
+      if (needs) await _refreshThreads(state, ac ? ac.signal : undefined);
+    } catch (_) {}
   } catch (e) {
     if (token && state && state.refreshToken !== token) return;
     if (e && e.name === "AbortError") return;
@@ -113,12 +143,7 @@ export async function refreshList(dom, state, renderTabs, renderMessage, renderE
 export async function bootstrap(dom, state, renderTabs, renderMessage, renderEmpty) {
   try {
     // 先加载 thread 列表（若为空也没关系），再加载消息列表。
-    try {
-      const tr = await fetch("/api/threads");
-      const td = await tr.json();
-      const threads = td.threads || [];
-      for (const t of threads) state.threadIndex.set(t.key, t);
-    } catch (e) {}
+    try { await _refreshThreads(state, undefined); } catch (_) {}
 
     // Sync UI selection with watcher follow mode (avoid “UI 显示全部，但实际上已锁定跟随某会话”).
     try {

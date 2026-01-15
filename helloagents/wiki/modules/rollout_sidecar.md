@@ -19,6 +19,7 @@
 - 只读解析 JSONL（不改写原始日志）
 - 轮询 + 增量读取（按 offset tail），支持启动时回放尾部 N 行
 - 代码分层：`watcher.py` 聚焦主流程；`watch/*` 承载“跟随策略/进程扫描/翻译批处理与队列”等可复用组件
+  - 其中 `watch/rollout_extract.py` 负责“单条 JSONL 记录 → UI 事件块”提取（assistant/user/tool/reasoning）
 - 可选：WSL2/Linux 下支持“进程优先定位”当前会话文件
   - 扫描 `/proc/<pid>/fd`，优先锁定匹配到的 Codex 进程（及其子进程）正在写入的 `sessions/**/rollout-*.jsonl`
   - 并保留 sessions 扫描作为回退（用于进程已启动但文件尚未被发现的窗口期）
@@ -30,6 +31,7 @@
 - 长列表刷新：对较早消息行延后装饰（idle 分片 `decorateRow`），避免一次性加载/切换时卡顿
 - 多会话切换性能：消息列表按会话 key 做视图缓存；非当前会话的 SSE 仅对“已缓存视图”的会话进行缓冲，切回时回放到对应视图（溢出/切到 all 时自动回源刷新）
 - 断线恢复：浏览器 SSE 重连后会自动回源同步当前视图，并标记缓存视图在下次切换时回源刷新（避免长时间挂着漏消息）
+- 会话列表同步：断线恢复后会标记 `threadsDirty`，下一次列表回源时同步 `/api/threads`，避免侧栏漏会话/排序漂移
 - 翻译 Provider 可插拔并可在 UI 中切换：`stub/none/http/openai`
 - `--include-agent-reasoning` 说明：
   - 该类型通常是“流式推理文本”，同一段内容可能重复出现（模型/客户端实现差异）。

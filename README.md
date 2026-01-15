@@ -8,6 +8,7 @@
 - **时间线稳定**：服务端为新增消息附加单调递增 `seq`，UI 按 `(timestamp, seq)` 插入渲染，避免“时间倒退/回跳”。
 - **切换稳定**：UI 刷新列表期间暂存 SSE 消息，刷新结束后批量回放，避免清空/插入并发导致错位或闪烁。
 - **断线恢复**：SSE 重连后自动回源同步，避免长时间挂着时网络抖动/服务重启导致漏消息。
+- **会话列表同步**：断线恢复后标记为 dirty，并在下一次列表回源时同步 `/api/threads`，避免侧栏漏会话/排序漂移。
 - **切换加速**：消息列表按会话 `key` 做视图缓存；切换时优先复用已渲染 DOM，并回放该会话的 SSE 缓冲（溢出或切到 `all` 时再回源 `refreshList()`）。
 - **渲染加速**：Markdown 渲染按消息缓存；翻译回填优先原位更新 ZH 区块，减少重绘与上下文丢失。
 - **旁路只读**：不提供浏览器“驱动 Codex 执行”的控制入口（避免把 UI 变成远程执行面）。
@@ -57,6 +58,7 @@ cd ~/src/codex-thinking-sidecar-zh
 - `tools/codex_thinking_sidecar/codex_thinking_sidecar/`
   - `watcher.py`: 跟随 rollout 读取→`/ingest`；TUI tool gate 提示；翻译通过 `watch/` 子模块异步回填
   - `watch/`: watcher 侧子模块（rollout 路径/进程扫描/跟随策略/翻译批处理与队列）
+    - `watch/rollout_extract.py`: rollout JSONL 单条记录 → UI 事件提取（assistant/user/tool/reasoning）
   - `server.py`: HTTP+SSE；消息 `seq`；`op=add/update`
     - `ui/`: 纯静态 UI（无构建）
     - `ui/app/render.js`: 消息渲染门面（实现：`ui/app/render/*`）

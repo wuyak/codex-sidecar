@@ -1,36 +1,24 @@
 import hashlib
 import json
-import os
-import re
 import threading
 import sys
 import time
 import urllib.error
 import urllib.request
-from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Deque, Dict, Iterable, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set
 
 from .translator import Translator
 
 from .watch.rollout_paths import _ROLLOUT_RE, _find_rollout_file_for_thread, _parse_thread_id_from_filename
+from .watch.rollout_extract import extract_rollout_items
 from .watch.translation_pump import TranslationPump
 from .watch.follow_picker import FollowPicker
 from .watch.tui_gate import TuiGateTailer
 
 def _sha1_hex(s: str) -> str:
     return hashlib.sha1(s.encode("utf-8", errors="replace")).hexdigest()
-
-
-
-
-
-
-
-
-
-
 @dataclass
 class HttpIngestClient:
     server_url: str
@@ -373,91 +361,7 @@ class RolloutWatcher:
         except Exception:
             return 0
 
-        ts = obj.get("timestamp") or ""
-        top_type = obj.get("type")
-        payload = obj.get("payload") or {}
-
-        extracted: List[Dict[str, str]] = []
-
-        if top_type == "response_item":
-            # Assistant / User messages (final output and input echo)
-            if payload.get("type") == "message":
-                role = payload.get("role")
-                # Prefer event_msg.user_message for user input (more concise).
-                if role == "assistant":
-                    content = payload.get("content")
-                    parts: List[str] = []
-                    if isinstance(content, list):
-                        for c in content:
-                            if isinstance(c, dict) and isinstance(c.get("text"), str):
-                                txt = c.get("text") or ""
-                                if txt.strip():
-                                    parts.append(txt)
-                    if parts:
-                        extracted.append({"kind": f"{role}_message", "text": "\n".join(parts)})
-
-            if payload.get("type") == "reasoning":
-                summary = payload.get("summary")
-                if isinstance(summary, list):
-                    parts = []
-                    for item in summary:
-                        if isinstance(item, dict) and item.get("type") == "summary_text":
-                            txt = item.get("text")
-                            if isinstance(txt, str) and txt.strip():
-                                parts.append(txt)
-                    if parts:
-                        extracted.append({"kind": "reasoning_summary", "text": "\n".join(parts)})
-
-            # Tool calls / outputs (CLI tools, custom tools, web search)
-            ptype = payload.get("type")
-            if ptype in ("function_call", "custom_tool_call", "web_search_call"):
-                name = ""
-                call_id = ""
-                if isinstance(payload.get("name"), str):
-                    name = payload.get("name") or ""
-                if isinstance(payload.get("call_id"), str):
-                    call_id = payload.get("call_id") or ""
-                if ptype == "web_search_call":
-                    action = payload.get("action")
-                    text = json.dumps(action, ensure_ascii=False) if isinstance(action, (dict, list)) else str(action or "")
-                    title = "web_search_call"
-                else:
-                    key = "arguments" if ptype == "function_call" else "input"
-                    raw = payload.get(key)
-                    text = str(raw or "")
-                    title = name or ptype
-                prefix = f"call_id={call_id}\n" if call_id else ""
-                extracted.append(
-                    {
-                        "kind": "tool_call",
-                        "text": f"{title}\n{prefix}{text}".rstrip(),
-                    }
-                )
-
-            if ptype in ("function_call_output", "custom_tool_call_output"):
-                call_id = payload.get("call_id") if isinstance(payload.get("call_id"), str) else ""
-                out = payload.get("output")
-                text = str(out or "")
-                prefix = f"call_id={call_id}\n" if call_id else ""
-                extracted.append(
-                    {
-                        "kind": "tool_output",
-                        "text": f"{prefix}{text}".rstrip(),
-                    }
-                )
-
-        if self._include_agent_reasoning and top_type == "event_msg":
-            if payload.get("type") == "agent_reasoning":
-                txt = payload.get("text")
-                if isinstance(txt, str) and txt.strip():
-                    extracted.append({"kind": "agent_reasoning", "text": txt})
-
-        # User message echo in event stream (usually the most concise)
-        if top_type == "event_msg":
-            if payload.get("type") == "user_message":
-                msg = payload.get("message")
-                if isinstance(msg, str) and msg.strip():
-                    extracted.append({"kind": "user_message", "text": msg})
+        ts, extracted = extract_rollout_items(obj, include_agent_reasoning=self._include_agent_reasoning)
 
         ingested = 0
         for item in extracted:

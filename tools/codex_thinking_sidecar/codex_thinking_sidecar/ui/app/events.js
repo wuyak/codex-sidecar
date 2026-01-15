@@ -197,6 +197,10 @@ export function connectEventStream(dom, state, upsertThread, renderTabs, renderM
       // Only resync after a real disconnect/reconnect (avoid double-refresh on initial connect).
       if (ever && hadError) {
         try { setStatus(dom, "连接已恢复，正在同步…"); } catch (_) {}
+        try {
+          state.threadsDirty = true;
+          state.threadsLastSyncMs = 0;
+        } catch (_) {}
 
         // Mark cached views as overflow so switching will refresh from source.
         try {
