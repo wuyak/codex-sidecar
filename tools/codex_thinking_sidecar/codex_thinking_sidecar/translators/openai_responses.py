@@ -38,6 +38,24 @@ def _build_zh_translation_prompt(text: str) -> str:
     )
 
 
+def _looks_like_translate_batch_prompt(text: str) -> bool:
+    """
+    Detect the packed batch-translation prompt used by `watch/translate_batch.py`.
+
+    Important:
+    - For batch prompts, the caller already includes strict marker-preservation
+      instructions. Wrapping it again with a generic "translate everything" prompt
+      would cause the model to translate the instruction header/markers, breaking
+      unpacking on the sidecar.
+    """
+    s = str(text or "")
+    return (
+        "<<<SIDECAR_TRANSLATE_BATCH_V1>>>" in s
+        and "<<<SIDECAR_ITEM:" in s
+        and "<<<SIDECAR_END>>>" in s
+    )
+
+
 def _extract_openai_responses_text(obj) -> str:
     """
     Best-effort extraction for OpenAI Responses API (and compatible gateways).
@@ -217,7 +235,9 @@ class OpenAIResponsesTranslator:
             self.last_error = _log_openai_translate_error(endpoint, auth_token="", detail="missing_api_key")
             return ""
 
-        prompt = _build_zh_translation_prompt(text)
+        # Batch prompts already include their own instruction header and marker contracts.
+        # Do NOT wrap them again, otherwise the model may translate/alter the markers.
+        prompt = text if _looks_like_translate_batch_prompt(text) else _build_zh_translation_prompt(text)
         payload = {
             "model": (self.model or "").strip() or "gpt-4o-mini",
             "input": [

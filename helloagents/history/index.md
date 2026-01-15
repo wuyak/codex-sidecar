@@ -35,3 +35,4 @@
 - 202601151623_ui_list_modules
 - 202601151629_ui_render_tool_modules
 - 202601151635_ui_render_thinking_modules
+- 202601151652_translate_batch_openai_prompt

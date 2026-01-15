@@ -102,6 +102,8 @@ UI 支持三种显示模式：`中英文对照 / 仅中文 / 仅英文`（保存
 性能与请求量（避免“翻译 API 占用太多请求”）：
 - sidecar 会先对消息做去重，再进行翻译请求（重复内容不会反复打到翻译 API）。
 - `openai` Provider 内置小型 LRU 缓存（默认 64 条），同一段文本多次出现时会复用译文。
+- 回放/积压导入期支持“同一会话 key 内批量翻译”（默认最多 5 条/批）：通过 `watch/translate_batch.py` 的 marker 协议打包/解包，避免跨会话串流。
+- `openai` Provider 在检测到批量 marker prompt 时会原样发送（不再额外包裹通用翻译 prompt），确保 marker 不被翻译/改动从而可稳定解包。
 - UI 选择 `openai` Provider 时会自动补齐默认 `Base URL`（right.codes）与默认 `Model`（right.codes 场景默认 `gpt-5.2`），减少手动输入。
 
 ## 配置生效提示
