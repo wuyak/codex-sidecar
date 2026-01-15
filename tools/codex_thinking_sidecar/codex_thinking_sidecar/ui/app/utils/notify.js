@@ -59,17 +59,18 @@ export function notifyCorner(key, title, detail, opts = {}) {
   let cur = _items.get(k) || null;
   if (cur && cur.el) {
     try { if (cur.timer) clearTimeout(cur.timer); } catch (_) {}
-    try { cur.el.outerHTML = _renderToast({ title, detail, level }); } catch (_) {
+    try {
+      const wrap = document.createElement("div");
+      wrap.innerHTML = _renderToast({ title, detail, level });
+      const el = wrap.firstElementChild;
+      if (!el) throw new Error("empty_toast");
+      if (typeof cur.el.replaceWith === "function") cur.el.replaceWith(el);
+      else if (cur.el.parentNode) cur.el.parentNode.replaceChild(el, cur.el);
+      cur.el = el;
+    } catch (_) {
       // If replacement fails, fall back to recreate.
-      try { if (cur.el.parentNode) cur.el.parentNode.removeChild(cur.el); } catch (_) {}
+      try { if (cur.el && cur.el.parentNode) cur.el.parentNode.removeChild(cur.el); } catch (_) {}
       cur = null;
-    }
-    if (cur && cur.el && cur.el.parentNode) {
-      // Keep reference fresh (outerHTML replaced the node).
-      try {
-        const last = host.lastElementChild;
-        if (last) cur.el = last;
-      } catch (_) {}
     }
   }
   if (!cur) {
@@ -86,4 +87,3 @@ export function notifyCorner(key, title, detail, opts = {}) {
   }
   return cur.el || null;
 }
-
