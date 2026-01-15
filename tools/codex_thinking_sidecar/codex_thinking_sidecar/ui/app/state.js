@@ -10,6 +10,8 @@ export function createState() {
     renderSeq: 0,
     bootAutoStarted: false,
     uiEventSource: null,
+    sseEverOpen: false,
+    sseHadError: false,
     lastRenderedMs: NaN,
 
     // 多会话频繁切换：视图缓存（key -> DOM+索引），避免每次切换都全量 refreshList。

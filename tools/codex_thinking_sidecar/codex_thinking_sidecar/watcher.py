@@ -1,7 +1,6 @@
 import hashlib
 import json
 import os
-import queue
 import re
 import threading
 import sys
@@ -11,30 +10,14 @@ import urllib.request
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Deque, Dict, Iterable, List, Optional, Pattern, Set, Tuple
+from typing import Any, Deque, Dict, Iterable, List, Optional, Set, Tuple
 
-from .translator import NoneTranslator, Translator
+from .translator import Translator
 
-from .watch.procfs import _proc_iter_fd_targets, _proc_list_pids, _proc_read_cmdline, _proc_read_ppid
-from .watch.rollout_paths import _ROLLOUT_RE, _find_rollout_file_for_thread, _latest_rollout_file, _parse_thread_id_from_filename
-from .watch.translate_batch import _pack_translate_batch, _unpack_translate_batch
+from .watch.rollout_paths import _ROLLOUT_RE, _find_rollout_file_for_thread, _parse_thread_id_from_filename
 from .watch.translation_pump import TranslationPump
 from .watch.follow_picker import FollowPicker
-
-
-_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
-
-
-
-
-
-
-
-
-
-
-
-
+from .watch.tui_gate import TuiGateTailer
 
 def _sha1_hex(s: str) -> str:
     return hashlib.sha1(s.encode("utf-8", errors="replace")).hexdigest()
@@ -119,12 +102,7 @@ class RolloutWatcher:
 
         # Codex TUI log tail: surface "waiting for tool gate" so UI can show
         # "needs confirmation" states even when no new rollout lines appear.
-        self._tui_log_path = (self._codex_home / "log" / "codex-tui.log")
-        self._tui_inited = False
-        self._tui_offset = 0
-        self._tui_buf = b""
-        self._tui_last_toolcall: Optional[Dict[str, object]] = None
-        self._tui_gate_waiting: bool = False
+        self._tui = TuiGateTailer(self._codex_home / "log" / "codex-tui.log")
         self._stop_event: Optional[threading.Event] = None
 
         # Translation is decoupled from ingestion: watcher ingests EN first,
@@ -248,7 +226,16 @@ class RolloutWatcher:
                 self._switch_to_latest_if_needed(force=False)
                 self._last_file_scan_ts = now
             self._poll_once()
-            self._poll_tui_log()
+            try:
+                self._tui.poll(
+                    thread_id=self._thread_id or "",
+                    read_tail_lines=self._read_tail_lines,
+                    sha1_hex=_sha1_hex,
+                    dedupe=self._dedupe,
+                    ingest=self._ingest.ingest,
+                )
+            except Exception:
+                pass
             stop_event.wait(self._poll_interval_s)
 
 
@@ -509,238 +496,6 @@ class RolloutWatcher:
                     self._translate.enqueue(mid=mid, text=text, thread_key=thread_key, batchable=is_replay)
         return ingested
 
-    def _poll_tui_log(self) -> None:
-        """
-        Tail ~/.codex/log/codex-tui.log and emit tool gate status to UI.
-
-        说明：
-        - 该日志属于 Codex TUI 交互层；当需要用户在终端确认/授权时，rollout JSONL 可能暂时不再增长，
-          导致 UI “看起来卡住”。这里把关键状态转成一条消息推送到 UI。
-        - 为避免刷屏，只解析非常少量的关键行：ToolCall / waiting for tool gate / tool gate released。
-        """
-        path = self._tui_log_path
-        try:
-            if not path.exists():
-                return
-        except Exception:
-            return
-
-        # One-time init: scan tail for a "currently waiting" state.
-        if not self._tui_inited:
-            self._tui_inited = True
-            try:
-                st = path.stat()
-                self._tui_offset = int(st.st_size)
-            except Exception:
-                self._tui_offset = 0
-            try:
-                tail = self._read_tail_lines(path, last_lines=240, max_bytes=2 * 1024 * 1024)
-                self._tui_scan_gate_state(tail, synthetic_only=True)
-            except Exception:
-                pass
-
-        try:
-            st = path.stat()
-            size = int(st.st_size)
-        except Exception:
-            return
-        if self._tui_offset > size:
-            # Truncated/rotated.
-            self._tui_offset = 0
-            self._tui_buf = b""
-
-        try:
-            with path.open("rb") as f:
-                f.seek(self._tui_offset)
-                chunk = f.read(256 * 1024)
-                self._tui_offset = int(f.tell())
-        except Exception:
-            return
-        if not chunk:
-            return
-
-        buf = self._tui_buf + chunk
-        parts = buf.split(b"\n")
-        self._tui_buf = parts.pop() if parts else b""
-        if parts:
-            self._tui_scan_gate_state(parts, synthetic_only=False)
-
-    def _tui_scan_gate_state(self, lines: List[bytes], synthetic_only: bool) -> None:
-        last_wait: Optional[Tuple[str, Optional[Dict[str, object]]]] = None
-        gate_waiting = bool(self._tui_gate_waiting)
-        last_toolcall = self._tui_last_toolcall
-
-        for bline in lines:
-            try:
-                raw = bline.decode("utf-8", errors="replace")
-            except Exception:
-                continue
-            line = _ANSI_RE.sub("", raw).strip("\r")
-            if not line.strip():
-                continue
-
-            ts, msg = self._tui_split_ts(line)
-            if not msg:
-                continue
-
-            toolcall = self._tui_parse_toolcall(msg)
-            if toolcall is not None:
-                toolcall["ts"] = ts
-                last_toolcall = toolcall
-                continue
-
-            if "waiting for tool gate" in msg:
-                gate_waiting = True
-                last_wait = (ts, last_toolcall)
-                if not synthetic_only:
-                    self._emit_tool_gate(ts, waiting=True, toolcall=last_toolcall)
-                continue
-
-            if "tool gate released" in msg:
-                if gate_waiting and not synthetic_only:
-                    self._emit_tool_gate(ts, waiting=False, toolcall=last_toolcall)
-                gate_waiting = False
-                last_wait = None
-                continue
-
-        # If we're only doing a synthetic init scan, emit a single "still waiting" message.
-        if synthetic_only and gate_waiting and last_wait is not None:
-            ts, tc = last_wait
-            self._emit_tool_gate(ts, waiting=True, toolcall=tc, synthetic=True)
-
-        self._tui_last_toolcall = last_toolcall
-        self._tui_gate_waiting = gate_waiting
-
-    @staticmethod
-    def _tui_split_ts(line: str) -> Tuple[str, str]:
-        """
-        codex-tui.log format (after stripping ANSI):
-          2026-01-14T12:34:56.123Z  INFO waiting for tool gate
-        """
-        s = (line or "").lstrip()
-        if not s:
-            return ("", "")
-        parts = s.split(" ", 1)
-        if len(parts) < 2:
-            return ("", s)
-        ts = parts[0].strip()
-        rest = parts[1].strip()
-        if ts and ("T" in ts) and (ts[0:4].isdigit()):
-            return (ts, rest)
-        return ("", s)
-
-    @staticmethod
-    def _tui_parse_toolcall(msg: str) -> Optional[Dict[str, object]]:
-        # Example:
-        #   INFO ToolCall: shell {"command":[...],"with_escalated_permissions":true,"justification":"..."}
-        if "ToolCall:" not in msg:
-            return None
-        try:
-            after = msg.split("ToolCall:", 1)[1].strip()
-            if not after:
-                return None
-            tool, rest = (after.split(" ", 1) + [""])[:2]
-            tool = tool.strip()
-            rest = rest.strip()
-            payload = None
-            if rest.startswith("{") and rest.endswith("}"):
-                try:
-                    payload = json.loads(rest)
-                except Exception:
-                    payload = None
-            return {"tool": tool, "payload": payload, "raw": rest}
-        except Exception:
-            return None
-
-    @staticmethod
-    def _map_tui_tool_name(tool: str) -> str:
-        t = str(tool or "").strip()
-        if t == "shell":
-            return "shell_command"
-        return t or "tool"
-
-    @staticmethod
-    def _redact_secrets(s: str) -> str:
-        # Best-effort redaction for common token formats.
-        out = str(s or "")
-        out = re.sub(r"\b(sk-[A-Za-z0-9]{8,})\b", "sk-***", out)
-        out = re.sub(r"\b(bearer)\s+[A-Za-z0-9._-]{12,}\b", r"\1 ***", out, flags=re.IGNORECASE)
-        return out
-
-    def _format_tool_gate_md(self, waiting: bool, toolcall: Optional[Dict[str, object]]) -> str:
-        icon = "⏸️" if waiting else "▶️"
-        title = "终端等待确认（tool gate）" if waiting else "终端已确认（tool gate released）"
-        lines = [f"{icon} {title}"]
-
-        if toolcall:
-            tool = self._map_tui_tool_name(str(toolcall.get("tool") or ""))
-            payload = toolcall.get("payload") if isinstance(toolcall.get("payload"), dict) else None
-            if tool:
-                lines.append("")
-                lines.append(f"- 工具：`{tool}`")
-            if payload and isinstance(payload, dict):
-                just = payload.get("justification")
-                if isinstance(just, str) and just.strip():
-                    lines.append(f"- 理由：{self._redact_secrets(just.strip())}")
-                cmd = payload.get("command")
-                cmd_s = ""
-                if isinstance(cmd, list):
-                    try:
-                        cmd_s = " ".join(str(x) for x in cmd if x is not None)
-                    except Exception:
-                        cmd_s = ""
-                elif isinstance(cmd, str):
-                    cmd_s = cmd
-                if cmd_s.strip():
-                    cmd_s = self._redact_secrets(cmd_s.strip())
-                    lines.append("")
-                    lines.append("```")
-                    lines.append(cmd_s)
-                    lines.append("```")
-
-        if waiting:
-            lines.append("")
-            lines.append("请回到终端完成确认/授权后，UI 才会继续刷新后续输出。")
-        return "\n".join(lines).strip()
-
-    def _emit_tool_gate(
-        self,
-        ts: str,
-        waiting: bool,
-        toolcall: Optional[Dict[str, object]],
-        synthetic: bool = False,
-    ) -> None:
-        if not ts:
-            try:
-                ts = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())
-            except Exception:
-                ts = ""
-        text = self._format_tool_gate_md(waiting=waiting, toolcall=toolcall)
-        # Synthetic init scan: avoid spamming a "released" event, only show if waiting.
-        if synthetic and not waiting:
-            return
-
-        file_path = str(self._tui_log_path)
-        try:
-            hid = _sha1_hex(f"{file_path}:tool_gate:{ts}:{text}")
-        except Exception:
-            hid = _sha1_hex(f"{file_path}:tool_gate::{text}")
-        if self._dedupe(hid, kind="tool_gate"):
-            return
-        msg = {
-            "id": hid[:16],
-            "ts": ts,
-            "kind": "tool_gate",
-            "text": text,
-            "zh": "",
-            "thread_id": self._thread_id or "",
-            "file": file_path,
-            "line": 0,
-        }
-        try:
-            self._ingest.ingest(msg)
-        except Exception:
-            return
 
     def _dedupe(self, key: str, kind: str) -> bool:
         if key in self._seen:

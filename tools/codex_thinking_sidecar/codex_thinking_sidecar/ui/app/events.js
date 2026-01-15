@@ -187,6 +187,34 @@ export function connectEventStream(dom, state, upsertThread, renderTabs, renderM
     } catch (e) {}
   }
 
+  state.uiEventSource.addEventListener("open", () => {
+    try {
+      const ever = !!(state && state.sseEverOpen);
+      state.sseEverOpen = true;
+      const hadError = !!(state && state.sseHadError);
+      state.sseHadError = false;
+
+      // Only resync after a real disconnect/reconnect (avoid double-refresh on initial connect).
+      if (ever && hadError) {
+        try { setStatus(dom, "连接已恢复，正在同步…"); } catch (_) {}
+
+        // Mark cached views as overflow so switching will refresh from source.
+        try {
+          if (state.viewCache && typeof state.viewCache.keys === "function") {
+            if (!state.sseOverflow || typeof state.sseOverflow.add !== "function") state.sseOverflow = new Set();
+            for (const k of state.viewCache.keys()) {
+              if (k && k !== "all") state.sseOverflow.add(k);
+            }
+          }
+        } catch (_) {}
+        // Drop buffered SSE during reconnect; we'll resync from source.
+        try { if (state.sseByKey && typeof state.sseByKey.clear === "function") state.sseByKey.clear(); } catch (_) {}
+
+        try { Promise.resolve(refreshList()).catch(() => {}); } catch (_) {}
+      }
+    } catch (_) {}
+  });
+
   state.uiEventSource.addEventListener("message", (ev) => {
     try {
       const msg = JSON.parse(ev.data);
@@ -200,6 +228,12 @@ export function connectEventStream(dom, state, upsertThread, renderTabs, renderM
     } catch (e) {}
   });
   state.uiEventSource.addEventListener("error", () => {
-    try { setStatus(dom, "连接已断开（可能已停止/退出）"); } catch (_) {}
+    try {
+      if (state && typeof state === "object") {
+        if (state.sseHadError) return;
+        state.sseHadError = true;
+      }
+      try { setStatus(dom, "连接已断开，等待自动重连…"); } catch (_) {}
+    } catch (_) {}
   });
 }
