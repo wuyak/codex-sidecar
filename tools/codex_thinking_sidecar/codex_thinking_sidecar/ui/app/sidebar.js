@@ -63,6 +63,34 @@ export function clearTabs(dom) {
   while (tabs.firstChild) tabs.removeChild(tabs.firstChild);
 }
 
+function _getOrCreateTab(tabs, existing, key, create) {
+  const k = String(key || "");
+  const prev = existing && typeof existing.get === "function" ? existing.get(k) : null;
+  if (prev) return prev;
+  const el = create();
+  try { el.dataset.key = k; } catch (_) {}
+  return el;
+}
+
+function _ensureTabStructure(btn) {
+  if (!btn) return null;
+  const dot = btn.querySelector ? btn.querySelector(".tab-dot") : null;
+  const labelSpan = btn.querySelector ? btn.querySelector(".tab-label") : null;
+  const countEl = btn.querySelector ? btn.querySelector("small") : null;
+  if (dot && labelSpan && countEl) return { dot, labelSpan, countEl };
+  // (Re)build inner structure once; updates reuse these nodes.
+  while (btn.firstChild) btn.removeChild(btn.firstChild);
+  const d = document.createElement("span");
+  d.className = "tab-dot";
+  const l = document.createElement("span");
+  l.className = "tab-label";
+  const s = document.createElement("small");
+  btn.appendChild(d);
+  btn.appendChild(l);
+  btn.appendChild(s);
+  return { dot: d, labelSpan: l, countEl: s };
+}
+
 export function upsertThread(state, msg) {
   const key = keyOf(msg);
   const prev = state.threadIndex.get(key) || { key, thread_id: msg.thread_id || "", file: msg.file || "", count: 0, last_ts: "", last_seq: 0 };
@@ -77,23 +105,32 @@ export function upsertThread(state, msg) {
 export function renderTabs(dom, state, onSelectKey) {
   const tabs = dom.tabs;
   if (!tabs) return;
+  const existing = new Map();
+  try {
+    const btns = tabs.querySelectorAll ? tabs.querySelectorAll("button.tab") : [];
+    for (const b of btns) {
+      const k = b && b.dataset ? String(b.dataset.key || "") : "";
+      if (k) existing.set(k, b);
+    }
+  } catch (_) {}
+
   const items = Array.from(state.threadIndex.values()).sort((a, b) => {
     const sa = Number(a && a.last_seq) || 0;
     const sb = Number(b && b.last_seq) || 0;
     if (sa !== sb) return sb - sa;
     return String(b.last_ts || "").localeCompare(String(a.last_ts || ""));
   });
-  clearTabs(dom);
+  const frag = document.createDocumentFragment();
 
-  const allBtn = document.createElement("button");
+  const allBtn = _getOrCreateTab(tabs, existing, "all", () => document.createElement("button"));
   allBtn.className = "tab" + (state.currentKey === "all" ? " active" : "");
   allBtn.textContent = "全部";
   allBtn.title = "全部";
   allBtn.onclick = () => onSelectKey("all");
-  tabs.appendChild(allBtn);
+  frag.appendChild(allBtn);
 
   for (const t of items) {
-    const btn = document.createElement("button");
+    const btn = _getOrCreateTab(tabs, existing, t.key, () => document.createElement("button"));
     btn.className = "tab" + (state.currentKey === t.key ? " active" : "");
     const clr = colorForKey(t.key || "");
     const defaultLabel = threadLabel(t);
@@ -101,17 +138,12 @@ export function renderTabs(dom, state, onSelectKey) {
     const label = custom || defaultLabel;
 
     try { btn.style.borderColor = clr.border; } catch (_) {}
-    const dot = document.createElement("span");
-    dot.className = "tab-dot";
-    try { dot.style.background = clr.fg; } catch (_) {}
-    const labelSpan = document.createElement("span");
-    labelSpan.className = "tab-label";
-    labelSpan.textContent = label;
-    const small = document.createElement("small");
-    small.textContent = `(${t.count || 0})`;
-    btn.appendChild(dot);
-    btn.appendChild(labelSpan);
-    btn.appendChild(small);
+    const parts = _ensureTabStructure(btn);
+    if (parts) {
+      try { parts.dot.style.background = clr.fg; } catch (_) {}
+      try { parts.labelSpan.textContent = label; } catch (_) {}
+      try { parts.countEl.textContent = `(${t.count || 0})`; } catch (_) {}
+    }
 
     const rename = () => {
       const cur = getCustomLabel(t.key);
@@ -123,10 +155,16 @@ export function renderTabs(dom, state, onSelectKey) {
       else setCustomLabel(t.key, v);
       renderTabs(dom, state, onSelectKey);
     };
-    btn.addEventListener("contextmenu", (e) => { try { e.preventDefault(); e.stopPropagation(); } catch (_) {} rename(); });
-    btn.addEventListener("dblclick", (e) => { try { e.preventDefault(); e.stopPropagation(); } catch (_) {} rename(); });
+    btn.oncontextmenu = (e) => { try { e.preventDefault(); e.stopPropagation(); } catch (_) {} rename(); };
+    btn.ondblclick = (e) => { try { e.preventDefault(); e.stopPropagation(); } catch (_) {} rename(); };
     btn.title = t.thread_id || t.file || t.key;
     btn.onclick = () => onSelectKey(t.key);
-    tabs.appendChild(btn);
+    frag.appendChild(btn);
+  }
+
+  // Replace children by reusing existing nodes (stable event handlers; cheap reorder).
+  try { tabs.replaceChildren(frag); } catch (_) {
+    clearTabs(dom);
+    tabs.appendChild(frag);
   }
 }
