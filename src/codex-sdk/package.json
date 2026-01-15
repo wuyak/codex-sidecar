@@ -11,6 +11,11 @@
     "@openai/codex-sdk": "^0.80.0"
   },
   "scripts": {
-    "turn": "node ./run_turn.mjs"
+    "turn": "node ./run_turn.mjs",
+    "serve": "node ./server.mjs",
+    "quickstart": "node ./examples/quickstart.mjs",
+    "stream": "node ./examples/streamed.mjs",
+    "structured": "node ./examples/structured.mjs",
+    "resume": "node ./examples/resume.mjs"
   }
 }

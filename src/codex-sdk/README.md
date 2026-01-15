@@ -7,6 +7,44 @@
 - 首次安装依赖：
   - `npm install`
 
+## 官方教程（快速上手）
+
+本目录内置了按官方 README 风格编写的示例（仅依赖 `@openai/codex-sdk`）：
+
+```bash
+cd src/codex-sdk
+npm install
+
+# Quickstart
+npm run quickstart -- "Summarize repository status"
+
+# Streaming（观察 tool/file_change/usage 等事件）
+npm run stream -- "Diagnose the test failure and propose a fix"
+
+# Structured output（outputSchema）
+npm run structured -- "Summarize repository status"
+
+# Resuming thread
+npm run resume -- "<threadId>" "Implement the fix"
+```
+
+## 本地控制台（浏览器输入）
+
+不改动本仓库既有 UI 目录；在 `src/codex-sdk` 内单独提供一个本地 Web 控制台：
+
+```bash
+cd src/codex-sdk
+npm install
+npm run serve
+```
+
+打开：
+- `http://127.0.0.1:8790/ui`
+
+说明：
+- 默认仅监听 `127.0.0.1`；如确需对外开放，需显式设置 `CODEX_SDK_ALLOW_REMOTE=1`（强烈不建议）。
+- `threadId` 可留空（新对话），也可粘贴恢复（续聊）。
+
 ## 本地自测（一次 Turn）
 
 > 该脚本为“单次执行器”，由上层 Python sidecar 按需调用；不常驻端口。
