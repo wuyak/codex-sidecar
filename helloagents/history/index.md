@@ -23,3 +23,4 @@
 - 202601151301_ui_sidebar_incremental_tabs
 - 202601151307_ui_lazy_decorate
 - 202601151448_rollout_extract_threads_sync
+- 202601151455_ui_sse_update_coalesce

@@ -55,6 +55,26 @@ function _bufferForKey(state, key, msg) {
     state.sseByKey.delete(k);
     return;
   }
+
+  // Coalesce op=update by id to avoid flooding buffers during slow translation backfill.
+  try {
+    const op = String((msg && msg.op) ? msg.op : "").trim().toLowerCase();
+    const mid = (msg && typeof msg.id === "string") ? msg.id : "";
+    if (op === "update" && mid) {
+      for (let i = buf.length - 1; i >= 0; i--) {
+        const prev = buf[i];
+        if (!prev || typeof prev !== "object") continue;
+        const pop = String((prev.op) ? prev.op : "").trim().toLowerCase();
+        const pid = (typeof prev.id === "string") ? prev.id : "";
+        if (pop === "update" && pid === mid) {
+          buf[i] = msg;
+          state.sseByKey.set(k, buf);
+          return;
+        }
+      }
+    }
+  } catch (_) {}
+
   buf.push(msg);
   state.sseByKey.set(k, buf);
 }
