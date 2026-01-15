@@ -39,17 +39,35 @@ def _tool_call_needs_approval(text: str) -> bool:
     """
     Best-effort heuristic for Codex CLI approval prompts.
 
-    When approval_policy is on-request, tool calls may require the user to confirm
-    before executing (e.g. sandbox_permissions=require_escalated). Those prompts
-    are not always visible in rollout JSONL, so we emit a UI hint proactively.
+    注意：sandbox_permissions=require_escalated 并不一定意味着“真的会卡住等待用户确认”，
+    这取决于 Codex 的 approval_policy（例如 never/auto/on-request）。
+    这里仅用于“提示可能需要终端确认”，避免误报为确定的 tool gate 状态。
     """
-    s = str(text or "").lower()
-    if "require_escalated" in s:
-        if "sandbox_permissions" in s or "with_escalated_permissions" in s:
-            return True
-        # Some variants only keep the value; still treat as likely approval.
+    lines = [ln for ln in str(text or "").splitlines() if ln is not None]
+    if not lines:
+        return False
+    # rollout_extract tool_call format:
+    #   title\ncall_id=...\n{json args}
+    # or
+    #   title\n{json args}
+    args_raw = ""
+    if len(lines) >= 2 and lines[1].startswith("call_id="):
+        args_raw = "\n".join(lines[2:]).strip()
+    else:
+        args_raw = "\n".join(lines[1:]).strip()
+    if not (args_raw.startswith("{") and args_raw.endswith("}")):
+        return False
+    try:
+        obj = json.loads(args_raw)
+    except Exception:
+        return False
+    if not isinstance(obj, dict):
+        return False
+    sp = obj.get("sandbox_permissions")
+    if isinstance(sp, str) and sp.strip() == "require_escalated":
         return True
-    if "with_escalated_permissions" in s and ("true" in s or ": true" in s):
+    wep = obj.get("with_escalated_permissions")
+    if wep is True:
         return True
     return False
 
@@ -77,7 +95,7 @@ def _format_approval_hint(tool_call_text: str) -> str:
     except Exception:
         pass
 
-    head = "⏸️ 终端等待确认（需要批准）"
+    head = "⚠️ 权限升级提示（可能需要终端确认）"
     parts = [head, "", f"- 工具：`{title}`"]
     if just:
         parts.append(f"- 原因（justification）：{_redact_secrets(just)}")
@@ -87,7 +105,7 @@ def _format_approval_hint(tool_call_text: str) -> str:
         parts.append(_redact_secrets(cmd.strip()))
         parts.append("```")
     parts.append("")
-    parts.append("请回到终端完成确认/授权后，工具输出才会继续出现。")
+    parts.append("注：该提示来自 tool_call 参数推断；是否需要批准以终端为准。若终端未出现确认提示，可忽略。")
     return "\n".join(parts).strip()
 
 

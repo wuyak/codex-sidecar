@@ -18,16 +18,19 @@ function _summarizeToolGate(text) {
   let tool = "";
   let just = "";
   let cmd = "";
+  let maybeStale = false;
   let inCode = false;
   for (const raw of lines) {
     const ln = String(raw || "").trim();
     if (!ln) continue;
     if (ln.startsWith("```")) { inCode = !inCode; continue; }
     if (inCode && !cmd) { cmd = ln; continue; }
+    if (ln.includes("尾部扫描") || ln.includes("历史残留")) maybeStale = true;
     if (!tool && ln.startsWith("- 工具")) tool = ln.replace(/^-\\s*工具\\s*[:：]\\s*/g, "").replaceAll("`", "").trim();
     if (!just && (ln.startsWith("- 原因") || ln.startsWith("- 理由"))) just = ln.replace(/^-\\s*(原因|理由)[^:：]*[:：]\\s*/g, "").trim();
   }
   const parts = [];
+  if (maybeStale) parts.push("注：可能是历史残留");
   if (tool) parts.push(`工具：${tool}`);
   if (just) parts.push(`原因：${just}`);
   if (cmd) parts.push(`命令：${cmd}`);
