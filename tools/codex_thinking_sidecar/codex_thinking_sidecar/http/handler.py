@@ -252,6 +252,20 @@ class SidecarHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.OK, self._controller.stop())
             return
 
+        if self.path == "/api/control/retranslate":
+            length = int(self.headers.get("Content-Length") or "0")
+            raw = self.rfile.read(length) if length > 0 else b"{}"
+            try:
+                obj = json.loads(raw.decode("utf-8", errors="replace"))
+            except Exception:
+                obj = {}
+            if not isinstance(obj, dict):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "invalid_payload"})
+                return
+            mid = str(obj.get("id") or obj.get("mid") or obj.get("msg_id") or "")
+            self._send_json(HTTPStatus.OK, self._controller.retranslate(mid))
+            return
+
         if self.path == "/api/control/follow":
             length = int(self.headers.get("Content-Length") or "0")
             raw = self.rfile.read(length) if length > 0 else b"{}"
@@ -339,4 +353,3 @@ class SidecarHandler(BaseHTTPRequestHandler):
 
         self._state.add(obj)
         self._send_json(HTTPStatus.OK, {"ok": True, "op": "add"})
-

@@ -38,5 +38,10 @@ export function createState() {
 
     // Markdown 渲染缓存（用于频繁切换/重绘加速）
     mdCache: new Map(), // key -> { text, html }
+
+    // 思考行局部显示模式（mid -> "en"|"zh"|"both"），用于单条切换而不影响全局 displayMode。
+    thinkModeById: new Map(),
+    thinkModeOrder: [], // LRU-ish for pruning
+    thinkModeMax: 600,
   };
 }

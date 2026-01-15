@@ -144,6 +144,55 @@ class SidecarController:
         except Exception:
             return
 
+    def retranslate(self, mid: str) -> Dict[str, Any]:
+        """
+        Force (re)translation for a single message id.
+        Used by the UI "翻译/重译" button on thinking rows.
+        """
+        m = str(mid or "").strip()
+        if not m:
+            return {"ok": False, "error": "missing_id"}
+
+        try:
+            msg = self._state.get_message(m)
+        except Exception:
+            msg = None
+        if not isinstance(msg, dict):
+            return {"ok": False, "error": "not_found"}
+
+        kind = str(msg.get("kind") or "")
+        if kind not in ("reasoning_summary", "agent_reasoning"):
+            return {"ok": False, "error": "not_thinking"}
+
+        text = str(msg.get("text") or "")
+        if not text.strip():
+            return {"ok": False, "error": "empty_text"}
+
+        thread_id = str(msg.get("thread_id") or "")
+        file_path = str(msg.get("file") or "")
+        thread_key = thread_id or file_path or "unknown"
+
+        watcher = None
+        running = False
+        with self._lock:
+            watcher = self._watcher
+            running = bool(self._thread is not None and self._thread.is_alive())
+        if watcher is None or not running:
+            return {"ok": False, "error": "not_running"}
+
+        # Clear existing zh to make the UI show "ZH…" while re-translation is in-flight.
+        try:
+            self._state.add({"op": "update", "id": m, "zh": ""})
+        except Exception:
+            pass
+
+        ok = False
+        try:
+            ok = bool(watcher.retranslate(m, text=text, thread_key=thread_key))
+        except Exception:
+            ok = False
+        return {"ok": ok, "id": m, "queued": ok}
+
     def start(self) -> Dict[str, Any]:
         with self._lock:
             if self._thread is not None and self._thread.is_alive():

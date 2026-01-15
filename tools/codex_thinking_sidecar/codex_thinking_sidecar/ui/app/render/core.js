@@ -57,7 +57,7 @@ export function renderMessage(dom, state, msg, opts = {}) {
   // 翻译回填：优先原位更新（保留行内状态），失败则回退为整行 replace。
   if (canPatch) {
     const zhText = (typeof msg.zh === "string") ? msg.zh : "";
-    const vis = getThinkingVisibility(dom);
+    const vis = getThinkingVisibility(dom, state, mid);
     const isUpdate = String((msg && msg.op) ? msg.op : "").trim().toLowerCase() === "update";
     const ok = tryPatchThinkingRow(dom, state, msg, row, { mid, t, zhText, isUpdate, ...vis });
     if (ok) {
@@ -108,11 +108,14 @@ export function renderMessage(dom, state, msg, opts = {}) {
     }
   } else if (isThinking) {
     const zhText = (typeof msg.zh === "string") ? msg.zh : "";
-    const vis = getThinkingVisibility(dom);
+    const vis = getThinkingVisibility(dom, state, mid);
     const r = renderThinkingBlock(state, msg, { mid, zhText, ...vis });
     metaLeftExtra = r.metaLeftExtra || "";
     metaRightExtra = r.metaRightExtra || "";
     body = r.body || "";
+    if (r.rowModeClass) {
+      try { row.className = `${row.className} ${r.rowModeClass}`.trim(); } catch (_) {}
+    }
   } else {
     body = `<pre>${escapeHtml(msg.text || "")}</pre>`;
   }

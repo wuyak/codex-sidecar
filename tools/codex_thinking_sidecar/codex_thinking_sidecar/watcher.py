@@ -101,6 +101,27 @@ class RolloutWatcher:
             batch_size=5,
         )
 
+    def retranslate(self, mid: str, text: str, thread_key: str) -> bool:
+        """
+        Force (re)translation for a single message id.
+        Called from the HTTP control plane when user clicks "重译" in the UI.
+        """
+        if self._stop_requested():
+            return False
+        try:
+            if self._translate is None:
+                return False
+            self._translate.enqueue(
+                mid=str(mid or "").strip(),
+                text=str(text or ""),
+                thread_key=str(thread_key or ""),
+                batchable=False,
+                force=True,
+            )
+            return True
+        except Exception:
+            return False
+
     def _stop_requested(self) -> bool:
         ev = self._stop_event
         if ev is None:

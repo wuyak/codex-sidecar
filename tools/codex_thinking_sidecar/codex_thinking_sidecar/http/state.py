@@ -126,6 +126,17 @@ class SidecarState:
         with self._lock:
             return list(self._messages)
 
+    def get_message(self, mid: str) -> Optional[dict]:
+        """
+        Fetch a message by id (best-effort copy).
+        """
+        k = str(mid or "")
+        if not k:
+            return None
+        with self._lock:
+            cur = self._by_id.get(k)
+            return dict(cur) if isinstance(cur, dict) else None
+
     def list_threads(self) -> List[dict]:
         with self._lock:
             msgs = list(self._messages)
@@ -167,4 +178,3 @@ class SidecarState:
 
     def unsubscribe(self, q: "queue.Queue[dict]") -> None:
         self._broadcaster.unsubscribe(q)
-

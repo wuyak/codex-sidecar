@@ -69,20 +69,21 @@ class TranslationPump:
         t.start()
         self._thread = t
 
-    def enqueue(self, mid: str, text: str, thread_key: str, batchable: bool) -> None:
+    def enqueue(self, mid: str, text: str, thread_key: str, batchable: bool, *, force: bool = False) -> None:
         m = str(mid or "").strip()
         t = str(text or "")
         if not m or not t.strip():
             return
 
-        # Dedupe (bounded).
-        if m in self._seen:
+        # Dedupe (bounded). "force" bypasses the early return so UI can re-translate a row.
+        if not force and m in self._seen:
             return
-        self._seen.add(m)
-        self._seen_order.append(m)
-        while len(self._seen_order) > self._seen_max:
-            old = self._seen_order.popleft()
-            self._seen.discard(old)
+        if m not in self._seen:
+            self._seen.add(m)
+            self._seen_order.append(m)
+            while len(self._seen_order) > self._seen_max:
+                old = self._seen_order.popleft()
+                self._seen.discard(old)
 
         item: Dict[str, Any] = {
             "id": m,
