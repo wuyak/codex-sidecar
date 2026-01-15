@@ -74,7 +74,7 @@ export function connectEventStream(dom, state, upsertThread, renderTabs, renderM
       if (shouldRender) {
         if (op === "update" && mid && state.rowIndex && state.rowIndex.has(mid)) {
           const oldRow = state.rowIndex.get(mid);
-          renderMessage(dom, state, msg, { replaceEl: oldRow });
+          renderMessage(dom, state, msg, { patchEl: oldRow });
         } else if (op !== "update") {
           // Keep a strict ordering invariant: insert by (timestamp, seq) instead of append+refresh.
           if (!state.timeline || !Array.isArray(state.timeline)) state.timeline = [];
@@ -83,7 +83,7 @@ export function connectEventStream(dom, state, upsertThread, renderTabs, renderM
           const item = { id: mid, ms, seq };
           if (mid && state.rowIndex && state.rowIndex.has(mid)) {
             const oldRow = state.rowIndex.get(mid);
-            renderMessage(dom, state, msg, { replaceEl: oldRow });
+            renderMessage(dom, state, msg, { patchEl: oldRow });
           } else {
             const idx = _findInsertIndex(state.timeline, item);
             let beforeEl = null;

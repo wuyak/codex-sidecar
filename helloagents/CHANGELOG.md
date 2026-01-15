@@ -1,11 +1,11 @@
 # Changelog
 
 ## [Unreleased]
-- UI: 拆分 `ui/app/sdk.js` / `ui/app/render.js`，引入子目录实现（保持纯静态，无构建）
+- UI: 拆分 `ui/app/render.js`，引入子目录实现（保持纯静态，无构建）
 - UI: 优化列表刷新/切换性能：使用 `DocumentFragment`，刷新期间暂存 SSE 并在结束后回放；思考区增加“ZH 翻译中”占位提示（对照/英文模式可见）。
+- UI: 优化频繁切换时的重绘成本：Markdown 渲染按消息缓存；翻译回填尽量原位更新（不整行 replace）。
 
 - UI: 拆分 `ui/app/markdown.js` / `ui/app/decorate.js`，引入子目录实现（保持纯静态，无构建）
-- 新增：SDK 控制模式（浏览器输入栏 → `/api/sdk/turn/run` → Codex SDK 执行一次 turn，并写回 `/events` 统一展示；`/api/sdk/status` 提供依赖/权限诊断与 CSRF token）。
 - 新增：UI 控制面（保存配置、开始/停止监听、清空显示）+ 短命令 `./ui.sh`。
 - 优化：`./ui.sh` 当端口已有健康服务时直接打开已有 UI 并退出，避免端口占用反复报错。
 - 新增：翻译 Provider 预留与 UI 切换（stub/none/http/openai）。

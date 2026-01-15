@@ -20,6 +20,36 @@ import {
 } from "./format.js";
 import { escapeHtml, extractJsonOutputString, formatTs, safeDomId, safeJsonParse } from "../utils.js";
 
+const _MD_CACHE_MAX = 3000;
+
+function _renderMarkdownCached(state, cacheKey, text) {
+  const src = String(text || "");
+  const k = String(cacheKey || "");
+  if (!k || !state || typeof state !== "object" || !state.mdCache || typeof state.mdCache.get !== "function") {
+    return String(renderMarkdown(src) || "");
+  }
+  const cache = state.mdCache;
+  try {
+    const prev = cache.get(k);
+    if (prev && typeof prev === "object" && prev.text === src && typeof prev.html === "string") {
+      // bump LRU
+      cache.delete(k);
+      cache.set(k, prev);
+      return prev.html;
+    }
+  } catch (_) {}
+  const html = String(renderMarkdown(src) || "");
+  try {
+    cache.set(k, { text: src, html });
+    while (cache.size > _MD_CACHE_MAX) {
+      const firstKey = cache.keys().next().value;
+      if (firstKey === undefined) break;
+      cache.delete(firstKey);
+    }
+  } catch (_) {}
+  return html;
+}
+
 export function clearList(dom) {
   const list = dom.list;
   if (!list) return;
@@ -37,17 +67,14 @@ export function renderEmpty(dom) {
 
 export function renderMessage(dom, state, msg, opts = {}) {
   const opt = (opts && typeof opts === "object") ? opts : {};
-  const list = opt.list || dom.list;
-  if (!list) return;
+  const patchEl = opt.patchEl || null;
   const insertBefore = opt.insertBefore || null;
   const replaceEl = opt.replaceEl || null;
 
-  const row = document.createElement("div");
+  const mid = (msg && typeof msg.id === "string") ? msg.id : "";
   const t = formatTs(msg.ts || "");
   const kind = msg.kind || "";
   const kindClass = String(kind || "").replace(/[^a-z0-9_-]/gi, "-");
-  row.className = "row" + (kindClass ? ` kind-${kindClass}` : "");
-
   const mode = (dom.displayMode && dom.displayMode.value) ? dom.displayMode.value : "both";
   const isThinking = (kind === "reasoning_summary" || kind === "agent_reasoning");
   const showEn = !isThinking ? true : (mode !== "zh");
@@ -58,6 +85,91 @@ export function renderMessage(dom, state, msg, opts = {}) {
   const autoscroll = ("autoscroll" in opt)
     ? !!opt.autoscroll
     : ((window.innerHeight + window.scrollY) >= (document.body.scrollHeight - 80));
+
+  const canPatch = !!(
+    patchEl &&
+    patchEl.nodeType === 1 &&
+    isThinking &&
+    mid &&
+    patchEl.dataset &&
+    patchEl.dataset.msgId === mid
+  );
+
+  const list = opt.list || dom.list || (canPatch ? patchEl.parentNode : null);
+  if (!list && !canPatch) return;
+  const replaceTarget = replaceEl || (!canPatch ? patchEl : null) || null;
+
+  const row = canPatch ? patchEl : document.createElement("div");
+  row.className = "row" + (kindClass ? ` kind-${kindClass}` : "");
+
+  // 翻译回填：优先原位更新（保留行内状态），失败则回退为整行 replace。
+  if (canPatch) {
+    try {
+      const metaLeft = row.querySelector ? row.querySelector(".meta-left") : null;
+      const metaRight = row.querySelector ? row.querySelector(".meta-right") : null;
+      if (!metaLeft || !metaRight) throw new Error("missing meta");
+
+      const enText = showEn ? cleanThinkingText(msg.text || "") : "";
+      const zhClean = (hasZh) ? cleanThinkingText(zhText) : "";
+      const hasZhClean = !!String(zhClean || "").trim();
+      const waitingZh = (!hasZhClean);
+
+      const pills = [];
+      if (showEn) pills.push(`<span class="pill">思考（EN）</span>`);
+      if (showZh && hasZhClean) pills.push(`<span class="pill">思考（ZH）</span>`);
+      else if (showZh && waitingZh) pills.push(`<span class="pill">思考（ZH…）</span>`);
+
+      const metaRightExtra = (!showZh)
+        ? (hasZhClean ? `<span class="pill">ZH 已就绪</span>` : `<span class="pill">ZH 翻译中</span>`)
+        : "";
+
+      metaLeft.innerHTML = `
+        <span class="timestamp">${escapeHtml(t.local || t.utc)}</span>
+        ${pills.join("")}
+      `;
+      metaRight.innerHTML = metaRightExtra || "";
+
+      // Update EN (optional)
+      if (showEn) {
+        const enRendered = _renderMarkdownCached(state, `md:${mid}:think_en`, enText);
+        const enEl = row.querySelector(".think-en");
+        if (enEl) enEl.innerHTML = enRendered || "";
+      }
+
+      // Update ZH (optional)
+      if (showZh) {
+        const zhRendered = hasZhClean ? _renderMarkdownCached(state, `md:${mid}:think_zh`, zhClean) : "";
+        const enHas = !!(showEn && String(enText || "").trim());
+        const zhEl = row.querySelector(".think-zh");
+        if (!zhEl) throw new Error("missing zh container");
+        zhEl.className = `think-zh md${enHas ? " think-split" : ""}`;
+        zhEl.innerHTML = zhRendered || "";
+
+        let waitEl = row.querySelector(".think-wait");
+        if (waitingZh) {
+          if (!waitEl) {
+            waitEl = document.createElement("div");
+            waitEl.className = "think-wait meta";
+            waitEl.textContent = "（ZH 翻译中…）";
+            try {
+              const anchor = (zhEl.closest && zhEl.closest(".pre-wrap")) ? zhEl.closest(".pre-wrap") : zhEl;
+              anchor.parentNode && anchor.parentNode.insertBefore(waitEl, anchor.nextSibling);
+            } catch (_) {}
+          } else {
+            waitEl.textContent = "（ZH 翻译中…）";
+          }
+        } else if (waitEl && waitEl.parentNode) {
+          try { waitEl.parentNode.removeChild(waitEl); } catch (_) {}
+        }
+      }
+
+      decorateRow(row);
+      if (autoscroll) window.scrollTo(0, document.body.scrollHeight);
+      return;
+    } catch (_) {
+      // fall through to full render+replace below
+    }
+  }
 
   let body = "";
   let metaLeftExtra = "";
@@ -169,7 +281,7 @@ export function renderMessage(dom, state, msg, opts = {}) {
         ...(explanation.trim() ? ["", "**说明**", explanation.trim()] : []),
       ].join("\n");
       metaLeftExtra = `<span class="pill">更新计划</span><span class="pill">${escapeHtml(String(items.length || 0))} 项</span>`;
-      body = `<div class="md">${renderMarkdown(md)}</div>`;
+      body = `<div class="md">${_renderMarkdownCached(state, `md:${mid}:update_plan`, md)}</div>`;
     } else {
       metaLeftExtra = `<span class="pill">工具调用</span><span class="pill"><code>${escapeHtml(toolName)}</code></span>`;
       const pretty = argsObj ? JSON.stringify(argsObj, null, 2) : argsRaw;
@@ -182,15 +294,15 @@ export function renderMessage(dom, state, msg, opts = {}) {
   } else if (kind === "tool_gate") {
     metaLeftExtra = `<span class="pill">终端确认</span>`;
     const txt = String(msg.text || "");
-    body = `<div class="md">${renderMarkdown(txt)}</div>`;
+    body = `<div class="md">${_renderMarkdownCached(state, `md:${mid}:tool_gate`, txt)}</div>`;
   } else if (kind === "user_message") {
     metaLeftExtra = `<span class="pill">用户输入</span>`;
     const txt = String(msg.text || "");
     const split = splitLeadingCodeBlock(txt);
     if (split && split.code) {
-      body = `${split.code ? `<pre class="code">${escapeHtml(split.code)}</pre>` : ``}${split.rest ? `<div class="md">${renderMarkdown(split.rest)}</div>` : ``}`;
+      body = `${split.code ? `<pre class="code">${escapeHtml(split.code)}</pre>` : ``}${split.rest ? `<div class="md">${_renderMarkdownCached(state, `md:${mid}:user_rest`, split.rest)}</div>` : ``}`;
     } else {
-      body = `<div class="md">${renderMarkdown(txt)}</div>`;
+      body = `<div class="md">${_renderMarkdownCached(state, `md:${mid}:user`, txt)}</div>`;
     }
   } else if (kind === "assistant_message") {
     metaLeftExtra = `<span class="pill">回答</span>`;
@@ -198,29 +310,37 @@ export function renderMessage(dom, state, msg, opts = {}) {
     if (isCodexEditSummary(txt)) {
       body = renderCodexEditSummary(txt) || `<pre>${escapeHtml(txt)}</pre>`;
     } else {
-      body = `<div class="md">${renderMarkdown(txt)}</div>`;
+      body = `<div class="md">${_renderMarkdownCached(state, `md:${mid}:assistant`, txt)}</div>`;
     }
   } else if (isThinking) {
     const enText = showEn ? cleanThinkingText(msg.text || "") : "";
-    const zhClean = (showZh && hasZh) ? cleanThinkingText(zhText) : "";
+    const zhClean = (hasZh) ? cleanThinkingText(zhText) : "";
     const hasZhClean = !!String(zhClean || "").trim();
-    const waitingZh = (showZh && !hasZhClean);
+    const waitingZh = (!hasZhClean);
 
     const pills = [];
     if (showEn) pills.push(`<span class="pill">思考（EN）</span>`);
     if (showZh && hasZhClean) pills.push(`<span class="pill">思考（ZH）</span>`);
-    else if (waitingZh) pills.push(`<span class="pill">思考（ZH…）</span>`);
+    else if (showZh && waitingZh) pills.push(`<span class="pill">思考（ZH…）</span>`);
     metaLeftExtra = pills.join("");
 
-    const enRendered = showEn ? renderMarkdown(enText) : "";
-    const enHtml = enRendered ? `<div class="md">${enRendered}</div>` : "";
-    const zhRendered = (showZh && hasZhClean) ? renderMarkdown(zhClean) : "";
-    const zhCls = enHtml ? "md think-split" : "md";
-    const zhHtml = zhRendered ? `<div class="${zhCls}">${zhRendered}</div>` : "";
-    const waitingHtml = waitingZh ? `<div class="meta">（ZH 翻译中…）</div>` : "";
-    body = (enHtml || zhHtml)
-      ? (`${enHtml}${zhHtml || waitingHtml}`)
-      : (waitingHtml || `<div class="meta">（空）</div>`);
+    metaRightExtra = (!showZh)
+      ? (hasZhClean ? `<span class="pill">ZH 已就绪</span>` : `<span class="pill">ZH 翻译中</span>`)
+      : "";
+
+    const enHas = !!(showEn && String(enText || "").trim());
+    const enRendered = enHas ? _renderMarkdownCached(state, `md:${mid}:think_en`, enText) : "";
+    const zhRendered = (showZh && hasZhClean) ? _renderMarkdownCached(state, `md:${mid}:think_zh`, zhClean) : "";
+
+    const parts = [`<div class="think">`];
+    if (enHas) parts.push(`<div class="think-en md">${enRendered || ""}</div>`);
+    if (showZh) {
+      const zhCls = `think-zh md${enHas ? " think-split" : ""}`;
+      parts.push(`<div class="${zhCls}">${zhRendered || ""}</div>`);
+      if (waitingZh) parts.push(`<div class="think-wait meta">（ZH 翻译中…）</div>`);
+    }
+    parts.push(`</div>`);
+    body = parts.join("");
   } else {
     body = `<pre>${escapeHtml(msg.text || "")}</pre>`;
   }
@@ -238,12 +358,11 @@ export function renderMessage(dom, state, msg, opts = {}) {
     ${body}
   `;
   decorateRow(row);
-  const mid = (msg && typeof msg.id === "string") ? msg.id : "";
   if (mid) {
     row.dataset.msgId = mid;
     try { row.id = `msg_${safeDomId(mid)}`; } catch (_) {}
   }
-  if (replaceEl && replaceEl.parentNode === list) list.replaceChild(row, replaceEl);
+  if (replaceTarget && replaceTarget.parentNode === list) list.replaceChild(row, replaceTarget);
   else if (insertBefore) list.insertBefore(row, insertBefore);
   else list.appendChild(row);
   if (mid && state && state.rowIndex && typeof state.rowIndex.set === "function") {

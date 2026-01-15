@@ -3,7 +3,6 @@
 > 该目录存放已执行的方案包（从 `helloagents/plan/` 迁移而来）。
 
 ## 2026-01
-- 202601150005_codex_sdk_control_mode
 - 202601141118_config_xdg_recovery_ui
 - 202601131834_ui_scroll_and_tool_cards
 - 202601131333_ui_order_and_full_turn_view
@@ -16,3 +15,4 @@
 - 202601131049_multi_translate_profiles
 - 202601150958_ui_refactor_modules
 - 202601151037_ui_perf_translation
+- 202601151050_ui_cache_patch_update

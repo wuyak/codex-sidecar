@@ -19,10 +19,7 @@ export function createState() {
     ssePending: [],
     sseFlushTimer: 0,
 
-    // SDK 控制模式状态（由 /api/sdk/status 动态探测）
-    sdkAvailable: false,
-    sdkCsrfToken: "",
-    sdkThreadId: "",
-    sdkBusy: false,
+    // Markdown 渲染缓存（用于频繁切换/重绘加速）
+    mdCache: new Map(), // key -> { text, html }
   };
 }

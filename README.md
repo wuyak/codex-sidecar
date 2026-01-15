@@ -7,6 +7,7 @@
 - **翻译解耦**：翻译在后台队列慢慢补齐，完成后以 `op=update` 回填到原消息块（不改变时间线位置）。
 - **时间线稳定**：服务端为新增消息附加单调递增 `seq`，UI 按 `(timestamp, seq)` 插入渲染，避免“时间倒退/回跳”。
 - **切换稳定**：UI 刷新列表期间暂存 SSE 消息，刷新结束后批量回放，避免清空/插入并发导致错位或闪烁。
+- **渲染加速**：Markdown 渲染按消息缓存；翻译回填优先原位更新 ZH 区块，减少重绘与上下文丢失。
 
 ## 快速开始
 
@@ -45,22 +46,13 @@ cd ~/src/codex-thinking-sidecar-zh
 - `进程定位/仅跟随进程/进程 regex`：在 Linux/WSL 下用 `/proc/<pid>/fd` 更精准跟随正在写入的 rollout 文件，减少“挂着但读旧会话”
 - `poll/scan`：读文件/扫描新会话文件的频率
 
-### 可选：SDK 控制模式（实验性）
-项目内包含 `src/codex-sdk/`（Node.js），sidecar 提供 `/api/sdk/*` 接口用于从 UI 发送一条文本到本机 Codex 会话（并把 user/assistant 消息写回同一事件流展示）。
-
-前置条件：
-- 需要 Node.js（建议 ≥ 18）
-- 首次使用需在 `src/codex-sdk` 安装依赖：`npm install`
-
 ## 目录结构（概览）
 
 - `tools/codex_thinking_sidecar/codex_thinking_sidecar/`
   - `watcher.py`: 跟随 rollout 读取→`/ingest`；翻译后台队列（批量仅用于回放导入）
   - `server.py`: HTTP+SSE；消息 `seq`；`op=add/update`
-  - `ui/`: 纯静态 UI（无构建）
+    - `ui/`: 纯静态 UI（无构建）
     - `ui/app/render.js`: 时间线渲染门面（实现：`ui/app/render/core.js`）
-    - `ui/app/sdk.js`: SDK 控制 UI 门面（实现：`ui/app/sdk/core.js`；存储：`ui/app/sdk/storage.js`）
     - `ui/app/markdown.js`: Markdown 门面；实现位于 `ui/app/markdown/*`
     - `ui/app/decorate.js`: 行装饰门面；实现位于 `ui/app/decorate/core.js`
-- `src/codex-sdk/`: SDK 控制模式（实验性）
 - `helloagents/`: 知识库（CHANGELOG / wiki / history）
