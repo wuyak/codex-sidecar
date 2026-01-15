@@ -9,12 +9,23 @@ export async function bootstrap(dom, state, renderTabs, renderMessage, renderEmp
 
     // Sync UI selection with watcher follow mode (avoid “UI 显示全部，但实际上已锁定跟随某会话”).
     try {
+      let pinOnSelect = false;
+      try { pinOnSelect = localStorage.getItem("codex_sidecar_pin_on_select") === "1"; } catch (_) {}
       const st = await fetch("/api/status", { cache: "no-store" }).then(r => r.json());
       const follow = (st && typeof st === "object") ? (st.follow || {}) : {};
       const mode = String((follow && follow.mode) ? follow.mode : "").trim().toLowerCase();
       const tid = String((follow && follow.thread_id) ? follow.thread_id : "").trim();
       const file = String((follow && follow.file) ? follow.file : "").trim();
-      if (mode === "pin" && (tid || file)) {
+      // If the UI preference disables pin-on-select, proactively release pin so new sessions can be discovered.
+      if (mode === "pin" && (tid || file) && !pinOnSelect) {
+        try {
+          await fetch("/api/control/follow", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode: "auto" }),
+          });
+        } catch (_) {}
+      } else if (mode === "pin" && (tid || file)) {
         let key = "";
         if (tid && state.threadIndex.has(tid)) key = tid;
         if (!key && file) {
@@ -39,4 +50,3 @@ export async function bootstrap(dom, state, renderTabs, renderMessage, renderEmp
     renderEmpty(dom);
   }
 }
-

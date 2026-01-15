@@ -313,25 +313,15 @@ class RolloutWatcher:
         except Exception:
             self._offset = 0
 
-        # Heuristic: If the newest N lines contain no reasoning items (e.g., huge tool outputs),
-        # expand the replay window to find at least some reasoning for quick validation.
-        max_lines = 5000
+        # Respect the user's configured replay window strictly.
         replay_lines = max(0, int(last_lines))
         if replay_lines == 0:
             return
 
-        total_ingested = 0
-        while True:
-            tail = self._read_tail_lines(path, last_lines=replay_lines)
-            ingested = 0
-            for bline in tail:
-                self._line_no += 1
-                ingested += self._handle_line(bline, file_path=path, line_no=self._line_no, is_replay=True)
-
-            total_ingested += ingested
-            if total_ingested > 0 or replay_lines >= max_lines:
-                break
-            replay_lines = min(max_lines, replay_lines * 5)
+        tail = self._read_tail_lines(path, last_lines=replay_lines)
+        for bline in tail:
+            self._line_no += 1
+            self._handle_line(bline, file_path=path, line_no=self._line_no, is_replay=True)
 
     def _poll_once(self) -> None:
         path = self._current_file

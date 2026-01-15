@@ -8,6 +8,9 @@
 
 			      #main { margin: 16px 60px 16px 16px; padding-bottom: 16px; }
 		      .sidebar-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+		      .pin-toggle { display:flex; align-items:center; gap:6px; user-select:none; cursor:pointer; padding:2px 6px; border-radius: 10px; border: 1px solid transparent; }
+		      .pin-toggle:hover { background:#f8fafc; border-color:#e2e8f0; }
+		      .pin-toggle input { width: 14px; height: 14px; margin: 0; accent-color:#111827; }
 	      .row { border: 1px solid #ddd; border-left: 4px solid #e5e7eb; border-radius: 8px; padding: 12px; margin: 10px 0; }
 	      .row.kind-user_message { border-left-color:#38bdf8; }
 	      .row.kind-assistant_message { border-left-color:#4ade80; }

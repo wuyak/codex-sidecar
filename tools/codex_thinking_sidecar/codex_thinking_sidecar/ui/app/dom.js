@@ -51,6 +51,7 @@ export function getDom() {
     scrollBottomBtn: byId("scrollBottomBtn"),
 
     tabs: byId("tabs"),
+    pinOnSelect: byId("pinOnSelect"),
     list: byId("list"),
   };
 }

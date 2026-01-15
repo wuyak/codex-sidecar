@@ -12,22 +12,34 @@ export async function initApp() {
   const state = createState();
   initViews(dom, state);
 
+  // UI preference: whether selecting a session tab should pin the watcher.
+  try {
+    const v = localStorage.getItem("codex_sidecar_pin_on_select");
+    if (dom.pinOnSelect) dom.pinOnSelect.checked = (v === "1");
+  } catch (_) {}
+  try {
+    if (dom.pinOnSelect) dom.pinOnSelect.addEventListener("change", () => {
+      try { localStorage.setItem("codex_sidecar_pin_on_select", dom.pinOnSelect.checked ? "1" : "0"); } catch (_) {}
+    });
+  } catch (_) {}
+
   const onSelectKey = async (key) => {
     state.currentKey = key;
     const { needsRefresh } = activateView(dom, state, key);
     // 快速 UI 反馈：先更新选中态，再异步拉取/重绘消息列表。
     try { renderTabsWrapper(dom, state); } catch (_) {}
-    // When multiple Codex sessions exist, auto-follow may jump between rollout files.
-    // Selecting a session in the sidebar pins the watcher to that thread/file so the
-    // visible log keeps updating for the chosen session.
+    // Follow policy:
+    // - "全部" always releases pin (auto-follow).
+    // - Selecting a session can optionally pin, controlled by the sidebar toggle.
     try {
+      const pinOnSelect = !!(dom.pinOnSelect && dom.pinOnSelect.checked);
       if (key === "all") {
         await fetch("/api/control/follow", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ mode: "auto" }),
         });
-      } else {
+      } else if (pinOnSelect) {
         const t = state.threadIndex.get(key) || {};
         const threadId = (t.thread_id || key || "").toString();
         const file = (t.file || "").toString();
