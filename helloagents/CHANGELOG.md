@@ -21,6 +21,7 @@
 - UI: 侧栏分层：拆分 `sidebar.js` → `sidebar/*`（labels/tabs），保留 facade 导出不变。
 - UI: 工具函数分层：拆分 `utils.js` → `utils/*`（time/id/color/json/clipboard/error），保留 facade 导出不变。
 - UI: 格式化分层：拆分 `format/wrap.js` → `format/wrap/*`（command/lines/tree/rg/output），保留 facade 导出不变。
+- UI: 列表分层：拆分 `list.js` → `list/*`（threads/refresh/bootstrap），保留 facade 导出不变。
 - UI: 侧栏会话列表渲染降频：高频 SSE 下合并刷新，减少重排/重绘。
 - UI: 侧栏会话列表增量渲染：复用 tab 节点并仅重排/更新，进一步降低 DOM churn。
 - UI: 长列表懒渲染：刷新列表时对较早行延后装饰（idle 分片 `decorateRow`），降低一次性重绘卡顿。
