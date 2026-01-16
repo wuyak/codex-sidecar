@@ -5,6 +5,8 @@ import { applyProfileToInputs, readHttpInputs, refreshHttpProfileSelect, upsertS
 import { closeDrawer, openDrawer, setStatus, showProviderBlocks } from "./ui.js";
 import { showShutdownScreen } from "../shutdown.js";
 import { toggleViewMode } from "../view_mode.js";
+import { dismissCorner, notifyCorner } from "../utils/notify.js";
+import { clearAllUnread, clearUnreadForKey, formatUnreadToastDetail, getUnreadTotal, updateUnreadButton } from "../unread.js";
 
 export function wireControlEvents(dom, state, helpers) {
   const { refreshList } = helpers;
@@ -48,7 +50,22 @@ export function wireControlEvents(dom, state, helpers) {
   });
 
   if (dom.scrollTopBtn) dom.scrollTopBtn.addEventListener("click", () => { window.scrollTo({ top: 0, behavior: "smooth" }); });
-  if (dom.scrollBottomBtn) dom.scrollBottomBtn.addEventListener("click", () => { window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }); });
+  if (dom.scrollBottomBtn) dom.scrollBottomBtn.addEventListener("click", () => {
+    const total = getUnreadTotal(state);
+    const atBottom = (window.innerHeight + window.scrollY) >= (document.body.scrollHeight - 80);
+    // 关闭通知：到达底部后再次点击 🔔 才清除未读（避免误清理/误判）。
+    if (total > 0 && atBottom) {
+      const curKey = String(state && state.currentKey ? state.currentKey : "all");
+      if (curKey === "all") clearAllUnread(state);
+      else clearUnreadForKey(state, curKey);
+      updateUnreadButton(dom, state);
+      const left = getUnreadTotal(state);
+      if (left > 0) notifyCorner("new_output", "有新输出", formatUnreadToastDetail(state), { level: "info", sticky: true });
+      else dismissCorner("new_output");
+      return;
+    }
+    window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+  });
 
   if (dom.httpProfile) dom.httpProfile.addEventListener("change", () => {
     upsertSelectedProfileFromInputs(dom, state);

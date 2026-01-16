@@ -1,7 +1,8 @@
 import { keyOf } from "../utils.js";
 import { applyMsgToList } from "./timeline.js";
 import { bufferForKey, pushPending, shouldBufferKey } from "./buffer.js";
-import { dismissCorner, notifyCorner } from "../utils/notify.js";
+import { notifyCorner } from "../utils/notify.js";
+import { formatUnreadToastDetail, markUnread, updateUnreadButton } from "../unread.js";
 
 function _toolGateWaiting(text) {
   const s = String(text || "");
@@ -87,32 +88,6 @@ export function connectEventStream(dom, state, upsertThread, renderTabs, renderM
   function _handleMsg(msg) {
     try {
       const op = String((msg && msg.op) ? msg.op : "").trim().toLowerCase();
-      // 右下角提醒（不依赖当前会话/是否可见，避免错过关键状态）
-      try {
-        const kind = String((msg && msg.kind) ? msg.kind : "").trim();
-        if (kind === "tool_gate") {
-          const txt = String(msg.text || "");
-          if (_toolGateWaiting(txt)) {
-            notifyCorner("tool_gate", "终端等待确认", _summarizeToolGate(txt) || "请回到终端完成确认/授权后继续。", { level: "warn", sticky: true });
-          } else if (_toolGateReleased(txt)) {
-            // 已确认：提示一下并自动消退
-            notifyCorner("tool_gate", "终端已确认", _summarizeToolGate(txt) || "tool gate 已解除。", { level: "success", ttlMs: 1600 });
-          }
-        } else if (kind === "assistant_message") {
-          // 可选提醒：用户不在底部且当前视图会渲染到该输出时提示“有新输出”
-          const atBottom = (window.innerHeight + window.scrollY) >= (document.body.scrollHeight - 80);
-          if (!atBottom) {
-            const k = keyOf(msg);
-            const shouldNotify = (state.currentKey === "all" || state.currentKey === k);
-            if (shouldNotify && op !== "update") {
-              notifyCorner("new_output", "有新输出", "你不在页面底部，可点击 ↓ 跳转。", { level: "info", ttlMs: 2200 });
-            }
-          } else {
-            // 在底部时不需要提醒，且可清理旧提示
-            dismissCorner("new_output");
-          }
-        }
-      } catch (_) {}
       // Clear manual translate in-flight state as soon as ZH arrives, so render can flip status immediately.
       try {
         if (op === "update" && msg && typeof msg.id === "string" && state && state.translateInFlight && typeof state.translateInFlight.delete === "function") {
@@ -127,6 +102,29 @@ export function connectEventStream(dom, state, upsertThread, renderTabs, renderM
 
       const k = keyOf(msg);
       const shouldRender = (state.currentKey === "all" || state.currentKey === k);
+
+      // 右下角提醒（不依赖当前会话可见性：通过“未读”汇总，避免错过多会话输出）
+      try {
+        const kind = String((msg && msg.kind) ? msg.kind : "").trim();
+        if (kind === "tool_gate") {
+          const txt = String(msg.text || "");
+          if (_toolGateWaiting(txt)) {
+            notifyCorner("tool_gate", "终端等待确认", _summarizeToolGate(txt) || "请回到终端完成确认/授权后继续。", { level: "warn", sticky: true });
+          } else if (_toolGateReleased(txt)) {
+            notifyCorner("tool_gate", "终端已确认", _summarizeToolGate(txt) || "tool gate 已解除。", { level: "success", ttlMs: 1600 });
+          }
+        }
+        if (op !== "update" && kind !== "tool_gate") {
+          const atBottom = (window.innerHeight + window.scrollY) >= (document.body.scrollHeight - 80);
+          // 当新消息不会立即出现在当前屏幕（不在底部或不在当前视图）时，计入未读并提示。
+          if (!atBottom || !shouldRender) {
+            const r = markUnread(state, msg);
+            updateUnreadButton(dom, state);
+            notifyCorner("new_output", "有新输出", formatUnreadToastDetail(state, { lastKey: r && r.key ? r.key : k }), { level: "info", sticky: true });
+          }
+        }
+      } catch (_) {}
+
       if (shouldRender) {
         applyMsgToList(dom, state, msg, renderMessage);
         // 当前在 all 视图时，其他已缓存会话的视图仍需要“慢慢跟上”，否则切回会显示旧内容。
