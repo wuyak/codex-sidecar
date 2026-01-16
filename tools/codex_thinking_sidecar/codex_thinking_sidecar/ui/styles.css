@@ -117,7 +117,7 @@
 	      .copy-toast { position:absolute; top: -10px; right: 34px; padding: 4px 10px; border-radius: 999px; font-size: 12px; line-height: 1; background: rgba(15,23,42,.72); color:#e2e8f0; border: 1px solid rgba(148,163,184,.35); box-shadow: 0 10px 24px rgba(0,0,0,.14); pointer-events:none; animation: copyToastFade 1.2s ease forwards; }
 	      .copy-toast.light { background: rgba(255,255,255,.92); color:#0f172a; border-color:#e2e8f0; }
 	      .copy-toast.fixed { position: fixed; top: 0; left: 0; right: auto; z-index: 2000; }
-	      .corner-notify { position: fixed; right: 14px; bottom: 14px; z-index: 1950; display:flex; flex-direction:column; gap: 8px; pointer-events:none; }
+	      .corner-notify { position: fixed; right: 14px; bottom: 118px; z-index: 1950; display:flex; flex-direction:column; gap: 8px; pointer-events:none; }
 	      .corner-toast { pointer-events:auto; min-width: 220px; max-width: min(460px, calc(100vw - 28px)); padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(148,163,184,.35); background: rgba(15,23,42,.86); color:#e2e8f0; box-shadow: 0 16px 44px rgba(0,0,0,.22); backdrop-filter: blur(4px); animation: cornerToastIn .16s ease-out forwards; }
 	      .corner-toast.info { border-color: rgba(148,163,184,.35); }
 	      .corner-toast.warn { border-color: rgba(248,113,113,.55); background: rgba(127,29,29,.86); }

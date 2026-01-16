@@ -114,7 +114,10 @@ export function connectEventStream(dom, state, upsertThread, renderTabs, renderM
             notifyCorner("tool_gate", "终端已确认", _summarizeToolGate(txt) || "tool gate 已解除。", { level: "success", ttlMs: 1600 });
           }
         }
-        if (op !== "update" && kind !== "tool_gate") {
+        // “有新输出”仅提示用户关心的类型：回答输出 / 审批提示。
+        // tool_call/tool_output（如 apply_patch）噪音较高，不触发未读提示。
+        const isNotifyKind = (kind === "assistant_message" || kind === "tool_gate");
+        if (op !== "update" && isNotifyKind) {
           const atBottom = (window.innerHeight + window.scrollY) >= (document.body.scrollHeight - 80);
           // 当新消息不会立即出现在当前屏幕（不在底部或不在当前视图）时，计入未读并提示。
           if (!atBottom || !shouldRender) {
