@@ -1,7 +1,7 @@
 from typing import Any, Dict
 
 from ..config import SidecarConfig
-from ..translator import HttpTranslator, NoneTranslator, OpenAIResponsesTranslator, StubTranslator, Translator
+from ..translator import HttpTranslator, NvidiaChatTranslator, NoneTranslator, OpenAIResponsesTranslator, StubTranslator, Translator
 
 
 def build_translator(cfg: SidecarConfig) -> Translator:
@@ -30,6 +30,33 @@ def build_translator(cfg: SidecarConfig) -> Translator:
             auth_header=auth_header,
             auth_prefix=auth_prefix,
             reasoning_effort=reasoning_effort,
+        )
+    if provider == "nvidia":
+        tc = cfg.translator_config or {}
+        tc = tc if isinstance(tc, dict) else {}
+        if isinstance(tc.get("nvidia"), dict):
+            tc = tc.get("nvidia") or {}
+        base_url = str(tc.get("base_url") or "").strip()
+        model = str(tc.get("model") or "").strip()
+        api_key = str(tc.get("api_key") or "").strip()
+        timeout_s = float(tc.get("timeout_s") or 12.0)
+        auth_env = str(tc.get("auth_env") or "NVIDIA_API_KEY").strip() or "NVIDIA_API_KEY"
+        try:
+            rpm = int(tc.get("rpm") or 40)
+        except Exception:
+            rpm = 40
+        try:
+            max_retries = int(tc.get("max_retries") or 3)
+        except Exception:
+            max_retries = 3
+        return NvidiaChatTranslator(
+            base_url=base_url,
+            model=model or "nvidia/riva-translate-4b-instruct-v1_1",
+            api_key=api_key,
+            timeout_s=timeout_s,
+            auth_env=auth_env,
+            rpm=rpm,
+            max_retries=max_retries,
         )
     if provider == "http":
         tc = cfg.translator_config or {}
@@ -107,4 +134,3 @@ def count_valid_http_profiles(tc: Any) -> int:
     if url.startswith("http://") or url.startswith("https://"):
         return 1
     return 0
-

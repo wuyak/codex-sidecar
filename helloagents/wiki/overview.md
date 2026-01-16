@@ -7,6 +7,7 @@
 | 模块名称 | 职责 | 状态 | 文档 |
 |---------|------|------|------|
 | rollout_sidecar | 监听 rollout JSONL + UI 展示 + 翻译 Provider | 开发中 | modules/rollout_sidecar.md |
+| nvidia_translate | NVIDIA NIM 翻译 Provider（Chat Completions） | 开发中 | modules/nvidia_translate.md |
 
 - UI 模块（ESM，无构建）：
   - `tools/codex_thinking_sidecar/codex_thinking_sidecar/ui/app/markdown/*`: Markdown 渲染/清理/导入切分（含 inline/table 子模块）

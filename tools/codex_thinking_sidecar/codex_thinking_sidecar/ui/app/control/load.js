@@ -13,6 +13,7 @@ export async function loadControl(dom, state) {
   let translators = [
     { id: "stub", label: "Stub（占位）" },
     { id: "none", label: "None（不翻译）" },
+    { id: "nvidia", label: "NVIDIA（NIM Chat Completions）" },
     { id: "openai", label: "GPT（Responses API 兼容）" },
     { id: "http", label: "HTTP（通用适配器）" },
   ];
@@ -80,6 +81,7 @@ export async function loadControl(dom, state) {
     const tc = cfg.translator_config || {};
     const tcObj = (tc && typeof tc === "object") ? tc : {};
     const httpTc = (tcObj.http && typeof tcObj.http === "object") ? tcObj.http : tcObj;
+    const nvidiaTc = (tcObj.nvidia && typeof tcObj.nvidia === "object") ? tcObj.nvidia : tcObj;
     const openaiTc = (tcObj.openai && typeof tcObj.openai === "object") ? tcObj.openai : tcObj;
     const normalized = normalizeHttpProfiles(httpTc || {});
     state.httpProfiles = normalized.profiles;
@@ -97,6 +99,16 @@ export async function loadControl(dom, state) {
       const ah = String(oh.auth_header || "Authorization").toLowerCase();
       if (dom.openaiAuthMode) dom.openaiAuthMode.value = (ah === "x-api-key") ? "x-api-key" : "authorization";
       if (dom.openaiReasoning) dom.openaiReasoning.value = oh.reasoning_effort || "";
+    } catch (_) {}
+    // nvidia provider fields
+    try {
+      const nh = nvidiaTc || {};
+      if (dom.nvidiaBaseUrl) dom.nvidiaBaseUrl.value = nh.base_url || "";
+      if (dom.nvidiaModel) dom.nvidiaModel.value = nh.model || "";
+      if (dom.nvidiaApiKey) dom.nvidiaApiKey.value = nh.api_key || "";
+      if (dom.nvidiaAuthEnv) dom.nvidiaAuthEnv.value = nh.auth_env || "";
+      if (dom.nvidiaTimeout) dom.nvidiaTimeout.value = nh.timeout_s ?? 12;
+      if (dom.nvidiaRpm) dom.nvidiaRpm.value = nh.rpm ?? 40;
     } catch (_) {}
     showProviderBlocks(dom, (dom.translatorSel && dom.translatorSel.value) ? dom.translatorSel.value : "");
   } catch (e) {
@@ -209,6 +221,14 @@ export async function loadControl(dom, state) {
       const base = String(openaiTc.base_url || "");
       const model = String(openaiTc.model || "");
       debugLines.splice(5, 0, `openai_base_url: ${base}`, `openai_model: ${model}`);
+    }
+    if (provider.toLowerCase() === "nvidia") {
+      const tc = cfg.translator_config || {};
+      const tcObj = (tc && typeof tc === "object") ? tc : {};
+      const nvidiaTc = (tcObj.nvidia && typeof tcObj.nvidia === "object") ? tcObj.nvidia : tcObj;
+      const base = String(nvidiaTc.base_url || "");
+      const model = String(nvidiaTc.model || "");
+      debugLines.splice(5, 0, `nvidia_base_url: ${base}`, `nvidia_model: ${model}`);
     }
     // Translation worker stats (help diagnose "ZH 翻译中…" delays).
     try {

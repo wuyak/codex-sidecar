@@ -44,6 +44,18 @@ function showOpenAIFields(dom, show) {
   } catch (_) {}
 }
 
+function showNvidiaFields(dom, show) {
+  const els = [dom.nvidiaBaseUrl, dom.nvidiaModel, dom.nvidiaApiKey, dom.nvidiaAuthEnv, dom.nvidiaRpm, dom.nvidiaTimeout];
+  for (const el of els) {
+    if (!el) continue;
+    el.disabled = !show;
+    el.style.opacity = show ? "1" : "0.5";
+  }
+  try {
+    if (dom.nvidiaBlock) dom.nvidiaBlock.style.display = show ? "" : "none";
+  } catch (_) {}
+}
+
 function ensureOpenAIDefaults(dom) {
   try {
     if (dom.openaiBaseUrl && !String(dom.openaiBaseUrl.value || "").trim()) {
@@ -64,10 +76,31 @@ function ensureOpenAIDefaults(dom) {
   } catch (_) {}
 }
 
+function ensureNvidiaDefaults(dom) {
+  try {
+    if (dom.nvidiaBaseUrl && !String(dom.nvidiaBaseUrl.value || "").trim()) {
+      dom.nvidiaBaseUrl.value = "https://integrate.api.nvidia.com/v1";
+    }
+    if (dom.nvidiaModel && !String(dom.nvidiaModel.value || "").trim()) {
+      dom.nvidiaModel.value = "nvidia/riva-translate-4b-instruct-v1_1";
+    }
+    if (dom.nvidiaAuthEnv && !String(dom.nvidiaAuthEnv.value || "").trim()) {
+      dom.nvidiaAuthEnv.value = "NVIDIA_API_KEY";
+    }
+    if (dom.nvidiaRpm && (dom.nvidiaRpm.value === "" || dom.nvidiaRpm.value == null)) {
+      dom.nvidiaRpm.value = 40;
+    }
+    if (dom.nvidiaTimeout && (dom.nvidiaTimeout.value === "" || dom.nvidiaTimeout.value == null)) {
+      dom.nvidiaTimeout.value = 12;
+    }
+  } catch (_) {}
+}
+
 export function showProviderBlocks(dom, provider) {
   const p = String(provider || "").trim().toLowerCase();
   showHttpFields(dom, p === "http");
+  showNvidiaFields(dom, p === "nvidia");
   showOpenAIFields(dom, p === "openai");
   if (p === "openai") ensureOpenAIDefaults(dom);
+  if (p === "nvidia") ensureNvidiaDefaults(dom);
 }
-

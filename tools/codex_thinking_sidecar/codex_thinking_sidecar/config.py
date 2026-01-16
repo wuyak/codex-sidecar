@@ -43,7 +43,7 @@ class SidecarConfig:
     # 提示音（UI）：none（无）或预置音效 id（如 soft-1/soft-2/soft-3）。
     notify_sound: str = "none"
 
-    translator_provider: str = "stub"  # stub | none | http | openai
+    translator_provider: str = "stub"  # stub | none | http | openai | nvidia
     translator_config: Dict[str, Any] = None  # provider-specific
 
     def to_dict(self) -> Dict[str, Any]:

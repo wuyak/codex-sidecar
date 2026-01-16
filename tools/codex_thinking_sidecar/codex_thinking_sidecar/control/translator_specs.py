@@ -13,6 +13,19 @@ TRANSLATORS: List[TranslatorSpec] = [
     TranslatorSpec(id="stub", label="Stub（占位）", fields={}),
     TranslatorSpec(id="none", label="None（不翻译）", fields={}),
     TranslatorSpec(
+        id="nvidia",
+        label="NVIDIA（NIM Chat Completions）",
+        fields={
+            "base_url": {"type": "string", "label": "Base URL", "placeholder": "https://integrate.api.nvidia.com/v1"},
+            "model": {"type": "string", "label": "Model", "placeholder": "nvidia/riva-translate-4b-instruct-v1_1"},
+            "api_key": {"type": "string", "label": "API Key（可选）", "placeholder": "建议用 Auth ENV（不落盘）"},
+            "auth_env": {"type": "string", "label": "Auth ENV（推荐）", "placeholder": "NVIDIA_API_KEY"},
+            "timeout_s": {"type": "number", "label": "超时（秒）", "default": 12},
+            "rpm": {"type": "number", "label": "RPM（节流）", "default": 40},
+            "max_retries": {"type": "number", "label": "429 重试次数", "default": 3},
+        },
+    ),
+    TranslatorSpec(
         id="openai",
         label="GPT（Responses API 兼容）",
         fields={
@@ -39,4 +52,3 @@ TRANSLATORS: List[TranslatorSpec] = [
         },
     ),
 ]
-

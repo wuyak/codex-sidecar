@@ -84,6 +84,28 @@ export async function saveConfig(dom, state) {
       },
     };
   }
+  if (provider === "nvidia") {
+    const base = (dom.nvidiaBaseUrl && dom.nvidiaBaseUrl.value) ? dom.nvidiaBaseUrl.value.trim() : "";
+    const model = (dom.nvidiaModel && dom.nvidiaModel.value) ? dom.nvidiaModel.value.trim() : "";
+    const apiKey = (dom.nvidiaApiKey && dom.nvidiaApiKey.value) ? dom.nvidiaApiKey.value.trim() : "";
+    const authEnv = (dom.nvidiaAuthEnv && dom.nvidiaAuthEnv.value) ? dom.nvidiaAuthEnv.value.trim() : "";
+    const rpm = Number((dom.nvidiaRpm && dom.nvidiaRpm.value) ? dom.nvidiaRpm.value : 40);
+    const timeout = Number((dom.nvidiaTimeout && dom.nvidiaTimeout.value) ? dom.nvidiaTimeout.value : 12);
+    if (!base) { alert("请填写 Base URL（例如 https://integrate.api.nvidia.com/v1）"); return; }
+    if (!model) { alert("请填写 Model（例如 nvidia/riva-translate-4b-instruct-v1_1）"); return; }
+    if (!apiKey && !authEnv) { alert("请填写 API Key，或填写 Auth ENV 并在环境变量中提供 Key"); return; }
+    patch.translator_config = {
+      nvidia: {
+        base_url: base,
+        model,
+        api_key: apiKey,
+        auth_env: authEnv,
+        rpm,
+        timeout_s: timeout,
+        max_retries: 3,
+      },
+    };
+  }
   const saved = await api("POST", "/api/config", patch);
   if (saved && saved.ok === false) {
     const err = String(saved.error || "");

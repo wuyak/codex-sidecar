@@ -6,6 +6,7 @@ Implementation lives under `codex_thinking_sidecar.translators.*`.
 
 from .translators import (
     HttpTranslator,
+    NvidiaChatTranslator,
     NoneTranslator,
     OpenAIResponsesTranslator,
     StubTranslator,
@@ -18,5 +19,5 @@ __all__ = [
     "NoneTranslator",
     "HttpTranslator",
     "OpenAIResponsesTranslator",
+    "NvidiaChatTranslator",
 ]
-

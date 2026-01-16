@@ -46,6 +46,7 @@ cd ~/src/codex-thinking-sidecar-zh
   - `none`：不翻译
   - `http`：通用 HTTP 适配器（支持 Profiles）
   - `openai`：Responses API 兼容（用于 GPT 类网关/自建代理）
+  - `nvidia`：NVIDIA NIM（Chat Completions 兼容；默认 `integrate.api.nvidia.com/v1`；推荐用 `NVIDIA_API_KEY` 环境变量；内置 RPM 节流与 429 重试）
 
 说明：
 - 翻译默认不会阻塞采集；中文会稍后“回填”到对应消息。

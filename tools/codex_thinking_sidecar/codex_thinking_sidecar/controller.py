@@ -335,15 +335,18 @@ class SidecarController:
         env_hint = {}
         try:
             provider = str(cfg.get("translator_provider") or "")
-            if provider in ("http", "openai"):
+            if provider in ("http", "openai", "nvidia"):
                 auth_env = ""
                 tc = cfg.get("translator_config") or {}
                 if isinstance(tc, dict):
                     if provider == "http":
                         auth_env = str(select_http_profile(tc).get("auth_env") or "").strip()
-                    else:
+                    elif provider == "openai":
                         oc = tc.get("openai") if isinstance(tc.get("openai"), dict) else tc
                         auth_env = str((oc or {}).get("auth_env") or "").strip()
+                    else:
+                        nc = tc.get("nvidia") if isinstance(tc.get("nvidia"), dict) else tc
+                        auth_env = str((nc or {}).get("auth_env") or "NVIDIA_API_KEY").strip() or "NVIDIA_API_KEY"
                 if auth_env:
                     env_hint = {"auth_env": auth_env, "auth_env_set": bool(os.environ.get(auth_env))}
         except Exception:

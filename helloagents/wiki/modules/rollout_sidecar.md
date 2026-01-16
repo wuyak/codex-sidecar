@@ -46,7 +46,7 @@
 - 断线恢复：浏览器 SSE 重连后会自动回源同步当前视图，并标记缓存视图在下次切换时回源刷新（避免长时间挂着漏消息）
 - 会话列表同步：断线恢复后会标记 `threadsDirty`，下一次列表回源时同步 `/api/threads`，避免侧栏漏会话/排序漂移
 - 多会话不串线：推荐通过侧栏会话切换（或启用“锁定”）来浏览单会话；`all` 视图更适合快速总览（不再在每条消息上额外展示会话标识，避免信息噪音）
-- 翻译 Provider 可插拔并可在 UI 中切换：`stub/none/http/openai`
+- 翻译 Provider 可插拔并可在 UI 中切换：`stub/none/http/openai/nvidia`
 - `--include-agent-reasoning` 说明：
   - 该类型通常是“流式推理文本”，同一段内容可能重复出现（模型/客户端实现差异）。
   - sidecar 会对 `agent_reasoning` 做更激进的去重（不依赖 timestamp），但仍建议仅在需要更实时内容时开启。
@@ -119,7 +119,7 @@
 - `Reasoning`：翻译通常不需要；仅当使用 `gpt-5*` / `o*` 推理模型时才建议设置为 `minimal/none`
 
 配置保存策略（避免互相覆盖）：
-- sidecar 会把不同 Provider 的配置分区保存到 `translator_config.http` / `translator_config.openai`，切换 Provider 不会覆盖另一边的配置。
+- sidecar 会把不同 Provider 的配置分区保存到 `translator_config.http` / `translator_config.openai` / `translator_config.nvidia`，切换 Provider 不会覆盖另一边的配置。
 
 性能与请求量（避免“翻译 API 占用太多请求”）：
 - sidecar 会先对消息做去重，再进行翻译请求（重复内容不会反复打到翻译 API）。
