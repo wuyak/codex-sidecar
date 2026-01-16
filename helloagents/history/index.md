@@ -59,3 +59,4 @@
 - 202601170719_ui_dock_mid_layer_tokens
 - 202601170726_ui_dock_polish_typography
 - 202601170732_ui_skin_toggle_localstorage
+- 202601170737_ui_dark_skin

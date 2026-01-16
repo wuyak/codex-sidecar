@@ -3,6 +3,7 @@ const _LS_SKIN = "codex_sidecar_ui_skin";
 function _sanitize(v) {
   const s = String(v || "").trim().toLowerCase();
   if (s === "flat") return "flat";
+  if (s === "dark") return "dark";
   return "default";
 }
 
@@ -27,4 +28,3 @@ export function initSkin(dom, opts = {}) {
     });
   }
 }
-
