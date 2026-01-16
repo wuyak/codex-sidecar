@@ -63,7 +63,8 @@ function _updateThinkingMetaRight(state, row, mid) {
   const hasZh = _hasZhReady(row);
   const err = String((row.dataset && row.dataset.translateError) ? row.dataset.translateError : "").trim();
   const inFlight = !!(state.translateInFlight && typeof state.translateInFlight.has === "function" && state.translateInFlight.has(mid));
-  const translateMode = (String(state.translateMode || "").toLowerCase() === "manual") ? "manual" : "auto";
+  const isAgent = !!(row && row.classList && row.classList.contains("kind-agent_reasoning"));
+  const translateMode = isAgent ? "manual" : ((String(state.translateMode || "").toLowerCase() === "manual") ? "manual" : "auto");
   const provider = String(state.translatorProvider || "").trim().toLowerCase();
   try {
     metaRight.innerHTML = buildThinkingMetaRight({ mid, provider, hasZh, err, translateMode, inFlight });
@@ -135,7 +136,8 @@ export function wireThinkingRowActions(dom, state) {
 
     const hasZh = _hasZhReady(row);
     if (!hasZh) {
-      const tmode = (String(state.translateMode || "").toLowerCase() === "manual") ? "manual" : "auto";
+      const isAgent = !!(row && row.classList && row.classList.contains("kind-agent_reasoning"));
+      const tmode = isAgent ? "manual" : ((String(state.translateMode || "").toLowerCase() === "manual") ? "manual" : "auto");
       if (tmode !== "manual") {
         const err = String((row.dataset && row.dataset.translateError) ? row.dataset.translateError : "").trim();
         flashToastAt(
@@ -192,4 +194,3 @@ export function wireThinkingRowActions(dom, state) {
     try { stabilizeClickWithin(row, Number(e && e.clientY) || 0); } catch (_) {}
   });
 }
-

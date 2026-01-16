@@ -37,7 +37,10 @@ export function wireControlEvents(dom, state, helpers) {
         const hasZh = !!(zhEl && String(zhEl.textContent || "").trim());
         const err = String((row.dataset && row.dataset.translateError) ? row.dataset.translateError : "").trim();
         const inFlight = !!(state && state.translateInFlight && typeof state.translateInFlight.has === "function" && state.translateInFlight.has(mid));
-        const translateMode = (String(state && state.translateMode ? state.translateMode : "").toLowerCase() === "manual") ? "manual" : "auto";
+        const isAgent = !!(row && row.classList && row.classList.contains("kind-agent_reasoning"));
+        const translateMode = isAgent
+          ? "manual"
+          : ((String(state && state.translateMode ? state.translateMode : "").toLowerCase() === "manual") ? "manual" : "auto");
         const provider = String(state && state.translatorProvider ? state.translatorProvider : "").trim().toLowerCase();
         metaRight.innerHTML = buildThinkingMetaRight({ mid, provider, hasZh, err, translateMode, inFlight });
       } catch (_) {}

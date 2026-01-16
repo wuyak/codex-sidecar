@@ -5,25 +5,12 @@ import { isCodexEditSummary, renderCodexEditSummary } from "../format.js";
 import { renderMarkdownCached } from "./md_cache.js";
 import { getThinkingVisibility, isThinkingKind, renderThinkingBlock, tryPatchThinkingRow } from "./thinking.js";
 import { renderToolCall, renderToolOutput } from "./tool.js";
-import { colorForKey, escapeHtml, formatTs, keyOf, rolloutStampFromFile, safeDomId, shortId } from "../utils.js";
+import { escapeHtml, formatTs, safeDomId } from "../utils.js";
 
 function _sessionPill(state, msg) {
-  try {
-    if (!state || state.currentKey !== "all") return "";
-    const key = keyOf(msg);
-    if (!key || key === "unknown") return "";
-    const file = String(msg && msg.file ? msg.file : "");
-    const tid = String(msg && msg.thread_id ? msg.thread_id : "");
-    const stamp = rolloutStampFromFile(file);
-    const idPart = tid ? shortId(tid) : shortId((file.split("/").slice(-1)[0]) || key);
-    const label = (stamp && idPart) ? `${stamp} · ${idPart}` : (idPart || stamp || "unknown");
-    const title = escapeHtml(tid || file || key);
-    const clr = colorForKey(key);
-    const style = ` style="border-color:${escapeHtml(clr.border)}; background:${escapeHtml(clr.dotBg)}; color:${escapeHtml(clr.fg)};"`;
-    return `<span class="pill pill-session"${style} title="${title}">${escapeHtml(label)}</span>`;
-  } catch (_) {
-    return "";
-  }
+  // 不在列表中额外展示“会话标识 pill”（避免信息噪音）。
+  // 如需区分来源，可切换到具体会话 tab，或通过行 hover/title 获取 thread/file 信息。
+  return "";
 }
 
 export function clearList(dom) {
@@ -78,6 +65,12 @@ export function renderMessage(dom, state, msg, opts = {}) {
     const zhText = (typeof msg.zh === "string") ? msg.zh : "";
     const translateError = (typeof msg.translate_error === "string") ? msg.translate_error : "";
     const vis = getThinkingVisibility(dom, state, mid, zhText);
+    try {
+      // agent_reasoning 默认不做 auto 翻译：按“手动可点翻译”展示，避免误显示“翻译中…”.
+      if (kind === "agent_reasoning" && String(state && state.translateMode ? state.translateMode : "").toLowerCase() !== "manual") {
+        vis.translateMode = "manual";
+      }
+    } catch (_) {}
     const isUpdate = String((msg && msg.op) ? msg.op : "").trim().toLowerCase() === "update";
     try { row.dataset.translateError = translateError || ""; } catch (_) {}
     const ok = tryPatchThinkingRow(dom, state, msg, row, { mid, t, zhText, translateError, translatorProvider: state.translatorProvider || "", isUpdate, ...vis });
@@ -132,6 +125,12 @@ export function renderMessage(dom, state, msg, opts = {}) {
     const zhText = (typeof msg.zh === "string") ? msg.zh : "";
     const translateError = (typeof msg.translate_error === "string") ? msg.translate_error : "";
     const vis = getThinkingVisibility(dom, state, mid, zhText);
+    try {
+      // agent_reasoning 默认不做 auto 翻译：按“手动可点翻译”展示，避免误显示“翻译中…”.
+      if (kind === "agent_reasoning" && String(state && state.translateMode ? state.translateMode : "").toLowerCase() !== "manual") {
+        vis.translateMode = "manual";
+      }
+    } catch (_) {}
     const r = renderThinkingBlock(state, msg, { mid, zhText, translateError, translatorProvider: state.translatorProvider || "", ...vis });
     metaLeftExtra = `${sessionPill}${r.metaLeftExtra || ""}`;
     metaRightExtra = r.metaRightExtra || "";
@@ -157,6 +156,11 @@ export function renderMessage(dom, state, msg, opts = {}) {
     </div>
     ${body}
   `;
+  try {
+    if (state && state.currentKey === "all") {
+      row.title = String(msg && (msg.thread_id || msg.file || "") ? (msg.thread_id || msg.file || "") : "");
+    }
+  } catch (_) {}
   if (opt.deferDecorate) queueDecorateRow(row);
   else decorateRow(row);
   if (mid) {
