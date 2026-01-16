@@ -44,6 +44,7 @@ export async function saveConfig(dom, state) {
     watch_codex_home: (dom.watchHome && dom.watchHome.value) ? dom.watchHome.value : "",
     auto_start: (dom.autoStart && dom.autoStart.value) === "1",
     translate_mode: (dom.translateMode && dom.translateMode.value) ? dom.translateMode.value : "auto",
+    notify_sound: (dom.notifySound && dom.notifySound.value) ? dom.notifySound.value : "none",
     follow_codex_process: (dom.followProc && dom.followProc.value) === "1",
     only_follow_when_process: (dom.onlyWhenProc && dom.onlyWhenProc.value) === "1",
     codex_process_regex: ((dom.procRegex && dom.procRegex.value) ? dom.procRegex.value : "codex").trim(),

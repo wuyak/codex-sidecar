@@ -26,6 +26,8 @@ export function createState() {
     // 翻译模式（来自服务端 config）：auto | manual
     translateMode: "auto",
     translatorProvider: "stub",
+    // 提示音（来自服务端 config）：none | soft-1 | soft-2 | soft-3
+    notifySound: "none",
     // 手动翻译防抖：mid -> in-flight
     translateInFlight: new Set(),
 

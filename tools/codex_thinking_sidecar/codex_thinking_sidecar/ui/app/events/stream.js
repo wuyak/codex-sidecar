@@ -3,6 +3,7 @@ import { applyMsgToList } from "./timeline.js";
 import { bufferForKey, pushPending, shouldBufferKey } from "./buffer.js";
 import { notifyCorner } from "../utils/notify.js";
 import { formatUnreadToastDetail, markUnread, updateUnreadButton } from "../unread.js";
+import { maybePlayNotifySound } from "../sound.js";
 
 function _toolGateWaiting(text) {
   const s = String(text || "");
@@ -110,6 +111,7 @@ export function connectEventStream(dom, state, upsertThread, renderTabs, renderM
           const txt = String(msg.text || "");
           if (_toolGateWaiting(txt)) {
             notifyCorner("tool_gate", "终端等待确认", _summarizeToolGate(txt) || "请回到终端完成确认/授权后继续。", { level: "warn", sticky: true });
+            try { maybePlayNotifySound(dom, state); } catch (_) {}
           } else if (_toolGateReleased(txt)) {
             notifyCorner("tool_gate", "终端已确认", _summarizeToolGate(txt) || "tool gate 已解除。", { level: "success", ttlMs: 1600 });
           }
@@ -124,6 +126,7 @@ export function connectEventStream(dom, state, upsertThread, renderTabs, renderM
             const r = markUnread(state, msg);
             updateUnreadButton(dom, state);
             notifyCorner("new_output", "有新输出", formatUnreadToastDetail(state, { lastKey: r && r.key ? r.key : k }), { level: "info", sticky: true });
+            try { maybePlayNotifySound(dom, state); } catch (_) {}
           }
         }
       } catch (_) {}

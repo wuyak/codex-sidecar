@@ -170,6 +170,17 @@ class SidecarHandler(BaseHTTPRequestHandler):
                 )
                 return
             ct = ui_content_type(cand)
+            # Serve binary assets (audio, etc.) as bytes.
+            if (ct.startswith("audio/")) or (cand.suffix.lower() in (".ogg", ".mp3", ".wav")):
+                data = cand.read_bytes()
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", ct)
+                for k, v in headers.items():
+                    self.send_header(k, v)
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+                return
             body = load_ui_text(cand, "")
             self._send_text(HTTPStatus.OK, body, content_type=ct, extra_headers=headers)
         except Exception:

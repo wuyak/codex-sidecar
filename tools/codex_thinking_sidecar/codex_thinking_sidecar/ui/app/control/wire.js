@@ -9,6 +9,7 @@ import { dismissCorner, notifyCorner } from "../utils/notify.js";
 import { clearAllUnread, clearUnreadForKey, formatUnreadToastDetail, getUnreadTotal, updateUnreadButton } from "../unread.js";
 import { flashToastAt } from "../utils/toast.js";
 import { buildThinkingMetaRight } from "../thinking/meta.js";
+import { preloadNotifySound } from "../sound.js";
 
 export function wireControlEvents(dom, state, helpers) {
   const { refreshList } = helpers;
@@ -49,6 +50,18 @@ export function wireControlEvents(dom, state, helpers) {
 
   if (dom.translatorSel) dom.translatorSel.addEventListener("change", () => {
     showProviderBlocks(dom, (dom.translatorSel.value || ""));
+  });
+  if (dom.notifySound) dom.notifySound.addEventListener("change", async () => {
+    const v = String(dom.notifySound.value || "none").trim().toLowerCase() || "none";
+    try { state.notifySound = v; } catch (_) {}
+    try { preloadNotifySound(state); } catch (_) {}
+    try {
+      await api("POST", "/api/config", { notify_sound: v });
+    } catch (_) {}
+    try {
+      const r = dom.notifySound.getBoundingClientRect();
+      flashToastAt(r.left + r.width / 2, r.top + r.height / 2, v === "none" ? "提示音：已关闭" : "提示音：已开启", { isLight: true, durationMs: 1100 });
+    } catch (_) {}
   });
 
   if (dom.configToggleBtn) dom.configToggleBtn.addEventListener("click", () => {

@@ -40,6 +40,9 @@ class SidecarConfig:
     # - manual: 仅在 UI 触发（点击思考块 / 重译按钮）时翻译
     translate_mode: str = "auto"
 
+    # 提示音（UI）：none（无）或预置音效 id（如 soft-1/soft-2/soft-3）。
+    notify_sound: str = "none"
+
     translator_provider: str = "stub"  # stub | none | http | openai
     translator_config: Dict[str, Any] = None  # provider-specific
 
@@ -97,6 +100,9 @@ class SidecarConfig:
         tm = str(d.get("translate_mode") or "auto").strip().lower()
         if tm not in ("auto", "manual"):
             tm = "auto"
+        ns = str(d.get("notify_sound") or "none").strip().lower()
+        if ns not in ("none", "soft-1", "soft-2", "soft-3"):
+            ns = "none"
         return SidecarConfig(
             config_home=cfg_home,
             watch_codex_home=watch_home,
@@ -111,6 +117,7 @@ class SidecarConfig:
             codex_process_regex=str(d.get("codex_process_regex") or "codex"),
             only_follow_when_process=bool(only_follow_when_process),
             translate_mode=tm,
+            notify_sound=ns,
             translator_provider=str(d.get("translator_provider") or "stub"),
             translator_config=translator_config,
         )
@@ -296,6 +303,7 @@ def default_config(config_home: Path) -> SidecarConfig:
         codex_process_regex="codex",
         only_follow_when_process=True,
         translate_mode="auto",
+        notify_sound="none",
         translator_provider="stub",
         translator_config={},
     )

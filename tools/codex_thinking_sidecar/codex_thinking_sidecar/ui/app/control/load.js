@@ -2,6 +2,7 @@ import { fmtErr } from "../utils.js";
 import { api } from "./api.js";
 import { applyProfileToInputs, countValidHttpProfiles, normalizeHttpProfiles, refreshHttpProfileSelect } from "./http_profiles.js";
 import { setDebug, setStatus, showProviderBlocks } from "./ui.js";
+import { preloadNotifySound } from "../sound.js";
 
 export async function loadControl(dom, state) {
   const ts = Date.now();
@@ -62,6 +63,7 @@ export async function loadControl(dom, state) {
     if (dom.watchHome) dom.watchHome.value = cfg.watch_codex_home || "";
     if (dom.autoStart) dom.autoStart.value = cfg.auto_start ? "1" : "0";
     if (dom.translateMode) dom.translateMode.value = (cfg.translate_mode === "manual") ? "manual" : "auto";
+    if (dom.notifySound) dom.notifySound.value = String(cfg.notify_sound || "none").trim().toLowerCase() || "none";
     if (dom.followProc) dom.followProc.value = cfg.follow_codex_process ? "1" : "0";
     if (dom.onlyWhenProc) dom.onlyWhenProc.value = (cfg.only_follow_when_process === false) ? "0" : "1";
     if (dom.procRegex) dom.procRegex.value = cfg.codex_process_regex || "codex";
@@ -105,7 +107,9 @@ export async function loadControl(dom, state) {
   try {
     state.translateMode = (cfg.translate_mode === "manual") ? "manual" : "auto";
     state.translatorProvider = String(cfg.translator_provider || "stub").trim().toLowerCase() || "stub";
+    state.notifySound = String(cfg.notify_sound || "none").trim().toLowerCase() || "none";
   } catch (_) {}
+  try { preloadNotifySound(state); } catch (_) {}
   try {
     const btn = dom && dom.translateToggleBtn ? dom.translateToggleBtn : null;
     if (btn && btn.classList) {

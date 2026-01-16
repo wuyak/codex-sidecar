@@ -8,6 +8,7 @@ export function getDom() {
     watchHome: byId("watchHome"),
     autoStart: byId("autoStart"),
     translateMode: byId("translateMode"),
+    notifySound: byId("notifySound"),
     followProc: byId("followProc"),
     onlyWhenProc: byId("onlyWhenProc"),
     procRegex: byId("procRegex"),

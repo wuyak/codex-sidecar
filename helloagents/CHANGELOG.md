@@ -33,6 +33,7 @@
 - 翻译: `auto` 模式仅自动翻译 `reasoning_summary`；`agent_reasoning` 默认改为手动触发，避免翻译队列堆积导致整体变慢。
 - UI: “有新输出”未读提示默认仅对“回答输出/审批提示”生效（忽略 tool_call/tool_output 等噪音），且右下角 toast 不再遮挡 🔔/↓ 浮动按钮。
 - UI: 右下角通知 toast 改为不抢占点击，并避开右下角跳转按钮区域，避免影响 ↑/🔔/↓ 交互。
+- UI: 新增铃铛提示音配置（`notify_sound`）：设置中可选无/舒缓-1/2/3；音效文件随 UI 静态资源提供（`ui/music/`，Kenney CC0）。
 
 - UI: 拆分 `ui/app/markdown.js` / `ui/app/decorate.js`，引入子目录实现（保持纯静态，无构建）
 - 新增：UI 控制面（保存配置、开始/停止监听、清空显示）+ 短命令 `./ui.sh`。

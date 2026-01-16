@@ -11,10 +11,12 @@ import { syncSidebarHeadButtons, wireSidebarHeadActions } from "./interactions/s
 import { flashToastAt } from "./utils/toast.js";
 import { initViewMode } from "./view_mode.js";
 import { activateView, initViews } from "./views.js";
+import { initSound } from "./sound.js";
 
 export async function initApp() {
   const dom = getDom();
   const state = createState();
+  initSound(dom, state);
   initViews(dom, state);
   initViewMode(dom, state);
   try { state.hiddenThreads = loadHiddenThreads(); } catch (_) { state.hiddenThreads = new Set(); }

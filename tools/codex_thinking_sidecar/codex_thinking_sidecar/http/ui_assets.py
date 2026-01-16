@@ -28,6 +28,12 @@ def ui_content_type(path: Path) -> str:
         return "application/javascript; charset=utf-8"
     if ext == ".json":
         return "application/json; charset=utf-8"
+    if ext == ".ogg":
+        return "audio/ogg"
+    if ext == ".mp3":
+        return "audio/mpeg"
+    if ext == ".wav":
+        return "audio/wav"
     return "text/plain; charset=utf-8"
 
 
@@ -36,4 +42,3 @@ def load_ui_text(path: Path, fallback: str) -> str:
         return path.read_text(encoding="utf-8")
     except Exception:
         return fallback
-
