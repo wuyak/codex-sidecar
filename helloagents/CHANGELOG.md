@@ -34,6 +34,7 @@
 - UI: 右侧工具栏与底部浮动按钮统一为 SVG 图标；并用 CSS Variables 统一颜色/危险色/阴影/焦点 ring 等设计 token（应用到按钮/表单/抽屉/tool 卡片/pill 等）。
 - UI: 移除 `update_plan` 状态图标中的 emoji（改为纯文本标记），避免视觉噪音与字体不一致。
 - UI: 右侧工具栏升级为 Dock 形态（半透明背景/阴影/圆角），并清理顶栏卡片样式与 badge/Markdown/table 细节。
+- UI: 配置抽屉增加“皮肤（default/flat）”切换并本机记忆（localStorage），用于快速更换书签/Dock 观感。
 - 文档：新增 UI 模板/设计系统调研报告（`helloagents/wiki/modules/ui_template_research.md`），用于后续 UI 美化与渐进式改造评估。
 - UI: 右侧操作栏新增“🌐 自动翻译”快捷开关，切换 `auto/manual` 会对运行中的 watcher 立即生效（无需重启）。
 - UI：🌐 按钮支持“长按打开翻译设置”（单击仍切换自动翻译）；翻译设置新增“保存翻译设置（热加载）”，保存后立即生效且无需重启进程/会话。

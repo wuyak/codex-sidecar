@@ -11,6 +11,7 @@ import { initViewMode } from "./view_mode.js";
 import { activateView, initViews } from "./views.js";
 import { initSound } from "./sound.js";
 import { clearUnreadForKey } from "./unread.js";
+import { initSkin } from "./skin.js";
 
 export async function initApp() {
   const dom = getDom();
@@ -18,6 +19,7 @@ export async function initApp() {
   initSound(dom, state);
   initViews(dom, state);
   initViewMode(dom, state);
+  initSkin(dom, { setStatus });
   try { state.hiddenThreads = loadHiddenThreads(); } catch (_) { state.hiddenThreads = new Set(); }
   try { state.showHiddenThreads = loadShowHiddenFlag(); } catch (_) { state.showHiddenThreads = false; }
 
