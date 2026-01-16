@@ -134,7 +134,7 @@ export function formatUnreadToastDetail(state, opts = {}) {
   const parts = [];
   parts.push(`未读：${total} 条 / ${threads} 会话`);
   if (lastLabel) parts.push(`最近：${lastLabel}`);
-  parts.push("未读会显示在左侧会话书签上；点击对应书签即可查看。");
+  parts.push("未读会显示在右侧会话书签上；点击对应书签即可查看。");
   return parts.join("\n");
 }
 
@@ -142,7 +142,6 @@ export function updateUnreadButton(dom, state) {
   const btn = dom && dom.scrollBottomBtn ? dom.scrollBottomBtn : null;
   if (!btn) return;
   try {
-    btn.textContent = "↓";
     try { delete btn.dataset.unread; } catch (_) { btn.dataset.unread = ""; }
     if (btn.classList) btn.classList.remove("has-unread");
   } catch (_) {}
