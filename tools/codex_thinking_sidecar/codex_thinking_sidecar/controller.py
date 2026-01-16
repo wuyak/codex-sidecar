@@ -103,6 +103,7 @@ class SidecarController:
     def _patch_config(self, patch: Dict[str, Any], persist: bool, allow_empty_translator_config: bool) -> Dict[str, Any]:
         with self._lock:
             cur = self._cfg.to_dict()
+            prev_tm = str(cur.get("translate_mode") or "auto").strip().lower()
             # merge shallow
             for k, v in patch.items():
                 if k == "translator_config":
@@ -136,6 +137,15 @@ class SidecarController:
             self._cfg = SidecarConfig.from_dict(cur)
             if persist:
                 save_config(self._config_home, self._cfg)
+            # Hot-apply translate_mode for the running watcher (no restart required).
+            try:
+                next_tm = str(getattr(self._cfg, "translate_mode", "auto") or "auto").strip().lower()
+                watcher = self._watcher
+                running = bool(self._thread is not None and self._thread.is_alive())
+                if watcher is not None and running and next_tm and next_tm != prev_tm:
+                    watcher.set_translate_mode(next_tm)
+            except Exception:
+                pass
             return self._cfg.to_dict()
 
     def clear_messages(self) -> None:

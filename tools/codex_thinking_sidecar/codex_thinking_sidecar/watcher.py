@@ -287,6 +287,15 @@ class RolloutWatcher:
             pass
         return out
 
+    def set_translate_mode(self, mode: str) -> None:
+        """
+        运行时切换 translate_mode（auto/manual）。
+        """
+        tm = str(mode or "auto").strip().lower()
+        if tm not in ("auto", "manual"):
+            return
+        self._translate_mode = tm
+
     def set_follow(self, mode: str, thread_id: str = "", file: str = "") -> None:
         """
         Update follow strategy at runtime (called from HTTP control plane).

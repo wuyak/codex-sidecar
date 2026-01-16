@@ -106,6 +106,14 @@ export async function loadControl(dom, state) {
     state.translateMode = (cfg.translate_mode === "manual") ? "manual" : "auto";
     state.translatorProvider = String(cfg.translator_provider || "stub").trim().toLowerCase() || "stub";
   } catch (_) {}
+  try {
+    const btn = dom && dom.translateToggleBtn ? dom.translateToggleBtn : null;
+    if (btn && btn.classList) {
+      const isAuto = (String(state.translateMode || "").toLowerCase() !== "manual");
+      btn.classList.toggle("active", isAuto);
+      btn.title = isAuto ? "自动翻译：已开启" : "自动翻译：已关闭（手动）";
+    }
+  } catch (_) {}
 
   // 3.1) 提示恢复：Profiles 为空但存在可恢复备份（仅提示一次）
   try {

@@ -39,3 +39,4 @@
 - 202601151730_tui_gate_spam_guard
 - 202601152327_ui_quickview_notify_anchor
 - 202601160840_ui_notify_unread
+- 202601160850_ui_translate_toggle

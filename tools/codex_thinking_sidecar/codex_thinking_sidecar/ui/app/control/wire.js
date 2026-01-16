@@ -7,9 +7,42 @@ import { showShutdownScreen } from "../shutdown.js";
 import { toggleViewMode } from "../view_mode.js";
 import { dismissCorner, notifyCorner } from "../utils/notify.js";
 import { clearAllUnread, clearUnreadForKey, formatUnreadToastDetail, getUnreadTotal, updateUnreadButton } from "../unread.js";
+import { flashToastAt } from "../utils/toast.js";
+import { buildThinkingMetaRight } from "../thinking/meta.js";
 
 export function wireControlEvents(dom, state, helpers) {
   const { refreshList } = helpers;
+
+  const syncTranslateToggle = () => {
+    const btn = dom && dom.translateToggleBtn ? dom.translateToggleBtn : null;
+    if (!btn || !btn.classList) return;
+    const isAuto = (String(state && state.translateMode ? state.translateMode : "").toLowerCase() !== "manual");
+    try {
+      btn.classList.toggle("active", isAuto);
+      btn.title = isAuto ? "自动翻译：已开启" : "自动翻译：已关闭（手动）";
+    } catch (_) {}
+  };
+
+  const refreshThinkingMetaRight = () => {
+    const list = (state && state.activeList) ? state.activeList : (dom && dom.list ? dom.list : null);
+    if (!list || !list.querySelectorAll) return;
+    const nodes = list.querySelectorAll(".row.kind-reasoning_summary, .row.kind-agent_reasoning");
+    for (const row of nodes) {
+      try {
+        const mid = String(row && row.dataset ? (row.dataset.msgId || "") : "").trim();
+        if (!mid) continue;
+        const metaRight = row.querySelector ? row.querySelector(".meta-right") : null;
+        if (!metaRight) continue;
+        const zhEl = row.querySelector ? row.querySelector(".think-zh") : null;
+        const hasZh = !!(zhEl && String(zhEl.textContent || "").trim());
+        const err = String((row.dataset && row.dataset.translateError) ? row.dataset.translateError : "").trim();
+        const inFlight = !!(state && state.translateInFlight && typeof state.translateInFlight.has === "function" && state.translateInFlight.has(mid));
+        const translateMode = (String(state && state.translateMode ? state.translateMode : "").toLowerCase() === "manual") ? "manual" : "auto";
+        const provider = String(state && state.translatorProvider ? state.translatorProvider : "").trim().toLowerCase();
+        metaRight.innerHTML = buildThinkingMetaRight({ mid, provider, hasZh, err, translateMode, inFlight });
+      } catch (_) {}
+    }
+  };
 
   if (dom.translatorSel) dom.translatorSel.addEventListener("change", () => {
     showProviderBlocks(dom, (dom.translatorSel.value || ""));
@@ -36,6 +69,42 @@ export function wireControlEvents(dom, state, helpers) {
   if (dom.restartBtn) dom.restartBtn.addEventListener("click", async () => { await restartProcess(dom, state); });
   if (dom.clearBtn) dom.clearBtn.addEventListener("click", async () => { await clearView(dom, state, refreshList); });
   if (dom.quickViewBtn) dom.quickViewBtn.addEventListener("click", () => { toggleViewMode(dom, state); });
+  if (dom.translateToggleBtn) dom.translateToggleBtn.addEventListener("click", async () => {
+    const btn = dom.translateToggleBtn;
+    const cur = (String(state && state.translateMode ? state.translateMode : "").toLowerCase() === "manual") ? "manual" : "auto";
+    const next = (cur === "manual") ? "auto" : "manual";
+
+    // Optimistic local update (UI).
+    try { state.translateMode = next; } catch (_) {}
+    try { if (dom.translateMode) dom.translateMode.value = next; } catch (_) {}
+    syncTranslateToggle();
+    refreshThinkingMetaRight();
+    try {
+      const r = btn.getBoundingClientRect();
+      flashToastAt(r.left + r.width / 2, r.top + r.height / 2, next === "auto" ? "自动翻译：已开启" : "自动翻译：已关闭", { isLight: true, durationMs: 1100 });
+    } catch (_) {}
+
+    // Persist + apply runtime on server.
+    try {
+      const resp = await api("POST", "/api/config", { translate_mode: next });
+      if (resp && resp.ok === false) throw new Error(String(resp.error || "config_update_failed"));
+      const real = (resp && resp.translate_mode === "manual") ? "manual" : "auto";
+      try { state.translateMode = real; } catch (_) {}
+      try { if (dom.translateMode) dom.translateMode.value = real; } catch (_) {}
+      syncTranslateToggle();
+      refreshThinkingMetaRight();
+    } catch (_) {
+      // Revert on failure.
+      try { state.translateMode = cur; } catch (_) {}
+      try { if (dom.translateMode) dom.translateMode.value = cur; } catch (_) {}
+      syncTranslateToggle();
+      refreshThinkingMetaRight();
+      try {
+        const r = btn.getBoundingClientRect();
+        flashToastAt(r.left + r.width / 2, r.top + r.height / 2, "切换失败", { isLight: true, durationMs: 1200 });
+      } catch (_) {}
+    }
+  });
 
   if (dom.shutdownBtn) dom.shutdownBtn.addEventListener("click", async () => {
     if (!confirm("确定要退出 sidecar 进程？（将停止监听并关闭服务）")) return;
