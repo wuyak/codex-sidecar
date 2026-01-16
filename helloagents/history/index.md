@@ -46,3 +46,4 @@
 - 202601160946_ui_notify_sound
 - 202601160952_ui_unread_jump_per_session
 - 202601161134_nvidia_translate_provider
+- 202601161150_nvidia_translate_fix_and_model_presets

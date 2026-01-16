@@ -32,6 +32,7 @@
 - UI: `all` 视图移除每条消息的会话标识 pill（减少信息噪音），保留行 hover/title 便于排障。
 - 翻译: `auto` 模式仅自动翻译 `reasoning_summary`；`agent_reasoning` 默认改为手动触发，避免翻译队列堆积导致整体变慢。
 - 新增：NVIDIA NIM 翻译 Provider（`nvidia`，Chat Completions 兼容）：支持 `NVIDIA_API_KEY` 环境变量鉴权、RPM 节流与 429 退避重试。
+- 修复：NVIDIA Provider 响应解析更健壮（兼容 `message.content` 非字符串形态），并提取错误信息便于定位；UI 为 NVIDIA Model 增加常用预设候选。
 - UI: “有新输出”未读提示默认仅对“回答输出/审批提示”生效（忽略 tool_call/tool_output 等噪音），且右下角 toast 不再遮挡 🔔/↓ 浮动按钮。
 - UI: 右下角通知 toast 改为不抢占点击，并避开右下角跳转按钮区域，避免影响 ↑/🔔/↓ 交互。
 - UI: 新增铃铛提示音配置（`notify_sound`）：设置中可选无/舒缓-1/2/3；音效文件随 UI 静态资源提供（`ui/music/`，Kenney CC0）。

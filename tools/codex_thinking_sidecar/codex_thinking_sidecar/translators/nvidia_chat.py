@@ -31,19 +31,64 @@ def _build_zh_translation_prompt(text: str) -> str:
     )
 
 
+def _content_to_text(content) -> str:
+    """
+    Best-effort coercion for Chat Completions content.
+
+    Some gateways return:
+      - message.content as str
+      - message.content as list[{"type":"text","text":"..."}]
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, dict):
+        t = content.get("text")
+        if isinstance(t, str):
+            return t
+        t2 = content.get("content")
+        if isinstance(t2, str):
+            return t2
+        return ""
+    if isinstance(content, list):
+        parts = []
+        for part in content:
+            if isinstance(part, str):
+                if part:
+                    parts.append(part)
+                continue
+            if isinstance(part, dict):
+                t = part.get("text")
+                if isinstance(t, str) and t:
+                    parts.append(t)
+                    continue
+                t2 = part.get("content")
+                if isinstance(t2, str) and t2:
+                    parts.append(t2)
+                    continue
+        return "".join(parts)
+    return ""
+
+
 def _extract_chat_completions_text(obj) -> str:
     if not isinstance(obj, dict):
         return ""
     choices = obj.get("choices")
     if isinstance(choices, list) and choices:
-        first = choices[0]
-        if isinstance(first, dict):
-            msg = first.get("message")
+        for ch in choices:
+            if not isinstance(ch, dict):
+                continue
+            msg = ch.get("message")
             if isinstance(msg, dict):
-                c = msg.get("content")
+                c = _content_to_text(msg.get("content"))
                 if isinstance(c, str) and c.strip():
                     return c
-            t = first.get("text")
+            # streaming-like deltas (some gateways)
+            delta = ch.get("delta")
+            if isinstance(delta, dict):
+                c = _content_to_text(delta.get("content"))
+                if isinstance(c, str) and c.strip():
+                    return c
+            t = ch.get("text")
             if isinstance(t, str) and t.strip():
                 return t
     # best-effort fallbacks
@@ -73,6 +118,31 @@ def _parse_retry_after_s(v: str) -> float:
         return max(0.0, float(s))
     except Exception:
         return 0.0
+
+
+def _extract_error_detail(obj) -> str:
+    """
+    Best-effort extraction for API error payloads (without leaking secrets).
+    """
+    if not isinstance(obj, dict):
+        return ""
+    err = obj.get("error")
+    if isinstance(err, str) and err.strip():
+        return err.strip()
+    if isinstance(err, dict):
+        msg = err.get("message") or err.get("detail") or err.get("error") or ""
+        code = err.get("code") or err.get("status") or err.get("type") or ""
+        parts = []
+        if isinstance(code, (str, int)) and str(code).strip():
+            parts.append(f"code={str(code).strip()}")
+        if isinstance(msg, str) and msg.strip():
+            parts.append(msg.strip())
+        return " ".join(parts).strip()
+    for k in ("message", "detail", "error_description"):
+        v = obj.get(k)
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+    return ""
 
 
 @dataclass
@@ -226,7 +296,11 @@ class NvidiaChatTranslator:
                 if out:
                     self._cache_put(text, out)
                     return out
-                self.last_error = _log_nvidia_translate_error(endpoint, detail="empty_output")
+                err_detail = _extract_error_detail(obj)
+                if err_detail:
+                    self.last_error = _log_nvidia_translate_error(endpoint, detail=err_detail[:200])
+                else:
+                    self.last_error = _log_nvidia_translate_error(endpoint, detail="empty_output")
                 return ""
 
             except urllib.error.HTTPError as e:
@@ -267,4 +341,3 @@ class NvidiaChatTranslator:
                 self.last_error = _log_nvidia_translate_error(endpoint, detail=f"error={type(e).__name__}")
                 return ""
         return ""
-
