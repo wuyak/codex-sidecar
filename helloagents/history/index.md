@@ -44,3 +44,4 @@
 - 202601160922_ui_notify_filter_bell
 - 202601160927_ui_toast_not_block_nav
 - 202601160946_ui_notify_sound
+- 202601160952_ui_unread_jump_per_session

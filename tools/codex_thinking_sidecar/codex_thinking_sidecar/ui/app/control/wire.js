@@ -5,14 +5,13 @@ import { applyProfileToInputs, readHttpInputs, refreshHttpProfileSelect, upsertS
 import { closeDrawer, openDrawer, setStatus, showProviderBlocks } from "./ui.js";
 import { showShutdownScreen } from "../shutdown.js";
 import { toggleViewMode } from "../view_mode.js";
-import { dismissCorner, notifyCorner } from "../utils/notify.js";
-import { clearAllUnread, clearUnreadForKey, formatUnreadToastDetail, getUnreadTotal, updateUnreadButton } from "../unread.js";
+import { clearAllUnread, clearUnreadForKey, getUnreadCount, getUnreadTotal, pickMostRecentUnreadKey, updateUnreadButton } from "../unread.js";
 import { flashToastAt } from "../utils/toast.js";
 import { buildThinkingMetaRight } from "../thinking/meta.js";
 import { preloadNotifySound } from "../sound.js";
 
 export function wireControlEvents(dom, state, helpers) {
-  const { refreshList } = helpers;
+  const { refreshList, onSelectKey } = helpers;
 
   const syncTranslateToggle = () => {
     const btn = dom && dom.translateToggleBtn ? dom.translateToggleBtn : null;
@@ -135,19 +134,26 @@ export function wireControlEvents(dom, state, helpers) {
   });
 
   if (dom.scrollTopBtn) dom.scrollTopBtn.addEventListener("click", () => { window.scrollTo({ top: 0, behavior: "smooth" }); });
-  if (dom.scrollBottomBtn) dom.scrollBottomBtn.addEventListener("click", () => {
+  if (dom.scrollBottomBtn) dom.scrollBottomBtn.addEventListener("click", async () => {
     const total = getUnreadTotal(state);
     const atBottom = (window.innerHeight + window.scrollY) >= (document.body.scrollHeight - 80);
+    const curKey = String(state && state.currentKey ? state.currentKey : "all");
+    const curUnread = (curKey === "all") ? total : getUnreadCount(state, curKey);
+
     // 关闭通知：到达底部后再次点击 🔔 才清除未读（避免误清理/误判）。
-    if (total > 0 && atBottom) {
-      const curKey = String(state && state.currentKey ? state.currentKey : "all");
+    if (total > 0 && atBottom && (curKey === "all" || curUnread > 0)) {
       if (curKey === "all") clearAllUnread(state);
       else clearUnreadForKey(state, curKey);
       updateUnreadButton(dom, state);
-      const left = getUnreadTotal(state);
-      if (left > 0) notifyCorner("new_output", "有新输出", formatUnreadToastDetail(state), { level: "info", sticky: true });
-      else dismissCorner("new_output");
       return;
+    }
+
+    // 有未读时：优先跳到“最近未读”的会话，再滚动到底部（多会话下更符合直觉）。
+    if (total > 0) {
+      const target = pickMostRecentUnreadKey(state);
+      if (target && target !== curKey && typeof onSelectKey === "function") {
+        try { await onSelectKey(target); } catch (_) {}
+      }
     }
     window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
   });

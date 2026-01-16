@@ -146,7 +146,7 @@ export function updateUnreadButton(dom, state) {
     if (total > 0) {
       const badge = total > 99 ? "99+" : String(total);
       btn.textContent = "🔔";
-      btn.title = `有 ${total} 条新输出（点击跳到底部；底部再点一次停止通知）`;
+      btn.title = `有 ${total} 条新输出（点击跳到最近未读会话；到达底部后再点一次清除未读）`;
       btn.dataset.unread = badge;
       if (btn.classList) btn.classList.add("has-unread");
     } else {

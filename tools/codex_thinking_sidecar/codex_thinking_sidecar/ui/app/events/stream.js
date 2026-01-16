@@ -2,7 +2,7 @@ import { keyOf } from "../utils.js";
 import { applyMsgToList } from "./timeline.js";
 import { bufferForKey, pushPending, shouldBufferKey } from "./buffer.js";
 import { notifyCorner } from "../utils/notify.js";
-import { formatUnreadToastDetail, markUnread, updateUnreadButton } from "../unread.js";
+import { markUnread, updateUnreadButton } from "../unread.js";
 import { maybePlayNotifySound } from "../sound.js";
 
 function _toolGateWaiting(text) {
@@ -111,23 +111,19 @@ export function connectEventStream(dom, state, upsertThread, renderTabs, renderM
           const txt = String(msg.text || "");
           if (_toolGateWaiting(txt)) {
             notifyCorner("tool_gate", "终端等待确认", _summarizeToolGate(txt) || "请回到终端完成确认/授权后继续。", { level: "warn", sticky: true });
+            try { markUnread(state, msg); } catch (_) {}
+            updateUnreadButton(dom, state);
             try { maybePlayNotifySound(dom, state); } catch (_) {}
           } else if (_toolGateReleased(txt)) {
             notifyCorner("tool_gate", "终端已确认", _summarizeToolGate(txt) || "tool gate 已解除。", { level: "success", ttlMs: 1600 });
           }
         }
-        // “有新输出”仅提示用户关心的类型：回答输出 / 审批提示。
-        // tool_call/tool_output（如 apply_patch）噪音较高，不触发未读提示。
-        const isNotifyKind = (kind === "assistant_message" || kind === "tool_gate");
-        if (op !== "update" && isNotifyKind) {
-          const atBottom = (window.innerHeight + window.scrollY) >= (document.body.scrollHeight - 80);
-          // 当新消息不会立即出现在当前屏幕（不在底部或不在当前视图）时，计入未读并提示。
-          if (!atBottom || !shouldRender) {
-            const r = markUnread(state, msg);
-            updateUnreadButton(dom, state);
-            notifyCorner("new_output", "有新输出", formatUnreadToastDetail(state, { lastKey: r && r.key ? r.key : k }), { level: "info", sticky: true });
-            try { maybePlayNotifySound(dom, state); } catch (_) {}
-          }
+        // “未读”仅对用户关心的类型：回答输出 / 审批提示。
+        // tool_call/tool_output（如 apply_patch）噪音较高，不计入未读/不响铃。
+        if (op !== "update" && kind === "assistant_message") {
+          markUnread(state, msg);
+          updateUnreadButton(dom, state);
+          try { maybePlayNotifySound(dom, state); } catch (_) {}
         }
       } catch (_) {}
 

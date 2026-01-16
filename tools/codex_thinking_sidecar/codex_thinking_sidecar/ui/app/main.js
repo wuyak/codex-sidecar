@@ -116,6 +116,7 @@ export async function initApp() {
 
   wireControlEvents(dom, state, {
     refreshList: refreshListWrapper,
+    onSelectKey,
     renderTabs: () => renderTabsWrapper(dom, state),
   });
 

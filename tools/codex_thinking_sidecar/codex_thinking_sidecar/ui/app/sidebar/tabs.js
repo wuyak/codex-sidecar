@@ -1,6 +1,7 @@
 import { colorForKey, keyOf, rolloutStampFromFile, shortId } from "../utils.js";
 import { getCustomLabel, setCustomLabel } from "./labels.js";
 import { loadHiddenThreads } from "./hidden.js";
+import { getUnreadCount, getUnreadTotal } from "../unread.js";
 
 function threadLabel(t) {
   const stamp = rolloutStampFromFile(t.file || "");
@@ -79,18 +80,24 @@ export function renderTabs(dom, state, onSelectKey) {
   const showHidden = !!(state && state.showHiddenThreads);
   const frag = document.createDocumentFragment();
 
+  const totalUnread = getUnreadTotal(state);
   const allBtn = _getOrCreateTab(tabs, existing, "all", () => document.createElement("button"));
-  allBtn.className = "tab" + (state.currentKey === "all" ? " active" : "");
+  allBtn.className = "tab" + (state.currentKey === "all" ? " active" : "") + (totalUnread > 0 ? " has-unread" : "");
   allBtn.textContent = "全部";
   allBtn.title = "全部";
   allBtn.onclick = () => onSelectKey("all");
+  try {
+    if (totalUnread > 0) allBtn.dataset.unread = totalUnread > 99 ? "99+" : String(totalUnread);
+    else { try { delete allBtn.dataset.unread; } catch (_) { allBtn.dataset.unread = ""; } }
+  } catch (_) {}
   frag.appendChild(allBtn);
 
   for (const t of items) {
     const isHidden = !!(hidden && typeof hidden.has === "function" && hidden.has(t.key));
     if (isHidden && !showHidden) continue;
     const btn = _getOrCreateTab(tabs, existing, t.key, () => document.createElement("button"));
-    btn.className = "tab" + (isHidden ? " tab-hidden" : "") + (state.currentKey === t.key ? " active" : "");
+    const u = getUnreadCount(state, t.key);
+    btn.className = "tab" + (isHidden ? " tab-hidden" : "") + (state.currentKey === t.key ? " active" : "") + (u > 0 ? " has-unread" : "");
     const clr = colorForKey(t.key || "");
     const defaultLabel = threadLabel(t);
     const custom = getCustomLabel(t.key);
@@ -103,6 +110,10 @@ export function renderTabs(dom, state, onSelectKey) {
       try { parts.labelSpan.textContent = label; } catch (_) {}
       try { parts.countEl.textContent = `(${t.count || 0})`; } catch (_) {}
     }
+    try {
+      if (u > 0) btn.dataset.unread = u > 99 ? "99+" : String(u);
+      else { try { delete btn.dataset.unread; } catch (_) { btn.dataset.unread = ""; } }
+    } catch (_) {}
 
     const rename = () => {
       const cur = getCustomLabel(t.key);
