@@ -48,6 +48,78 @@ class SidecarController:
     def translators(self) -> Dict[str, Any]:
         return {"translators": [t.__dict__ for t in TRANSLATORS]}
 
+    def translate_probe(self) -> Dict[str, Any]:
+        """
+        Best-effort probe to validate the current translator configuration actually produces output.
+
+        Notes:
+        - Used by the UI after saving translator settings (no manual "test" button).
+        - Does not return any secrets; errors are taken from translator.last_error (sanitized upstream).
+        """
+        with self._lock:
+            cfg = self._cfg
+        provider = str(getattr(cfg, "translator_provider", "") or "stub").strip().lower()
+        if provider in ("stub", "none"):
+            return {"ok": False, "provider": provider, "error": "translator_disabled"}
+
+        # Keep it small but structurally rich (heading + code fence).
+        sample = (
+            "## Evaluating token limits\n\n"
+            "Do NOT drop leading `#` in headings.\n\n"
+            "```bash\n"
+            "echo hello\n"
+            "```\n\n"
+            "中文说明：这行不应被翻译或改动。\n"
+        )
+        t0 = time.monotonic()
+        try:
+            tr = build_translator(cfg)
+        except Exception:
+            return {"ok": False, "provider": provider, "error": "build_translator_failed"}
+
+        out = ""
+        try:
+            out = tr.translate(sample)
+        except Exception:
+            out = ""
+        ms = (time.monotonic() - t0) * 1000.0
+
+        out_s = str(out or "").strip()
+        err = ""
+        try:
+            err = str(getattr(tr, "last_error", "") or "").strip()
+        except Exception:
+            err = ""
+        if err.startswith("WARN:"):
+            err = err[len("WARN:") :].strip()
+
+        # Basic format checks (primarily for NVIDIA, but fine for others too).
+        heading_ok = ("##" in out_s) or ("\n#" in ("\n" + out_s))
+        code_ok = "```" in out_s
+        ok = bool(out_s)
+        if provider == "nvidia":
+            ok = ok and heading_ok and code_ok
+
+        model = ""
+        try:
+            model = str(getattr(tr, "_resolved_model", "") or getattr(tr, "model", "") or "").strip()
+        except Exception:
+            model = ""
+        if not model and provider:
+            model = provider
+
+        return {
+            "ok": bool(ok),
+            "provider": provider,
+            "model": model,
+            "ms": float(ms),
+            "sample_len": int(len(sample)),
+            "out_len": int(len(out_s)),
+            "heading_ok": bool(heading_ok),
+            "code_ok": bool(code_ok),
+            "error": err or ("empty_output" if not out_s else ""),
+        }
+
     def get_config(self) -> Dict[str, Any]:
         with self._lock:
             return self._cfg.to_dict()
@@ -104,6 +176,8 @@ class SidecarController:
         with self._lock:
             cur = self._cfg.to_dict()
             prev_tm = str(cur.get("translate_mode") or "auto").strip().lower()
+            prev_provider = str(cur.get("translator_provider") or "stub").strip().lower()
+            touched_translator = ("translator_provider" in patch) or ("translator_config" in patch)
             # merge shallow
             for k, v in patch.items():
                 if k == "translator_config":
@@ -146,6 +220,33 @@ class SidecarController:
                     watcher.set_translate_mode(next_tm)
             except Exception:
                 pass
+            # Hot-reload translator/provider config for the running watcher.
+            try:
+                watcher = self._watcher
+                running = bool(self._thread is not None and self._thread.is_alive())
+                next_provider = str(getattr(self._cfg, "translator_provider", "") or "").strip().lower()
+                if watcher is not None and running and (touched_translator or next_provider != prev_provider):
+                    watcher.set_translator(build_translator(self._cfg))
+            except Exception:
+                pass
+            # Hot-apply watcher runtime settings where it's safe (no full restart required).
+            # Note: watch_codex_home still requires stop/start to take effect.
+            try:
+                watcher = self._watcher
+                running = bool(self._thread is not None and self._thread.is_alive())
+                if watcher is not None and running:
+                    watcher.set_watch_max_sessions(int(getattr(self._cfg, "watch_max_sessions", 3) or 3))
+                    watcher.set_replay_last_lines(int(getattr(self._cfg, "replay_last_lines", 0) or 0))
+                    watcher.set_include_agent_reasoning(bool(getattr(self._cfg, "include_agent_reasoning", False)))
+                    watcher.set_poll_interval_s(float(getattr(self._cfg, "poll_interval", 0.5) or 0.5))
+                    watcher.set_file_scan_interval_s(float(getattr(self._cfg, "file_scan_interval", 2.0) or 2.0))
+                    watcher.set_follow_picker_config(
+                        follow_codex_process=bool(getattr(self._cfg, "follow_codex_process", False)),
+                        codex_process_regex=str(getattr(self._cfg, "codex_process_regex", "codex") or "codex"),
+                        only_follow_when_process=bool(getattr(self._cfg, "only_follow_when_process", True)),
+                    )
+            except Exception:
+                pass
             return self._cfg.to_dict()
 
     def clear_messages(self) -> None:
@@ -178,6 +279,8 @@ class SidecarController:
         if not text.strip():
             return {"ok": False, "error": "empty_text"}
 
+        prev_zh = str(msg.get("zh") or "")
+
         thread_id = str(msg.get("thread_id") or "")
         file_path = str(msg.get("file") or "")
         thread_key = thread_id or file_path or "unknown"
@@ -190,18 +293,20 @@ class SidecarController:
         if watcher is None or not running:
             return {"ok": False, "error": "not_running"}
 
-        # Clear existing zh to make the UI show "ZH…" while re-translation is in-flight.
+        queued = False
         try:
-            self._state.add({"op": "update", "id": m, "zh": "", "translate_error": ""})
+            queued = bool(watcher.retranslate(m, text=text, thread_key=thread_key, fallback_zh=prev_zh))
+        except Exception:
+            queued = False
+        if not queued:
+            return {"ok": False, "id": m, "queued": False, "error": "enqueue_failed"}
+
+        # Clear existing error (but keep previous zh until the new translation succeeds).
+        try:
+            self._state.add({"op": "update", "id": m, "translate_error": ""})
         except Exception:
             pass
-
-        ok = False
-        try:
-            ok = bool(watcher.retranslate(m, text=text, thread_key=thread_key))
-        except Exception:
-            ok = False
-        return {"ok": ok, "id": m, "queued": ok}
+        return {"ok": True, "id": m, "queued": True}
 
     def start(self) -> Dict[str, Any]:
         with self._lock:
@@ -332,25 +437,6 @@ class SidecarController:
             pin_file = self._pinned_file
 
         ws = watcher.status() if watcher is not None else {}
-        env_hint = {}
-        try:
-            provider = str(cfg.get("translator_provider") or "")
-            if provider in ("http", "openai", "nvidia"):
-                auth_env = ""
-                tc = cfg.get("translator_config") or {}
-                if isinstance(tc, dict):
-                    if provider == "http":
-                        auth_env = str(select_http_profile(tc).get("auth_env") or "").strip()
-                    elif provider == "openai":
-                        oc = tc.get("openai") if isinstance(tc.get("openai"), dict) else tc
-                        auth_env = str((oc or {}).get("auth_env") or "").strip()
-                    else:
-                        nc = tc.get("nvidia") if isinstance(tc.get("nvidia"), dict) else tc
-                        auth_env = str((nc or {}).get("auth_env") or "NVIDIA_API_KEY").strip() or "NVIDIA_API_KEY"
-                if auth_env:
-                    env_hint = {"auth_env": auth_env, "auth_env_set": bool(os.environ.get(auth_env))}
-        except Exception:
-            env_hint = {}
         return {
             "ok": True,
             "pid": os.getpid(),
@@ -364,7 +450,6 @@ class SidecarController:
                 "file": pin_file,
             },
             "config": cfg,
-            "env": env_hint,
         }
 
     def request_shutdown(self) -> Dict[str, Any]:

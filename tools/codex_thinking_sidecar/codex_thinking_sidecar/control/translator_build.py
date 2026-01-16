@@ -5,7 +5,7 @@ from ..translator import HttpTranslator, NvidiaChatTranslator, NoneTranslator, O
 
 
 def build_translator(cfg: SidecarConfig) -> Translator:
-    provider = (cfg.translator_provider or "stub").strip().lower()
+    provider = (cfg.translator_provider or "openai").strip().lower()
     if provider == "none":
         return NoneTranslator()
     if provider == "openai":
@@ -16,8 +16,8 @@ def build_translator(cfg: SidecarConfig) -> Translator:
         base_url = str(tc.get("base_url") or "").strip()
         model = str(tc.get("model") or "").strip()
         api_key = str(tc.get("api_key") or "").strip()
-        timeout_s = float(tc.get("timeout_s") or 12.0)
-        auth_env = str(tc.get("auth_env") or "").strip()
+        timeout_raw = tc.get("timeout_s")
+        timeout_s = float(timeout_raw) if timeout_raw not in (None, "") else 12.0
         auth_header = str(tc.get("auth_header") or "Authorization").strip() or "Authorization"
         auth_prefix = str(tc.get("auth_prefix") or "Bearer ").strip()
         reasoning_effort = str(tc.get("reasoning_effort") or "").strip()
@@ -26,7 +26,6 @@ def build_translator(cfg: SidecarConfig) -> Translator:
             model=model,
             api_key=api_key,
             timeout_s=timeout_s,
-            auth_env=auth_env,
             auth_header=auth_header,
             auth_prefix=auth_prefix,
             reasoning_effort=reasoning_effort,
@@ -39,23 +38,31 @@ def build_translator(cfg: SidecarConfig) -> Translator:
         base_url = str(tc.get("base_url") or "").strip()
         model = str(tc.get("model") or "").strip()
         api_key = str(tc.get("api_key") or "").strip()
-        timeout_s = float(tc.get("timeout_s") or 12.0)
-        auth_env = str(tc.get("auth_env") or "NVIDIA_API_KEY").strip() or "NVIDIA_API_KEY"
+        timeout_raw = tc.get("timeout_s")
+        timeout_s = float(timeout_raw) if timeout_raw not in (None, "") else 60.0
         try:
-            rpm = int(tc.get("rpm") or 40)
+            rpm_raw = tc.get("rpm")
+            rpm = int(rpm_raw) if rpm_raw not in (None, "") else 0
         except Exception:
-            rpm = 40
+            rpm = 0
         try:
-            max_retries = int(tc.get("max_retries") or 3)
+            mt_raw = tc.get("max_tokens")
+            max_tokens = int(mt_raw) if mt_raw not in (None, "") else 8192
+        except Exception:
+            max_tokens = 8192
+        max_tokens = max(0, max_tokens)
+        try:
+            mr_raw = tc.get("max_retries")
+            max_retries = int(mr_raw) if mr_raw not in (None, "") else 3
         except Exception:
             max_retries = 3
         return NvidiaChatTranslator(
             base_url=base_url,
-            model=model or "nvidia/riva-translate-4b-instruct-v1_1",
+            model=model or "moonshotai/kimi-k2-instruct",
             api_key=api_key,
             timeout_s=timeout_s,
-            auth_env=auth_env,
             rpm=rpm,
+            max_tokens=max_tokens,
             max_retries=max_retries,
         )
     if provider == "http":
@@ -63,14 +70,12 @@ def build_translator(cfg: SidecarConfig) -> Translator:
         selected = select_http_profile(tc if isinstance(tc, dict) else {})
         url = str(selected.get("url") or "").strip()
         timeout_s = float(selected.get("timeout_s") or 3.0)
-        auth_env = str(selected.get("auth_env") or "").strip()
         auth_token = str(selected.get("token") or "").strip()
         auth_header = str(selected.get("auth_header") or "Authorization").strip() or "Authorization"
         auth_prefix = str(selected.get("auth_prefix") or "Bearer ").strip()
         return HttpTranslator(
             url=url,
             timeout_s=timeout_s,
-            auth_env=auth_env,
             auth_token=auth_token,
             auth_header=auth_header,
             auth_prefix=auth_prefix,

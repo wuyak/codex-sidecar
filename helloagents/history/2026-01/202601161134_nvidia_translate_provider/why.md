@@ -1,7 +1,7 @@
 # 变更提案: NVIDIA 翻译引擎接入（NIM Chat Completions）
 
 ## 需求背景
-当前 sidecar 的翻译 Provider 仅支持 `http`（通用适配器）与 `openai`（Responses API 兼容）。为了在“准 + 快 + 保留代码/专有名词”场景下获得更稳定的翻译效果，需要接入 NVIDIA 的 NIM 翻译模型（如 `nvidia/riva-translate-4b-instruct-v1_1`）。
+当前 sidecar 的翻译 Provider 仅支持 `http`（通用适配器）与 `openai`（Responses API 兼容）。为了在“准 + 快 + 保留代码/专有名词”场景下获得更稳定的翻译效果，需要接入 NVIDIA 的 NIM 翻译模型（如 `nvidia/riva-translate-4b-instruct-v1.1`）。
 
 ## 变更内容
 1. 新增翻译 Provider：`nvidia`（Chat Completions 兼容），默认对接 `https://integrate.api.nvidia.com/v1/chat/completions`。
@@ -26,4 +26,3 @@
 ## 风险评估
 - **风险:** RPM 限制/429 导致翻译变慢或失败
 - **缓解:** 全局节流（min interval）+ 429 退避重试（优先 Retry-After）；失败仅回填 `translate_error`，不污染内容区
-

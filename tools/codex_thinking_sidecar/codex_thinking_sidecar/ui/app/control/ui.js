@@ -7,9 +7,29 @@ export function setDebug(dom, s) {
 }
 
 export function openDrawer(dom) {
+  // Keep UI clean: config drawer and translate drawer are mutually exclusive.
+  try { closeTranslateDrawer(dom); } catch (_) {}
   try {
     if (dom.drawerOverlay) dom.drawerOverlay.classList.remove("hidden");
     if (dom.drawer) dom.drawer.classList.remove("hidden");
+  } catch (_) {}
+}
+
+export function openTranslateDrawer(dom) {
+  // Keep UI clean: config drawer and translate drawer are mutually exclusive.
+  try { closeDrawer(dom); } catch (_) {}
+  try {
+    if (dom.translateDrawerOverlay) dom.translateDrawerOverlay.classList.remove("hidden");
+    if (dom.translateDrawer) dom.translateDrawer.classList.remove("hidden");
+  } catch (_) {}
+}
+
+export function openTranslatorSettings(dom) {
+  openTranslateDrawer(dom);
+  try {
+    setTimeout(() => {
+      try { if (dom && dom.translatorSel && dom.translatorSel.focus) dom.translatorSel.focus(); } catch (_) {}
+    }, 0);
   } catch (_) {}
 }
 
@@ -20,8 +40,15 @@ export function closeDrawer(dom) {
   } catch (_) {}
 }
 
+export function closeTranslateDrawer(dom) {
+  try {
+    if (dom.translateDrawerOverlay) dom.translateDrawerOverlay.classList.add("hidden");
+    if (dom.translateDrawer) dom.translateDrawer.classList.add("hidden");
+  } catch (_) {}
+}
+
 function showHttpFields(dom, show) {
-  const els = [dom.httpProfile, dom.httpProfileAddBtn, dom.httpProfileRenameBtn, dom.httpProfileDelBtn, dom.httpUrl, dom.httpToken, dom.httpTimeout, dom.httpAuthEnv];
+  const els = [dom.httpProfile, dom.httpProfileAddBtn, dom.httpProfileRenameBtn, dom.httpProfileDelBtn, dom.httpUrl, dom.httpToken, dom.httpTimeout];
   for (const el of els) {
     if (!el) continue;
     el.disabled = !show;
@@ -33,7 +60,7 @@ function showHttpFields(dom, show) {
 }
 
 function showOpenAIFields(dom, show) {
-  const els = [dom.openaiBaseUrl, dom.openaiModel, dom.openaiApiKey, dom.openaiAuthMode, dom.openaiAuthEnv, dom.openaiReasoning, dom.openaiTimeout];
+  const els = [dom.openaiBaseUrl, dom.openaiModel, dom.openaiApiKey, dom.openaiAuthMode, dom.openaiReasoning, dom.openaiTimeout];
   for (const el of els) {
     if (!el) continue;
     el.disabled = !show;
@@ -45,7 +72,7 @@ function showOpenAIFields(dom, show) {
 }
 
 function showNvidiaFields(dom, show) {
-  const els = [dom.nvidiaBaseUrl, dom.nvidiaModel, dom.nvidiaApiKey, dom.nvidiaAuthEnv, dom.nvidiaRpm, dom.nvidiaTimeout];
+  const els = [dom.nvidiaBaseUrl, dom.nvidiaModel, dom.nvidiaApiKey, dom.nvidiaMaxTokens, dom.nvidiaRpm, dom.nvidiaTimeout];
   for (const el of els) {
     if (!el) continue;
     el.disabled = !show;
@@ -61,12 +88,9 @@ function ensureOpenAIDefaults(dom) {
     if (dom.openaiBaseUrl && !String(dom.openaiBaseUrl.value || "").trim()) {
       dom.openaiBaseUrl.value = "https://www.right.codes/codex/v1";
     }
-    if (dom.openaiModel && !String(dom.openaiModel.value || "").trim()) {
-      const base = String(dom.openaiBaseUrl && dom.openaiBaseUrl.value ? dom.openaiBaseUrl.value : "").trim().toLowerCase();
-      // right.codes 的 Codex 网关在“ChatGPT 账号”场景下可能不支持部分常见模型（例如 gpt-4o-mini）。
-      // 给一个更稳妥的默认值，用户仍可按 /models 列表自行调整。
-      dom.openaiModel.value = (base.includes("right.codes") && base.includes("/codex/")) ? "gpt-5.1" : "gpt-4o-mini";
-    }
+	    if (dom.openaiModel && !String(dom.openaiModel.value || "").trim()) {
+	      dom.openaiModel.value = "gpt-5.1";
+	    }
     if (dom.openaiTimeout && (dom.openaiTimeout.value === "" || dom.openaiTimeout.value == null)) {
       dom.openaiTimeout.value = 12;
     }
@@ -82,16 +106,16 @@ function ensureNvidiaDefaults(dom) {
       dom.nvidiaBaseUrl.value = "https://integrate.api.nvidia.com/v1";
     }
     if (dom.nvidiaModel && !String(dom.nvidiaModel.value || "").trim()) {
-      dom.nvidiaModel.value = "nvidia/riva-translate-4b-instruct-v1_1";
-    }
-    if (dom.nvidiaAuthEnv && !String(dom.nvidiaAuthEnv.value || "").trim()) {
-      dom.nvidiaAuthEnv.value = "NVIDIA_API_KEY";
+      dom.nvidiaModel.value = "moonshotai/kimi-k2-instruct";
     }
     if (dom.nvidiaRpm && (dom.nvidiaRpm.value === "" || dom.nvidiaRpm.value == null)) {
-      dom.nvidiaRpm.value = 40;
+      dom.nvidiaRpm.value = 0;
     }
+	    if (dom.nvidiaMaxTokens && (dom.nvidiaMaxTokens.value === "" || dom.nvidiaMaxTokens.value == null)) {
+	      dom.nvidiaMaxTokens.value = 8192;
+	    }
     if (dom.nvidiaTimeout && (dom.nvidiaTimeout.value === "" || dom.nvidiaTimeout.value == null)) {
-      dom.nvidiaTimeout.value = 12;
+      dom.nvidiaTimeout.value = 60;
     }
   } catch (_) {}
 }

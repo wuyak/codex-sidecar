@@ -211,7 +211,7 @@ class RolloutWatcher:
             batch_size=5,
         )
 
-    def retranslate(self, mid: str, text: str, thread_key: str) -> bool:
+    def retranslate(self, mid: str, text: str, thread_key: str, fallback_zh: str = "") -> bool:
         """
         Force (re)translation for a single message id.
         Called from the HTTP control plane when user clicks "重译" in the UI.
@@ -221,14 +221,15 @@ class RolloutWatcher:
         try:
             if self._translate is None:
                 return False
-            self._translate.enqueue(
+            queued = self._translate.enqueue(
                 mid=str(mid or "").strip(),
                 text=str(text or ""),
                 thread_key=str(thread_key or ""),
                 batchable=False,
                 force=True,
+                fallback_zh=str(fallback_zh or ""),
             )
-            return True
+            return bool(queued)
         except Exception:
             return False
 
@@ -295,6 +296,89 @@ class RolloutWatcher:
         if tm not in ("auto", "manual"):
             return
         self._translate_mode = tm
+
+    def set_translator(self, translator: Translator) -> None:
+        """
+        运行时热加载翻译器配置（无需重启 watcher 线程）。
+        """
+        self._translator = translator
+        try:
+            if self._translate is not None:
+                self._translate.set_translator(translator)
+        except Exception:
+            pass
+
+    def set_watch_max_sessions(self, n: int) -> None:
+        """
+        运行时调整并行会话数量（tail 最近 N 个会话文件）。
+        """
+        try:
+            nn = max(1, int(n or 1))
+        except Exception:
+            nn = 1
+        self._watch_max_sessions = nn
+        try:
+            with self._follow_lock:
+                self._follow_dirty = True
+        except Exception:
+            pass
+
+    def set_replay_last_lines(self, n: int) -> None:
+        """
+        运行时调整启动/新文件初始化时的回放行数（仅影响后续新发现的会话文件）。
+        """
+        try:
+            nn = max(0, int(n or 0))
+        except Exception:
+            nn = 0
+        self._replay_last_lines = nn
+
+    def set_include_agent_reasoning(self, enabled: bool) -> None:
+        """
+        运行时切换是否采集 agent_reasoning（更长、更噪的思考流）。
+        """
+        self._include_agent_reasoning = bool(enabled)
+
+    def set_poll_interval_s(self, seconds: float) -> None:
+        """
+        运行时调整轮询间隔（越小越实时，但 CPU/IO 更高）。
+        """
+        try:
+            s = float(seconds)
+        except Exception:
+            s = 0.5
+        self._poll_interval_s = max(0.05, s)
+
+    def set_file_scan_interval_s(self, seconds: float) -> None:
+        """
+        运行时调整扫描间隔（影响发现新会话/进程定位切换的速度）。
+        """
+        try:
+            s = float(seconds)
+        except Exception:
+            s = 2.0
+        self._file_scan_interval_s = max(0.2, s)
+
+    def set_follow_picker_config(self, *, follow_codex_process: bool, codex_process_regex: str, only_follow_when_process: bool) -> None:
+        """
+        运行时更新“进程定位/仅跟随进程/regex”配置。
+
+        注意：仅影响后续的跟随选择；会触发一次立即重选/重扫。
+        """
+        try:
+            self._follow_picker = FollowPicker(
+                codex_home=self._codex_home,
+                follow_codex_process=bool(follow_codex_process),
+                codex_process_regex=str(codex_process_regex or "codex"),
+                only_follow_when_process=bool(only_follow_when_process),
+            )
+        except Exception:
+            return
+        try:
+            with self._follow_lock:
+                self._follow_dirty = True
+        except Exception:
+            pass
 
     def set_follow(self, mode: str, thread_id: str = "", file: str = "") -> None:
         """

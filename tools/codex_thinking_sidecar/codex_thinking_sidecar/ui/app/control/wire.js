@@ -1,11 +1,10 @@
 import { api } from "./api.js";
 import { clearView, restartProcess, startWatch, stopWatch } from "./actions.js";
-import { recoverConfig, saveConfig } from "./config.js";
+import { recoverConfig, saveConfig, saveTranslateConfig } from "./config.js";
 import { applyProfileToInputs, readHttpInputs, refreshHttpProfileSelect, upsertSelectedProfileFromInputs } from "./http_profiles.js";
-import { closeDrawer, openDrawer, setStatus, showProviderBlocks } from "./ui.js";
+import { closeDrawer, closeTranslateDrawer, openDrawer, openTranslatorSettings, setDebug, setStatus, showProviderBlocks } from "./ui.js";
 import { showShutdownScreen } from "../shutdown.js";
 import { toggleViewMode } from "../view_mode.js";
-import { clearAllUnread, clearUnreadForKey, getUnreadCount, getUnreadTotal, pickMostRecentUnreadKey, updateUnreadButton } from "../unread.js";
 import { flashToastAt } from "../utils/toast.js";
 import { buildThinkingMetaRight } from "../thinking/meta.js";
 import { preloadNotifySound } from "../sound.js";
@@ -19,7 +18,6 @@ export function wireControlEvents(dom, state, helpers) {
     const isAuto = (String(state && state.translateMode ? state.translateMode : "").toLowerCase() !== "manual");
     try {
       btn.classList.toggle("active", isAuto);
-      btn.title = isAuto ? "自动翻译：已开启" : "自动翻译：已关闭（手动）";
     } catch (_) {}
   };
 
@@ -47,9 +45,60 @@ export function wireControlEvents(dom, state, helpers) {
     }
   };
 
+  const _sanitizeTranslateMode = (mode) => (String(mode || "").trim().toLowerCase() === "manual") ? "manual" : "auto";
+
+  const _toastFromEl = (el, text, opts = {}) => {
+    const isLight = ("isLight" in opts) ? !!opts.isLight : true;
+    const durationMs = Number.isFinite(Number(opts.durationMs)) ? Number(opts.durationMs) : 1100;
+    try {
+      const node = el && el.getBoundingClientRect ? el : null;
+      const r = node ? node.getBoundingClientRect() : null;
+      const x = r ? (r.left + r.width / 2) : (window.innerWidth / 2);
+      const y = r ? (r.top + r.height / 2) : 24;
+      flashToastAt(x, y, text, { isLight, durationMs });
+    } catch (_) {}
+  };
+
+  const _applyTranslateModeLocal = (mode) => {
+    const m = _sanitizeTranslateMode(mode);
+    try { state.translateMode = m; } catch (_) {}
+    try { if (dom.translateMode) dom.translateMode.value = m; } catch (_) {}
+    syncTranslateToggle();
+    refreshThinkingMetaRight();
+    return m;
+  };
+
+  const _setTranslateMode = async (next, sourceEl) => {
+    const cur = _sanitizeTranslateMode(state && state.translateMode);
+    const want = _sanitizeTranslateMode(next);
+    if (want === cur) {
+      _applyTranslateModeLocal(cur);
+      return { ok: true, mode: cur };
+    }
+
+    // Optimistic local update (UI).
+    _applyTranslateModeLocal(want);
+    _toastFromEl(sourceEl || (dom && dom.translateToggleBtn), want === "auto" ? "自动翻译：已开启" : "自动翻译：已关闭");
+
+    // Persist + apply runtime on server.
+    try {
+      const resp = await api("POST", "/api/config", { translate_mode: want });
+      if (resp && resp.ok === false) throw new Error(String(resp.error || "config_update_failed"));
+      const real = (resp && resp.translate_mode === "manual") ? "manual" : "auto";
+      _applyTranslateModeLocal(real);
+      return { ok: true, mode: real };
+    } catch (_) {
+      // Revert on failure.
+      _applyTranslateModeLocal(cur);
+      _toastFromEl(sourceEl || (dom && dom.translateToggleBtn), "切换失败", { durationMs: 1200 });
+      return { ok: false, mode: cur };
+    }
+  };
+
   if (dom.translatorSel) dom.translatorSel.addEventListener("change", () => {
     showProviderBlocks(dom, (dom.translatorSel.value || ""));
   });
+
   if (dom.notifySound) dom.notifySound.addEventListener("change", async () => {
     const v = String(dom.notifySound.value || "none").trim().toLowerCase() || "none";
     try { state.notifySound = v; } catch (_) {}
@@ -71,55 +120,86 @@ export function wireControlEvents(dom, state, helpers) {
   });
   if (dom.drawerOverlay) dom.drawerOverlay.addEventListener("click", () => { closeDrawer(dom); });
   if (dom.drawerCloseBtn) dom.drawerCloseBtn.addEventListener("click", () => { closeDrawer(dom); });
+  if (dom.translateDrawerOverlay) dom.translateDrawerOverlay.addEventListener("click", () => { closeTranslateDrawer(dom); });
+  if (dom.translateDrawerCloseBtn) dom.translateDrawerCloseBtn.addEventListener("click", () => { closeTranslateDrawer(dom); });
   window.addEventListener("keydown", (e) => {
     try {
-      if (e && e.key === "Escape") closeDrawer(dom);
+      if (e && e.key === "Escape") { closeTranslateDrawer(dom); closeDrawer(dom); }
     } catch (_) {}
   });
 
   if (dom.saveBtn) dom.saveBtn.addEventListener("click", async () => { await saveConfig(dom, state); });
+  if (dom.saveTranslateBtn) dom.saveTranslateBtn.addEventListener("click", async () => { await saveTranslateConfig(dom, state); });
   if (dom.recoverBtn) dom.recoverBtn.addEventListener("click", async () => { await recoverConfig(dom, state); });
   if (dom.startBtn) dom.startBtn.addEventListener("click", async () => { await startWatch(dom, state); });
   if (dom.stopBtn) dom.stopBtn.addEventListener("click", async () => { await stopWatch(dom, state); });
   if (dom.restartBtn) dom.restartBtn.addEventListener("click", async () => { await restartProcess(dom, state); });
   if (dom.clearBtn) dom.clearBtn.addEventListener("click", async () => { await clearView(dom, state, refreshList); });
   if (dom.quickViewBtn) dom.quickViewBtn.addEventListener("click", () => { toggleViewMode(dom, state); });
-  if (dom.translateToggleBtn) dom.translateToggleBtn.addEventListener("click", async () => {
-    const btn = dom.translateToggleBtn;
-    const cur = (String(state && state.translateMode ? state.translateMode : "").toLowerCase() === "manual") ? "manual" : "auto";
-    const next = (cur === "manual") ? "auto" : "manual";
-
-    // Optimistic local update (UI).
-    try { state.translateMode = next; } catch (_) {}
-    try { if (dom.translateMode) dom.translateMode.value = next; } catch (_) {}
-    syncTranslateToggle();
-    refreshThinkingMetaRight();
-    try {
-      const r = btn.getBoundingClientRect();
-      flashToastAt(r.left + r.width / 2, r.top + r.height / 2, next === "auto" ? "自动翻译：已开启" : "自动翻译：已关闭", { isLight: true, durationMs: 1100 });
-    } catch (_) {}
-
-    // Persist + apply runtime on server.
-    try {
-      const resp = await api("POST", "/api/config", { translate_mode: next });
-      if (resp && resp.ok === false) throw new Error(String(resp.error || "config_update_failed"));
-      const real = (resp && resp.translate_mode === "manual") ? "manual" : "auto";
-      try { state.translateMode = real; } catch (_) {}
-      try { if (dom.translateMode) dom.translateMode.value = real; } catch (_) {}
-      syncTranslateToggle();
-      refreshThinkingMetaRight();
-    } catch (_) {
-      // Revert on failure.
-      try { state.translateMode = cur; } catch (_) {}
-      try { if (dom.translateMode) dom.translateMode.value = cur; } catch (_) {}
-      syncTranslateToggle();
-      refreshThinkingMetaRight();
-      try {
-        const r = btn.getBoundingClientRect();
-        flashToastAt(r.left + r.width / 2, r.top + r.height / 2, "切换失败", { isLight: true, durationMs: 1200 });
-      } catch (_) {}
-    }
+  if (dom.translateMode) dom.translateMode.addEventListener("change", async () => {
+    const next = _sanitizeTranslateMode(dom.translateMode.value);
+    await _setTranslateMode(next, dom.translateMode);
   });
+  if (dom.translateToggleBtn) {
+    const btn = dom.translateToggleBtn;
+    let pressT = 0;
+    let startX = 0;
+    let startY = 0;
+    let moved = false;
+    let pressed = false;
+    let longFired = false;
+    const LONG_MS = 520;
+    const MOVE_PX = 8;
+
+    const clearPress = () => {
+      pressed = false;
+      if (pressT) { try { clearTimeout(pressT); } catch (_) {} }
+      pressT = 0;
+    };
+
+    const onDown = (e) => {
+      try {
+        if (e && typeof e.button === "number" && e.button !== 0) return;
+      } catch (_) {}
+      moved = false;
+      pressed = true;
+      longFired = false;
+      startX = Number(e && e.clientX) || 0;
+      startY = Number(e && e.clientY) || 0;
+      if (pressT) { try { clearTimeout(pressT); } catch (_) {} }
+      pressT = window.setTimeout(() => {
+        if (!pressed || moved) return;
+        longFired = true;
+        openTranslatorSettings(dom);
+      }, LONG_MS);
+    };
+
+    const onMove = (e) => {
+      if (!pressed) return;
+      const x = Number(e && e.clientX) || 0;
+      const y = Number(e && e.clientY) || 0;
+      const dx = x - startX;
+      const dy = y - startY;
+      if ((dx * dx + dy * dy) > (MOVE_PX * MOVE_PX)) {
+        moved = true;
+        if (pressT) { try { clearTimeout(pressT); } catch (_) {} }
+        pressT = 0;
+      }
+    };
+
+    btn.addEventListener("pointerdown", onDown);
+    btn.addEventListener("pointermove", onMove);
+    btn.addEventListener("pointerup", clearPress);
+    btn.addEventListener("pointercancel", clearPress);
+    btn.addEventListener("pointerleave", clearPress);
+
+    btn.addEventListener("click", async (e) => {
+      if (longFired) { longFired = false; try { e.preventDefault(); e.stopPropagation(); } catch (_) {} return; }
+      const cur = _sanitizeTranslateMode(state && state.translateMode);
+      const next = (cur === "manual") ? "auto" : "manual";
+      await _setTranslateMode(next, btn);
+    });
+  }
 
   if (dom.shutdownBtn) dom.shutdownBtn.addEventListener("click", async () => {
     if (!confirm("确定要退出 sidecar 进程？（将停止监听并关闭服务）")) return;
@@ -135,26 +215,6 @@ export function wireControlEvents(dom, state, helpers) {
 
   if (dom.scrollTopBtn) dom.scrollTopBtn.addEventListener("click", () => { window.scrollTo({ top: 0, behavior: "smooth" }); });
   if (dom.scrollBottomBtn) dom.scrollBottomBtn.addEventListener("click", async () => {
-    const total = getUnreadTotal(state);
-    const atBottom = (window.innerHeight + window.scrollY) >= (document.body.scrollHeight - 80);
-    const curKey = String(state && state.currentKey ? state.currentKey : "all");
-    const curUnread = (curKey === "all") ? total : getUnreadCount(state, curKey);
-
-    // 关闭通知：到达底部后再次点击 🔔 才清除未读（避免误清理/误判）。
-    if (total > 0 && atBottom && (curKey === "all" || curUnread > 0)) {
-      if (curKey === "all") clearAllUnread(state);
-      else clearUnreadForKey(state, curKey);
-      updateUnreadButton(dom, state);
-      return;
-    }
-
-    // 有未读时：优先跳到“最近未读”的会话，再滚动到底部（多会话下更符合直觉）。
-    if (total > 0) {
-      const target = pickMostRecentUnreadKey(state);
-      if (target && target !== curKey && typeof onSelectKey === "function") {
-        try { await onSelectKey(target); } catch (_) {}
-      }
-    }
     window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
   });
 
@@ -203,7 +263,6 @@ export function wireControlEvents(dom, state, helpers) {
     else {
       if (dom.httpUrl) dom.httpUrl.value = "";
       if (dom.httpTimeout) dom.httpTimeout.value = 3;
-      if (dom.httpAuthEnv) dom.httpAuthEnv.value = "";
     }
   });
 }

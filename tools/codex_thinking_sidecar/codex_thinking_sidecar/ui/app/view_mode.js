@@ -18,9 +18,6 @@ function _applyButton(dom, mode) {
   if (!btn || !btn.classList) return;
   try {
     btn.classList.toggle("active", mode === "quick");
-    btn.title = (mode === "quick")
-      ? "快速浏览（已开启：仅输入/输出/思考）"
-      : "快速浏览（仅输入/输出/思考）";
   } catch (_) {}
 }
 
@@ -57,4 +54,3 @@ export function toggleViewMode(dom, state) {
   const cur = _sanitize(state && state.viewMode);
   return setViewMode(dom, state, cur === "quick" ? "full" : "quick");
 }
-

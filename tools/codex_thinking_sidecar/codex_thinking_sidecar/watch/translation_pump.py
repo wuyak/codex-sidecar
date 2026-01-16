@@ -46,6 +46,10 @@ class TranslationPump:
         self._seen_max = max(1000, int(max_seen_ids or 6000))
         # In-flight guard: prevent repeated manual "force" triggers from spamming requests.
         self._inflight: Set[str] = set()
+        # Coalesce manual "force" retranslate requests when an id is already queued/running.
+        # key=id -> latest force item (will run once after current inflight completes).
+        self._force_after: Dict[str, Dict[str, Any]] = {}
+        self._lock = threading.Lock()
 
         # Observability (best-effort; approximate counters are fine for a sidecar).
         self._drop_old_hi = 0
@@ -71,27 +75,64 @@ class TranslationPump:
         t.start()
         self._thread = t
 
-    def enqueue(self, mid: str, text: str, thread_key: str, batchable: bool, *, force: bool = False) -> None:
+    def set_translator(self, translator: Translator) -> None:
+        """
+        Hot-reload translator implementation at runtime.
+
+        Notes:
+        - Assignment is atomic; the worker thread will use the new translator for subsequent items.
+        - In-flight requests may still be running on the old translator instance.
+        """
+        try:
+            self._translator = translator
+        except Exception:
+            return
+
+    def enqueue(
+        self,
+        mid: str,
+        text: str,
+        thread_key: str,
+        batchable: bool,
+        *,
+        force: bool = False,
+        fallback_zh: str = "",
+    ) -> bool:
         m = str(mid or "").strip()
         t = str(text or "")
         if not m or not t.strip():
-            return
+            return False
 
         # Dedupe (bounded).
         # - Normal auto-translate: skip if we've seen this message id before.
-        # - Force retranslate: allow bypassing seen, but still block if a translate for this id is already queued/running.
-        if force:
-            if m in self._inflight:
-                return
-        else:
-            if m in self._seen:
-                return
-        if m not in self._seen:
-            self._seen.add(m)
-            self._seen_order.append(m)
-            while len(self._seen_order) > self._seen_max:
-                old = self._seen_order.popleft()
-                self._seen.discard(old)
+        # - Force retranslate: coalesce if already queued/running (run once after inflight).
+        try:
+            if force:
+                with self._lock:
+                    if m in self._inflight:
+                        item: Dict[str, Any] = {
+                            "id": m,
+                            "text": t,
+                            "key": str(thread_key or ""),
+                            "batchable": False,
+                        }
+                        fz = str(fallback_zh or "")
+                        if fz.strip():
+                            item["fallback_zh"] = fz
+                        self._force_after[m] = item
+                        return True
+            else:
+                with self._lock:
+                    if m in self._seen:
+                        return False
+                    self._seen.add(m)
+                    self._seen_order.append(m)
+                    while len(self._seen_order) > self._seen_max:
+                        old = self._seen_order.popleft()
+                        self._seen.discard(old)
+        except Exception:
+            # Best-effort: do not block enqueue on bookkeeping failures.
+            pass
 
         item: Dict[str, Any] = {
             "id": m,
@@ -99,12 +140,20 @@ class TranslationPump:
             "key": str(thread_key or ""),
             "batchable": bool(batchable),
         }
+        if force:
+            fz = str(fallback_zh or "")
+            if fz.strip():
+                item["fallback_zh"] = fz
 
         q = self._lo if batchable else self._hi
-        self._inflight.add(m)
-        self._put_drop_oldest(q, item, is_hi=(not batchable))
+        try:
+            with self._lock:
+                self._inflight.add(m)
+        except Exception:
+            pass
+        return bool(self._put_drop_oldest(q, item, is_hi=(not batchable)))
 
-    def _put_drop_oldest(self, q: "queue.Queue[Dict[str, Any]]", item: Dict[str, Any], *, is_hi: bool) -> None:
+    def _put_drop_oldest(self, q: "queue.Queue[Dict[str, Any]]", item: Dict[str, Any], *, is_hi: bool) -> bool:
         iid = ""
         try:
             iid = str(item.get("id") or "").strip()
@@ -112,13 +161,17 @@ class TranslationPump:
             iid = ""
         try:
             q.put_nowait(item)
-            return
+            return True
         except queue.Full:
             pass
         except Exception:
             if iid:
-                self._inflight.discard(iid)
-            return
+                try:
+                    with self._lock:
+                        self._inflight.discard(iid)
+                except Exception:
+                    pass
+            return False
         # Backpressure: drop one oldest item and retry once.
         try:
             old = q.get_nowait()
@@ -127,25 +180,73 @@ class TranslationPump:
             except Exception:
                 oid = ""
             if oid:
-                self._inflight.discard(oid)
+                try:
+                    with self._lock:
+                        self._inflight.discard(oid)
+                except Exception:
+                    pass
             if is_hi:
                 self._drop_old_hi += 1
             else:
                 self._drop_old_lo += 1
         except Exception:
             if iid:
-                self._inflight.discard(iid)
-            return
+                try:
+                    with self._lock:
+                        self._inflight.discard(iid)
+                except Exception:
+                    pass
+            return False
         try:
             q.put_nowait(item)
+            return True
         except Exception:
             if is_hi:
                 self._drop_new_hi += 1
             else:
                 self._drop_new_lo += 1
             if iid:
-                self._inflight.discard(iid)
+                try:
+                    with self._lock:
+                        self._inflight.discard(iid)
+                except Exception:
+                    pass
+            return False
+
+    def _done_id(self, mid: str) -> None:
+        """
+        Mark an id as done (clears inflight) and enqueue a coalesced force retranslate if present.
+        """
+        iid = str(mid or "").strip()
+        if not iid:
             return
+        follow: Optional[Dict[str, Any]] = None
+        try:
+            with self._lock:
+                self._inflight.discard(iid)
+                follow = self._force_after.pop(iid, None)
+        except Exception:
+            follow = None
+        if not isinstance(follow, dict) or not str(follow.get("text") or "").strip():
+            return
+        # Requeue follow-up as hi-priority (manual).
+        try:
+            with self._lock:
+                if iid in self._inflight:
+                    # Still in flight; coalesce again.
+                    self._force_after[iid] = follow
+                    return
+                self._inflight.add(iid)
+        except Exception:
+            pass
+        try:
+            self._put_drop_oldest(self._hi, follow, is_hi=True)
+        except Exception:
+            try:
+                with self._lock:
+                    self._inflight.discard(iid)
+            except Exception:
+                pass
 
     def stats(self) -> Dict[str, Any]:
         try:
@@ -277,6 +378,13 @@ class TranslationPump:
                     zh, err = self._translate_one(text)
                     if stop_event.is_set():
                         continue
+                    if (not str(zh or "").strip()) and str(err or "").strip():
+                        try:
+                            fz = str(item.get("fallback_zh") or "")
+                        except Exception:
+                            fz = ""
+                        if fz.strip():
+                            zh = fz
                     self._emit_translate(mid, zh, err)
                     self._done_items += 1
                     self._done_batches += 1
@@ -285,7 +393,7 @@ class TranslationPump:
                     self._last_key = key
                     self._last_ts = time.time()
                     try:
-                        self._inflight.discard(mid)
+                        self._done_id(mid)
                     except Exception:
                         pass
                     continue
@@ -304,6 +412,24 @@ class TranslationPump:
                     if stop_event.is_set():
                         continue
                     self._emit_translate(mid, zh, err)
+                    self._done_items += 1
+                    self._done_batches += 1
+                    self._last_batch_n = 1
+                    self._last_translate_ms = (time.monotonic() - t0) * 1000.0
+                    self._last_key = key
+                    self._last_ts = time.time()
+                    try:
+                        for it in batch:
+                            if not isinstance(it, dict):
+                                continue
+                            iid = str(it.get("id") or "").strip()
+                            if iid:
+                                self._done_id(iid)
+                    except Exception:
+                        try:
+                            self._done_id(mid)
+                        except Exception:
+                            pass
                     continue
 
                 packed = _pack_translate_batch(pairs)
@@ -321,7 +447,7 @@ class TranslationPump:
                         self._emit_translate(iid, "", berr)
                         self._done_items += 1
                         try:
-                            self._inflight.discard(iid)
+                            self._done_id(iid)
                         except Exception:
                             pass
                     self._done_batches += 1
@@ -332,7 +458,9 @@ class TranslationPump:
                     continue
 
                 mapping = _unpack_translate_batch(out, wanted_ids=wanted)
-                fallback_budget = 1
+                # If the model fails to follow the marker protocol, fallback to per-item translation
+                # (bounded by batch size) to avoid silent gaps in UI.
+                fallback_budget = max(1, len(pairs))
 
                 for iid, itxt in pairs:
                     if stop_event.is_set():
@@ -351,7 +479,7 @@ class TranslationPump:
                             self._emit_translate(iid, "", "批量翻译解包缺失")
                     self._done_items += 1
                     try:
-                        self._inflight.discard(iid)
+                        self._done_id(iid)
                     except Exception:
                         pass
                 self._done_batches += 1
@@ -362,7 +490,7 @@ class TranslationPump:
             except Exception:
                 # Best-effort cleanup: allow future retries even if a batch fails.
                 try:
-                    self._inflight.discard(mid)
+                    self._done_id(mid)
                 except Exception:
                     pass
                 try:
@@ -371,7 +499,7 @@ class TranslationPump:
                             continue
                         iid = str(it.get("id") or "").strip()
                         if iid:
-                            self._inflight.discard(iid)
+                            self._done_id(iid)
                 except Exception:
                     pass
                 continue

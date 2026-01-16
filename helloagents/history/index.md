@@ -47,3 +47,12 @@
 - 202601160952_ui_unread_jump_per_session
 - 202601161134_nvidia_translate_provider
 - 202601161150_nvidia_translate_fix_and_model_presets
+- 202601161209_nvidia_model_fallback
+- 202601161237_nvidia_models_dropdown
+- 202601161253_nvidia_model_select_dropdown
+- 202601161337_nvidia_model_single_select
+- 202601162256_ui_bookmarks_unread_quickview_retranslate_fix
+- 202601162334_remove_tool_callid_ghost_label
+- 202601162356_bookmarks_right_layer_skin
+- 202601170024_auto_audit_refactor_ui_template_research
+- 202601170059_ui_polish_bookmarks_mid_icons_commit

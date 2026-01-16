@@ -29,14 +29,13 @@
 - UI 顶栏：标题与运行状态
 - UI 右侧工具栏：⚙️ 配置、⚡ 快速浏览（仅输入/输出/思考）、▶️ 开始监听、⏹️ 停止监听、🔄 重启 Sidecar、🧹 清空显示、⏻ 退出 Sidecar
 - UI 配置抽屉：保存配置、恢复配置
-- UI 会话切换：会话列表固定在左侧 sidebar（默认自动隐藏，鼠标移到最左侧热区浮现），支持会话自定义标签（右键/双击会话项设置）
-- UI 未读提醒：回答输出/审批提示计入未读；侧栏会话 tab 与右下角 🔔 显示未读数；点击 🔔 跳到“最近未读”会话并滚动到底部；到达底部后再点一次 🔔 清除未读（停止提醒）；提示音可选（`ui/music/`，设置中可关闭）
-- 侧栏会话管理（安全优先）：⤓ 导出当前会话为 Markdown、🙈 隐藏当前会话（仅本机 localStorage）、👁 临时显示隐藏会话
-- 侧栏性能：会话列表渲染做了降频与增量更新（复用 tab 节点），降低高频 SSE 下的重排/重绘
+- UI 会话切换：右侧中间为“会话书签栏”（默认窄条，不挤压主列表；hover/当前会话时展开并覆盖内容）；单击切换会话；长按在原位重命名（Enter/失焦提交，Esc 取消）
+- UI 未读提醒：回答输出/审批提示计入未读；未读数显示在对应会话书签徽标上，“全部”书签显示总未读；切换到会话时自动清空该会话未读
+- 会话列表性能：书签渲染做了降频与增量更新（复用节点），降低高频 SSE 下的重排/重绘
 - UI 事件流分层：`ui/app/events/*`（timeline/buffer/stream）拆分，便于维护与进一步优化
 - 刷新期保护：刷新列表期间 SSE 会暂存到 `ssePending`；若积压过大则触发溢出兜底，刷新结束后自动回源同步一次
 - UI 装饰分层：长按复制/复制反馈由 `decorate/copy_hold.js` 负责；工具“详情/收起”切换由 `decorate/tool_toggle.js` 负责；`decorate/core.js` 仅做装饰编排
-- UI 侧栏分层：会话标签持久化拆到 `sidebar/labels.js`；侧栏渲染拆到 `sidebar/tabs.js`；`sidebar.js` 作为 facade
+- UI 会话栏分层：会话标签持久化拆到 `sidebar/labels.js`；书签渲染与交互在 `sidebar/tabs.js`；`sidebar.js` 作为 facade
 - UI 工具函数分层：`utils/*`（time/id/color/json/clipboard/error），`utils.js` 作为 facade
 - UI 格式化分层：`format/wrap/*`（command/lines/tree/rg/output），`format/wrap.js` 作为 facade
 - UI 列表分层：`list/*`（threads/refresh/bootstrap），`list.js` 作为 facade
@@ -45,8 +44,8 @@
 - 多会话切换性能：消息列表按会话 key 做视图缓存；非当前会话的 SSE 仅对“已缓存视图”的会话进行缓冲，切回时回放到对应视图（溢出/切到 all 时自动回源刷新）；其中 `op=update`（译文回填）会按消息 id 覆盖合并，避免缓冲被大量回填顶爆
 - 断线恢复：浏览器 SSE 重连后会自动回源同步当前视图，并标记缓存视图在下次切换时回源刷新（避免长时间挂着漏消息）
 - 会话列表同步：断线恢复后会标记 `threadsDirty`，下一次列表回源时同步 `/api/threads`，避免侧栏漏会话/排序漂移
-- 多会话不串线：推荐通过侧栏会话切换（或启用“锁定”）来浏览单会话；`all` 视图更适合快速总览（不再在每条消息上额外展示会话标识，避免信息噪音）
-- 翻译 Provider 可插拔并可在 UI 中切换：`stub/none/http/openai/nvidia`
+- 多会话不串线：推荐通过会话书签栏切换（或启用“锁定”）来浏览单会话；`all` 视图更适合快速总览（不再在每条消息上额外展示会话标识，避免信息噪音）
+- 翻译 Provider 可插拔并可在 UI 中切换：`http/openai/nvidia`（旧配置中的 `stub/none` 会自动迁移到 `openai`）
 - `--include-agent-reasoning` 说明：
   - 该类型通常是“流式推理文本”，同一段内容可能重复出现（模型/客户端实现差异）。
   - sidecar 会对 `agent_reasoning` 做更激进的去重（不依赖 timestamp），但仍建议仅在需要更实时内容时开启。
@@ -56,16 +55,17 @@
 - 翻译策略：仅对“思考内容”（`reasoning_summary` / 可选 `agent_reasoning`）进行翻译；工具输出与最终回答不翻译。
 - 展示顺序：列表按时间从上到下（新内容在底部）；工具输出默认折叠展示。
 - tool_call/tool_output 会做友好格式化（例如 `update_plan` 计划分行、`shell_command` 命令块展示）；原始参数/输出仍可展开查看，便于排障。
-- 快速浏览：开启 ⚡ 后仅显示 输入/输出/思考 三类块，其余类型隐藏（不影响摄取与时间线）。
+- tool_call/tool_output 不展示 `call_id`（仅用于内部关联 tool_call ↔ tool_output），避免 UI 出现无意义的 uuid 干扰阅读。
+- 快速浏览：开启 ⚡ 后仅显示 输入/输出/思考 + 更新计划（`update_plan`）块，其余类型隐藏（不影响摄取与时间线）。
 - Tool gate 提示来源：
   - ✅ 优先：`codex-tui.log`（真实 “waiting for tool gate / released”）
   - ⚠️ 辅助：tool_call 参数中出现权限升级字段时的“可能需要终端确认”提示（不等同于 tool gate 状态，是否需要批准以终端为准）
   - `justification` 字段来源：来自 tool_call 的参数（由 Codex 生成，用于解释“为什么要执行该命令/操作”）
 - UI 辅助：
-  - 右下角悬浮“↑ 顶部 / ↓ 底部”按钮，便于快速跳转；当有未读输出时，底部按钮会变为“🔔”并显示未读数
-  - 右下角通知：tool gate / 回答新输出等关键状态弹出提醒（含“可能是历史残留”的提示）；“有新输出”使用未读汇总（跨会话生效，仅统计“回答输出/审批提示”），点击 🔔 先跳到底部，到达底部后再点一次 🔔 可清除未读/停止通知；toast 不会遮挡/阻塞右下角跳转按钮点击
-  - 右侧操作栏新增 🌐 自动翻译开关：一键切换 `auto/manual`（对运行中的 watcher 立即生效，无需重启）
-  - 提示音：高级设置中可选择“无/舒缓-1/2/3”，用于“回答输出/审批提示”的铃铛提醒（音效来源：Kenney UI SFX Set，CC0；文件在 `ui/music/`）
+  - 右下角悬浮“↑ 顶部 / ↓ 底部”按钮，便于快速跳转（底部按钮不再承载未读提示）
+- 右下角通知：tool gate / 回答新输出等关键状态弹出提醒（含“可能是历史残留”的提示）；新输出未读以右侧书签徽标为准
+- 右侧“翻译”按钮：单击切换自动翻译 `auto/manual`（对运行中的 watcher 立即生效，无需重启）；长按打开独立的“翻译设置”抽屉（含自动翻译开关、Provider/模型/Key/超时等）
+  - 提示音：高级设置中可选择“无/舒缓-1/2/3”，用于“回答输出/审批提示”的通知（音效来源：Kenney UI SFX Set，CC0；文件在 `ui/music/`）
 
 ## 关于“在页面内输入并让 Codex 执行”
 本 sidecar 的核心原则是**不修改 Codex、只读监听**（旁路查看/调试）。因此：
@@ -100,7 +100,7 @@
 ## 翻译模式（auto/manual）
 - `auto`：自动翻译思考摘要（`reasoning_summary`）。未译时默认显示英文原文；译文回填后默认切到中文；单击思考块可在 EN/ZH 间切换。
 - `agent_reasoning`（如启用采集）默认不做自动翻译：避免噪音/量大导致翻译队列堆积；可点击“翻译/重译”按钮或单击思考块手动触发翻译。
-- `manual`：不自动翻译；仅当你单击思考块或点击“翻译/重译”按钮时才会发起翻译请求。UI 侧会做 in-flight 防抖，避免重复触发导致多次请求。
+- `manual`：不自动翻译；仅当你单击思考块或点击“翻译/重译”按钮时才会发起翻译请求。UI 侧会做 in-flight 防抖；当某条仍在翻译中再次点击“重译”时，会将重译请求加入队列（等待当前翻译完成后执行）。
 - 失败处理：翻译失败（超时/空译文等）不会把告警写进 `zh` 内容区；会以 `translate_error` 字段回填，UI 状态 pill 显示“失败/重试”，可点击按钮重新发起翻译。
 
 常见失败原因与建议：
@@ -129,11 +129,21 @@
 - UI 选择 `openai` Provider 时会自动补齐默认 `Base URL`（right.codes）与默认 `Model`（right.codes 场景默认 `gpt-5.2`），减少手动输入。
 
 ## 配置生效提示
-sidecar 的监听线程启动时会读取一次配置；若在“已开始监听”状态下修改翻译配置，需重启监听后才会生效（UI 会提示是否重启）。
+翻译相关配置（`translate_mode`、`translator_provider`、`translator_config.*`）已支持**热加载**：在“已开始监听”状态下保存后会立即对新翻译请求生效，无需重启进程/会话。
+
+注：监视目录（`watch_codex_home`）变更仍需“停止监听 → 再开始监听”才会切换到新目录；其余大多数 watcher 参数已支持运行时热更新。
+
+## 配置项速查（Watcher）
+- `采集 agent_reasoning`：是否额外采集更长、更噪的 `agent_reasoning`。关闭时仍会照常显示 `reasoning_summary`（这是默认“思考摘要”）。
+- `进程定位`：开启后会根据进程（`/proc`）定位正在写入的会话文件，优先跟随“当前正在跑的 Codex 会话”。
+- `仅在有进程时跟随`：开启后若未检测到匹配的 Codex 进程，则 sidecar 会进入 idle（不跟随任何文件）；关闭则会回退为 sessions 扫描（仍可看到最新会话）。
+- `进程匹配 regex`：用于匹配 Codex 进程命令行（默认 `codex`），只影响“进程定位”的检测范围。
+- `poll（秒）`：主循环轮询间隔（越小越实时，但 CPU/IO 更高）。
+- `scan（秒）`：会话文件/进程 fd 扫描间隔（越小越快发现新会话，但开销更高）。
 
 ## 硅基流动 translate.json 配置（免费优先）
 硅基流动的 translate.js 提供了 `translate.json`（表单提交）接口。sidecar 已对该接口做兼容：仍使用 `HTTP（通用适配器）`，仅需把 URL 指向 `translate.json`。
 
 - `HTTP URL`：`https://siliconflow.zvo.cn/translate.json?to=chinese_simplified`
-- `HTTP Token/Auth ENV`：留空
+- `HTTP Token`：留空（如无需要）
 - 语言参数：通过 URL query 传入 `to` / `from`（未传 `from` 默认 `auto`）

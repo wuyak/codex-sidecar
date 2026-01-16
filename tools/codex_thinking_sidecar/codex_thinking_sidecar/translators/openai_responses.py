@@ -33,7 +33,9 @@ def _build_zh_translation_prompt(text: str) -> str:
     # Keep this prompt short to reduce token cost.
     return (
         "把下面内容翻译成【简体中文】，只输出译文。\n"
-        "保留原有 Markdown/换行；代码块/命令/路径/变量名/JSON 原样不翻译；专有名词（API/HTTP/JSON/Codex/Sidecar 等）原样保留；原文中文为主则原样返回。\n\n"
+        "格式要求：逐行翻译并保持原有行序/分段/空行；不要合并或拆分段落；不要新增列表/标题/解释；保留原有 Markdown 标记（如 `#` 标题前缀、列表符号、缩进、``` 围栏）。\n"
+        "标题规则：对以 `#` 开头的标题行，必须保留 `#` 前缀与后续空格，并翻译其后的标题文字（不要删除 `#`）。\n"
+        "内容要求：中文原样保留、仅翻译英文；代码块/命令/路径/变量名/JSON 原样不翻译；专有名词（API/HTTP/JSON/Codex/Sidecar 等）原样保留；原文中文为主则原样返回。\n\n"
         f"{sentinel_a}\n{text}\n{sentinel_b}\n"
     )
 

@@ -2,7 +2,7 @@ import re
 from typing import Dict, List, Optional, Set, Tuple
 
 _TRANSLATE_BATCH_MAGIC = "<<<SIDECAR_TRANSLATE_BATCH_V1>>>"
-_TRANSLATE_BATCH_ITEM_RE = re.compile(r"^<<<SIDECAR_ITEM:([^>]+)>>>\\s*$")
+_TRANSLATE_BATCH_ITEM_RE = re.compile(r"^<<<SIDECAR_ITEM:([^>]+)>>>\s*$")
 _TRANSLATE_BATCH_END = "<<<SIDECAR_END>>>"
 
 def _pack_translate_batch(items: List[Tuple[str, str]]) -> str:
@@ -14,9 +14,14 @@ def _pack_translate_batch(items: List[Tuple[str, str]]) -> str:
     - Translator should output the same markers and translated content between them.
     """
     lines = [
-        "请将下列内容翻译为中文。",
-        "要求：逐行原样保留所有形如 <<<SIDECAR_...>>> 的标记行（不要翻译、不要改动、不要增删）。",
-        "输出必须包含最后一行 <<<SIDECAR_END>>>。",
+        "你是翻译器。请把下列内容翻译成【简体中文】，只输出译文。",
+        "通用要求：保留原有 Markdown/换行/空行；保留列表符号、缩进、`#` 标题前缀、``` 代码块围栏；代码块/命令/路径/变量名/JSON 原样不翻译；专有名词（API/HTTP/JSON/Codex/Sidecar/NVIDIA 等）原样保留；原文中文为主则原样返回。",
+        "协议要求：以下内容包含若干条目。你必须按原顺序输出每个条目的标记行与对应译文：",
+        "- 标记行形如 <<<SIDECAR_ITEM:<id>>> 与 <<<SIDECAR_END>>>，必须逐行原样保留（不要翻译、不要改动、不要增删）。",
+        "- Markdown 标题行：对以 `#` 开头的标题，必须保留前缀（`#` 与后续空格），并翻译其后的标题文字（不要删除 `#`）。",
+        "- 对于每个 <<<SIDECAR_ITEM:<id>>> 之后的内容：逐行翻译并原样保留换行；直到下一个标记行。",
+        "- 最后一行必须是 <<<SIDECAR_END>>>。",
+        "注意：不要输出任何额外说明文字；不要省略任何条目；不要只输出 <<<SIDECAR_END>>>。",
         "",
         _TRANSLATE_BATCH_MAGIC,
     ]

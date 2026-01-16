@@ -9,9 +9,7 @@ export function syncSidebarHeadButtons(dom, state) {
     if (dom.exportThreadBtn) dom.exportThreadBtn.disabled = isAll;
     if (dom.hideThreadBtn) dom.hideThreadBtn.disabled = isAll;
     if (dom.hideThreadBtn && dom.hideThreadBtn.classList) dom.hideThreadBtn.classList.toggle("active", hidden);
-    if (dom.hideThreadBtn) dom.hideThreadBtn.title = hidden ? "取消隐藏当前会话" : "隐藏当前会话";
     if (dom.showHiddenBtn && dom.showHiddenBtn.classList) dom.showHiddenBtn.classList.toggle("active", !!state.showHiddenThreads);
-    if (dom.showHiddenBtn) dom.showHiddenBtn.title = state.showHiddenThreads ? "已显示隐藏会话" : "显示隐藏会话";
   } catch (_) {}
 }
 
@@ -58,4 +56,3 @@ export function wireSidebarHeadActions(dom, state, helpers) {
     });
   } catch (_) {}
 }
-

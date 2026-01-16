@@ -45,6 +45,18 @@ function _hasZhReady(row) {
   }
 }
 
+function _getCachedZhClean(state, mid) {
+  const id = String(mid || "").trim();
+  if (!id) return "";
+  try {
+    const cache = (state && state.mdCache && typeof state.mdCache.get === "function") ? state.mdCache : null;
+    if (!cache) return "";
+    const v = cache.get(`md:${id}:think_zh`);
+    if (v && typeof v === "object" && typeof v.text === "string") return String(v.text || "");
+  } catch (_) {}
+  return "";
+}
+
 function _hasActiveSelection() {
   try {
     const sel = window.getSelection && window.getSelection();
@@ -71,6 +83,25 @@ function _updateThinkingMetaRight(state, row, mid) {
   } catch (_) {}
 }
 
+async function _postRetranslate(mid) {
+  const id = String(mid || "").trim();
+  if (!id) return { ok: false, error: "missing_id" };
+  try {
+    const resp = await fetch("/api/control/retranslate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    let obj = null;
+    try { obj = await resp.json(); } catch (_) { obj = null; }
+    const ok = !!(resp && resp.ok && obj && obj.ok !== false && obj.queued !== false);
+    const err = String((obj && obj.error) ? obj.error : (resp && !resp.ok ? `http_status=${resp.status}` : "") || "").trim();
+    return { ok, error: err };
+  } catch (_) {
+    return { ok: false, error: "request_failed" };
+  }
+}
+
 export function wireThinkingRowActions(dom, state) {
   const host = state && state.listHost ? state.listHost : (dom && dom.list ? dom.list : null);
   if (!host || !host.addEventListener) return;
@@ -88,6 +119,8 @@ export function wireThinkingRowActions(dom, state) {
       const mid = String(btn.dataset && btn.dataset.mid ? btn.dataset.mid : "").trim();
       if (!mid) return;
       const row = btn.closest ? btn.closest(".row") : null;
+      const hadZh = !!(row && _hasZhReady(row));
+      const oldZh = hadZh ? _getCachedZhClean(state, mid) : "";
       try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
       try {
         const p = String(state.translatorProvider || "").trim().toLowerCase();
@@ -96,29 +129,31 @@ export function wireThinkingRowActions(dom, state) {
           return;
         }
       } catch (_) {}
-      const inFlight = !!(state.translateInFlight && typeof state.translateInFlight.has === "function" && state.translateInFlight.has(mid));
-      if (inFlight) {
-        flashToastAt(Number(e.clientX) || 0, Number(e.clientY) || 0, "正在翻译…", { isLight: true });
-        return;
-      }
+      const alreadyInFlight = !!(state.translateInFlight && typeof state.translateInFlight.has === "function" && state.translateInFlight.has(mid));
+      let addedInFlight = false;
       try {
         if (!state.translateInFlight || typeof state.translateInFlight.add !== "function") state.translateInFlight = new Set();
-        state.translateInFlight.add(mid);
+        if (!alreadyInFlight) {
+          state.translateInFlight.add(mid);
+          addedInFlight = true;
+        }
       } catch (_) {}
-      try { if (row && row.dataset) row.dataset.translateError = ""; } catch (_) {}
       _updateThinkingMetaRight(state, row, mid);
-      flashToastAt(Number(e.clientX) || 0, Number(e.clientY) || 0, "正在翻译…", { isLight: true });
-      try {
-        await fetch("/api/control/retranslate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: mid }),
-        });
-      } catch (_) {
-        try { state.translateInFlight.delete(mid); } catch (_) {}
-        try { if (row && row.dataset) row.dataset.translateError = "翻译请求失败"; } catch (_) {}
+      const r = await _postRetranslate(mid);
+      if (!r.ok) {
+        const err = String(r.error || "unknown_error");
+        try { if (addedInFlight) state.translateInFlight.delete(mid); } catch (_) {}
+        try { if (row && row.dataset) row.dataset.translateError = err; } catch (_) {}
         _updateThinkingMetaRight(state, row, mid);
-        flashToastAt(Number(e.clientX) || 0, Number(e.clientY) || 0, "翻译请求失败", { isLight: true });
+        flashToastAt(Number(e.clientX) || 0, Number(e.clientY) || 0, `重译失败：${err}`, { isLight: true });
+      } else {
+        // “重译完成”提示：仅在用户点击过“重译”且该条已有译文时触发（避免首次翻译刷屏）。
+        if (hadZh) {
+          try {
+            if (!state.retranslatePending || typeof state.retranslatePending.set !== "function") state.retranslatePending = new Map();
+            state.retranslatePending.set(mid, { oldZh, x: Number(e.clientX) || 0, y: Number(e.clientY) || 0 });
+          } catch (_) {}
+        }
       }
       return;
     }
@@ -164,20 +199,14 @@ export function wireThinkingRowActions(dom, state) {
         if (!state.translateInFlight || typeof state.translateInFlight.add !== "function") state.translateInFlight = new Set();
         state.translateInFlight.add(mid);
       } catch (_) {}
-      try { if (row && row.dataset) row.dataset.translateError = ""; } catch (_) {}
       _updateThinkingMetaRight(state, row, mid);
-      flashToastAt(Number(e.clientX) || 0, Number(e.clientY) || 0, "正在翻译…", { isLight: true });
-      try {
-        await fetch("/api/control/retranslate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: mid }),
-        });
-      } catch (_) {
+      const r = await _postRetranslate(mid);
+      if (!r.ok) {
+        const err = String(r.error || "unknown_error");
         try { state.translateInFlight.delete(mid); } catch (_) {}
-        try { if (row && row.dataset) row.dataset.translateError = "翻译请求失败"; } catch (_) {}
+        try { if (row && row.dataset) row.dataset.translateError = err; } catch (_) {}
         _updateThinkingMetaRight(state, row, mid);
-        flashToastAt(Number(e.clientX) || 0, Number(e.clientY) || 0, "翻译请求失败", { isLight: true });
+        flashToastAt(Number(e.clientX) || 0, Number(e.clientY) || 0, `翻译失败：${err}`, { isLight: true });
       }
       return;
     }

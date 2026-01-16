@@ -75,6 +75,8 @@ export function renderMessage(dom, state, msg, opts = {}) {
     try { row.dataset.translateError = translateError || ""; } catch (_) {}
     const ok = tryPatchThinkingRow(dom, state, msg, row, { mid, t, zhText, translateError, translatorProvider: state.translatorProvider || "", isUpdate, ...vis });
     if (ok) {
+      // Remove legacy hover titles (older versions used thread_id/file for debugging).
+      try { row.removeAttribute("title"); } catch (_) {}
       // Translation backfill updates can be bursty; decorate lazily to avoid blocking UI.
       if (isUpdate || opt.deferDecorate) queueDecorateRow(row);
       else decorateRow(row);
@@ -91,12 +93,14 @@ export function renderMessage(dom, state, msg, opts = {}) {
   if (kind === "tool_output") {
     const r = renderToolOutput(dom, state, msg, { mid });
     if (!r) return;
+    try { if (r.rowClass) row.className = `${row.className} ${r.rowClass}`.trim(); } catch (_) {}
     metaLeftExtra = `${sessionPill}${r.metaLeftExtra || ""}`;
     metaRightExtra = r.metaRightExtra || "";
     body = r.body || "";
   } else if (kind === "tool_call") {
     const r = renderToolCall(dom, state, msg, { mid });
     if (!r) return;
+    try { if (r.rowClass) row.className = `${row.className} ${r.rowClass}`.trim(); } catch (_) {}
     metaLeftExtra = `${sessionPill}${r.metaLeftExtra || ""}`;
     metaRightExtra = r.metaRightExtra || "";
     body = r.body || "";
@@ -156,9 +160,15 @@ export function renderMessage(dom, state, msg, opts = {}) {
     </div>
     ${body}
   `;
+  // Remove legacy hover titles (older versions used thread_id/file for debugging).
+  try { row.removeAttribute("title"); } catch (_) {}
+  // Tool rows should stay clean: avoid accidental hover tooltips from nested title attrs.
   try {
-    if (state && state.currentKey === "all") {
-      row.title = String(msg && (msg.thread_id || msg.file || "") ? (msg.thread_id || msg.file || "") : "");
+    if (kind === "tool_call" || kind === "tool_output") {
+      const xs = row.querySelectorAll ? row.querySelectorAll("[title]") : [];
+      for (const el of xs) {
+        try { el.removeAttribute("title"); } catch (_) {}
+      }
     }
   } catch (_) {}
   if (opt.deferDecorate) queueDecorateRow(row);

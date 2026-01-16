@@ -26,17 +26,46 @@
 - UI: 思考渲染分层：拆分 `render/thinking.js` → `render/thinking/*`（visibility/derive/patch/block），并对 `op=update`（译文回填）优先走原位 patch 降低 DOM churn。
 - UI: 侧栏会话列表渲染降频：高频 SSE 下合并刷新，减少重排/重绘。
 - UI: 侧栏会话列表增量渲染：复用 tab 节点并仅重排/更新，进一步降低 DOM churn。
+- UI: 会话切换侧栏改为右侧“书签栏”：默认窄条，hover/当前会话自动展开；长按就地重命名；未读以书签徽标展示。
 - UI: 长列表懒渲染：刷新列表时对较早行延后装饰（idle 分片 `decorateRow`），降低一次性重绘卡顿。
-- UI: 新输出通知改为“未读汇总”（跨会话生效）；底部按钮在有未读时显示 🔔+未读数，且需到达底部后再次点击 🔔 才清除未读/停止通知（避免误清理）。
+- UI: 新输出通知改为“未读汇总”（跨会话生效），未读仅在右侧书签徽标展示；移除右下角“铃铛/未读数”形态与清除交互，底部按钮固定为“↓”。
+- UI: 书签栏布局与层级优化：书签作为浮层不占用主列表宽度（不制造右侧大空白）；hover/当前会话展开时覆盖主列表；并预留 `data-bm-skin` 皮肤接口（默认 `default`，可切到 `flat`）。
+- UI: 书签栏定位调整：固定右侧中间；并提升图层以覆盖主列表/右侧按钮/底部浮动按钮（仍低于抽屉 overlay）。
+- UI: 右侧工具栏与底部浮动按钮统一为 SVG 图标，并用 CSS Variables 统一颜色/阴影/尺寸等设计 token。
+- 文档：新增 UI 模板/设计系统调研报告（`helloagents/wiki/modules/ui_template_research.md`），用于后续 UI 美化与渐进式改造评估。
 - UI: 右侧操作栏新增“🌐 自动翻译”快捷开关，切换 `auto/manual` 会对运行中的 watcher 立即生效（无需重启）。
-- UI: `all` 视图移除每条消息的会话标识 pill（减少信息噪音），保留行 hover/title 便于排障。
+- UI：🌐 按钮支持“长按打开翻译设置”（单击仍切换自动翻译）；翻译设置新增“保存翻译设置（热加载）”，保存后立即生效且无需重启进程/会话。
+- UI: “翻译设置”抽屉新增“自动翻译（auto/manual）”开关（与 🌐 单击联动），减少主配置抽屉噪音。
+- UI: 翻译设置移除 `Auth ENV`（环境变量名）输入项，避免困惑；`API Key/Token` 输入改为密码框，减少误截图泄露风险。
+- UI: 快速浏览（⚡）增加展示 `update_plan`（更新计划）块，便于跟踪执行步骤。
+- 修复：快速浏览（⚡）可识别 `multi_tool_use.parallel` 包裹的 `update_plan`，并兼容参数被 code fence 包裹/仅出现 `Plan updated` output 的场景，避免“计划更新”在快速浏览中被误隐藏。
+- 修复：工具输出（tool_output）的 DOM id 不再包含 `call_id`，并清理 tool_call/tool_output 行内残留 `title`，避免出现 uuid “幽灵标签/悬浮提示”干扰阅读。
+- UI: `all` 视图移除每条消息的会话标识 pill（减少信息噪音），并移除会话 tab/消息行的 thread_id 悬停提示（避免遮挡/干扰）。
+- UI: 配置抽屉不再区分“基础/高级”，统一为单页表单；表单输入统一 `box-sizing:border-box`，修复文本框宽度溢出。
 - 翻译: `auto` 模式仅自动翻译 `reasoning_summary`；`agent_reasoning` 默认改为手动触发，避免翻译队列堆积导致整体变慢。
 - 新增：NVIDIA NIM 翻译 Provider（`nvidia`，Chat Completions 兼容）：支持 `NVIDIA_API_KEY` 环境变量鉴权、RPM 节流与 429 退避重试。
 - 修复：NVIDIA Provider 响应解析更健壮（兼容 `message.content` 非字符串形态），并提取错误信息便于定位；UI 为 NVIDIA Model 增加常用预设候选。
-- UI: “有新输出”未读提示默认仅对“回答输出/审批提示”生效（忽略 tool_call/tool_output 等噪音），且右下角 toast 不再遮挡 🔔/↓ 浮动按钮。
-- UI: 右下角通知 toast 改为不抢占点击，并避开右下角跳转按钮区域，避免影响 ↑/🔔/↓ 交互。
-- UI: 新增铃铛提示音配置（`notify_sound`）：设置中可选无/舒缓-1/2/3；音效文件随 UI 静态资源提供（`ui/music/`，Kenney CC0）。
-- UI: 未读提示增强：侧栏会话 tab 增加未读徽标（数字）；右下角 🔔 点击会跳到“最近未读”会话并滚动到底部；未读不再以“有新输出”常驻 toast 占屏（仅保留 tool gate 等关键状态 toast）。
+- 调整：NVIDIA Provider 在 404/疑似未翻译输出时仅在 4 个内置模型内自动回退；同时更新 UI 默认模型为 `moonshotai/kimi-k2-instruct`，并在加载配置时强制纠正到允许列表以避免过时/无权限 id 导致空译文。
+- 优化：NVIDIA Model 下拉固定为 4 个候选（kimi/gemma/mistral/ministral），移除“刷新/自定义/测试”入口以简化 UI 并避免误选弱模型。
+- 修复：思考块“翻译/重译”按钮现在会校验后端返回并给出明确失败原因；重译失败不再清空旧译文，避免闪烁与“译文丢失”。
+- 修复：重译请求在目标消息“翻译已在途”时不再静默丢弃；会合并为“在途完成后补一次重译”，避免 UI 卡在“重译中”且误判成功。
+- 优化：重译交互降噪：不再弹出“正在提交/已入队”双重提示；当已存在译文时仅提示一次“已完成重译/内容无变化”（首次翻译不提示）。
+- 调整：NVIDIA `max_tokens` 默认改为 8192（输出上限；可设为 0 表示不传该字段；如触发 400 上下文超限会自动 clamp 并重试一次）。
+- 新增：保存翻译设置后自动进行一次“翻译自检”请求（无需手动点测试按钮），并以 toast 提示成功/失败原因，便于快速确认 Key/模型/权限是否可用。
+- 优化：NVIDIA Provider 增加 Markdown 保真质量门控：当输出缺失标题 `#` 或代码围栏 ```（输入中存在时），会在 4 个内置模型内自动回退，降低“标题/代码块被漏翻译或格式丢失”的概率。
+- 调整：NVIDIA `RPM` 默认改为 0（不主动节流）；如遇 429 再按需开启节流（仍保留 429 退避重试）。
+- 新增：NVIDIA Provider 支持 `max_tokens`（默认 8192）以降低长文本截断概率，并在 UI 增加 `Max Tokens` 配置项。
+- 修复：批量翻译（`<<<SIDECAR_TRANSLATE_BATCH_V1>>>`）的 marker 解包正则错误，避免批量翻译结果“看似成功但译文缺失”。
+- 优化：批量翻译提示词更严格，并在解包缺失时对缺失项回退单条翻译，避免 UI 出现漏段。
+- 优化：单条翻译提示词补齐“逐行翻译/不改写结构/标题 `#` 前缀保留”等约束，降低“漏标题格式/自动改成列表/合并段落”的概率。
+- 优化：NVIDIA Provider 在 400 “maximum context length ...” 错误时自动降低 `max_tokens` 并重试一次，避免用户把 `max_tokens` 设太大导致空译文。
+- UI：NVIDIA `Model` 使用单一 `select` 下拉，固定 4 个可切换模型。
+- 修复：如本机配置中存在历史遗留的 NVIDIA model id（例如 `nvidia/riva-translate-4b-instruct-v1_1`），sidecar 会在加载时直接重置为默认模型并写回 `config.json`，避免反复触发 404/空译文。
+- 精简：NVIDIA `Model` 内置候选仅保留 4 个“翻译指令跟随更稳”的模型；移除 `nvidia/riva-translate-*` 等明显不稳定/易 404 的模型。
+- UI: “有新输出”未读提示默认仅对“回答输出/审批提示”生效（忽略 tool_call/tool_output 等噪音），且右下角 toast 不再遮挡 ↑/↓ 浮动按钮。
+- UI: 右下角通知 toast 改为不抢占点击，并避开右下角跳转按钮区域，避免影响 ↑/↓ 交互。
+- UI: 新增通知提示音配置（`notify_sound`）：设置中可选无/舒缓-1/2/3；音效文件随 UI 静态资源提供（`ui/music/`，Kenney CC0）。
+- UI: 未读提示增强：会话书签增加未读徽标（数字）；切换到会话会清空该会话未读；未读不再以“有新输出”常驻 toast 占屏（仅保留 tool gate 等关键状态 toast）。
 
 - UI: 拆分 `ui/app/markdown.js` / `ui/app/decorate.js`，引入子目录实现（保持纯静态，无构建）
 - 新增：UI 控制面（保存配置、开始/停止监听、清空显示）+ 短命令 `./ui.sh`。
@@ -147,11 +176,14 @@
 - 修复：当 `apply_patch` 以 `shell_command` here-doc 形式执行时，tool_output 的“详情”现在会展示 patch 本体并做 diff 高亮（不再只看到 `Success...` 摘要）。
 - 修复：Markdown 渲染对终端换行更友好（中文不再出现“会 话”这类断词空格），并将 `────` 分隔行独立成块，避免与下一行合并导致结构错乱。
 - 新增：Watcher 支持并行 tail 最近 N 个会话文件（配置项 `watch_max_sessions`，默认 3），满足“至少 3 个会话同时实时更新”；锁定（pin）仅影响主跟随，不阻断后台摄取与侧栏会话发现。
-- 新增：UI 高级设置加入“并行会话”输入框（maxSessions），用于配置 `watch_max_sessions`（保存后重启监听生效）。
+- 新增：UI 配置加入“并行会话”输入框（maxSessions），用于配置 `watch_max_sessions`（保存后立即生效，无需重启监听）。
+- 优化：保存配置后可运行时热更新 watcher 参数（采集 `agent_reasoning`、进程定位/regex、poll/scan 等）；仅“监视目录”需要停止后再开始监听才能切换。
 - 修复：UI 状态/调试信息里可显示 `tail:N` 与翻译队列统计，便于定位“翻译慢”是队列积压还是模型/网络耗时。
 - 新增：翻译模式 `translate_mode=auto|manual`：`auto` 自动翻译思考；`manual` 仅在单击思考块或点“翻译/重译”时才发起翻译请求。
 - 优化：未译时默认只显示英文原文，状态栏以 pill 提示“ZH 待翻译/翻译中/已就绪”；译文回填后默认切到中文，单击思考块可在 EN/ZH 间切换。
 - 防抖：手动翻译增加 in-flight 保护，避免重复点击导致多次翻译请求；翻译队列也会忽略同一条消息的重复 force 触发。
+- 修复：当某条仍在翻译中再次点击“重译”，会排队一次后续重译（等待当前翻译完成），避免“闪一下但没发请求/没执行”的困惑。
+- 修复：`TranslationPump` 在批量翻译的边界分支也会清理 inflight，避免后续重译被永久合并导致“入队但不执行”。
 - 新增：对 `require_escalated` 等需要终端批准的工具调用，Watcher 会主动推送一条 `tool_gate` 提示到 UI（不依赖 codex-tui.log），降低“终端在等你确认但 UI 看起来没反应”的困惑。
 - 修复：翻译失败（超时/空译文）不再把告警文本写入 `zh`（避免 UI 误判“ZH 已就绪”并污染内容区）；改为回填 `translate_error`，UI 用状态 pill 展示失败并支持“重试”。
 - 修复：重新翻译会清空 `zh` 时，UI 不再被旧的“单条显示模式”覆盖导致英文被隐藏（无 `zh` 时强制显示 EN）。

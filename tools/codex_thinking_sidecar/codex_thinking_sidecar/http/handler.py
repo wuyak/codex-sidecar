@@ -277,6 +277,11 @@ class SidecarHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.OK, self._controller.retranslate(mid))
             return
 
+        if self.path == "/api/control/translate_probe":
+            # No payload needed; probes current translator config.
+            self._send_json(HTTPStatus.OK, self._controller.translate_probe())
+            return
+
         if self.path == "/api/control/follow":
             length = int(self.headers.get("Content-Length") or "0")
             raw = self.rfile.read(length) if length > 0 else b"{}"

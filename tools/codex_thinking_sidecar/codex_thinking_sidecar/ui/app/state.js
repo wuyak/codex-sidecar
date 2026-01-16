@@ -25,11 +25,13 @@ export function createState() {
 
     // 翻译模式（来自服务端 config）：auto | manual
     translateMode: "auto",
-    translatorProvider: "stub",
+    translatorProvider: "openai",
     // 提示音（来自服务端 config）：none | soft-1 | soft-2 | soft-3
     notifySound: "none",
     // 手动翻译防抖：mid -> in-flight
     translateInFlight: new Set(),
+    // 用户点击“重译”后的完成提示：mid -> { oldZh, x, y }
+    retranslatePending: new Map(),
 
     // 多会话频繁切换：视图缓存（key -> DOM+索引），避免每次切换都全量 refreshList。
     listHost: null, // 原始 #list 容器（作为 view host）

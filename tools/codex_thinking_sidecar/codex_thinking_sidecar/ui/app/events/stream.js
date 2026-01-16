@@ -2,8 +2,10 @@ import { keyOf } from "../utils.js";
 import { applyMsgToList } from "./timeline.js";
 import { bufferForKey, pushPending, shouldBufferKey } from "./buffer.js";
 import { notifyCorner } from "../utils/notify.js";
+import { flashToastAt } from "../utils/toast.js";
 import { markUnread, updateUnreadButton } from "../unread.js";
 import { maybePlayNotifySound } from "../sound.js";
+import { cleanThinkingText } from "../markdown.js";
 
 function _toolGateWaiting(text) {
   const s = String(text || "");
@@ -95,6 +97,33 @@ export function connectEventStream(dom, state, upsertThread, renderTabs, renderM
           const hasZh = (typeof msg.zh === "string") && String(msg.zh || "").trim();
           const hasErr = (typeof msg.translate_error === "string") && String(msg.translate_error || "").trim();
           if (hasZh || hasErr) state.translateInFlight.delete(msg.id);
+        }
+      } catch (_) {}
+
+      // "重译完成" 提示：仅在用户点击过“重译”且译文确实发生替换时触发（避免重复 toast）。
+      try {
+        if (op === "update" && msg && typeof msg.id === "string" && state && state.retranslatePending && typeof state.retranslatePending.get === "function") {
+          const pend = state.retranslatePending.get(msg.id);
+          if (pend && typeof pend === "object") {
+            const x = Number(pend.x) || 0;
+            const y = Number(pend.y) || 0;
+            const oldZh = String(pend.oldZh || "");
+            const err = (typeof msg.translate_error === "string") ? String(msg.translate_error || "").trim() : "";
+            const zh = (typeof msg.zh === "string") ? String(msg.zh || "") : "";
+
+            if (err) {
+              flashToastAt(x, y, `重译失败：${err}`, { isLight: true, durationMs: 1400 });
+              try { state.retranslatePending.delete(msg.id); } catch (_) {}
+            } else if (zh.trim()) {
+              const next = cleanThinkingText(zh);
+              const prev = cleanThinkingText(String(oldZh || ""));
+              const prevTrim = String(prev || "").trim();
+              const nextTrim = String(next || "").trim();
+              const label = !prevTrim ? "已完成重译" : (nextTrim === prevTrim ? "已完成重译（内容无变化）" : "已完成重译");
+              flashToastAt(x, y, label, { isLight: true, durationMs: 1200 });
+              try { state.retranslatePending.delete(msg.id); } catch (_) {}
+            }
+          }
         }
       } catch (_) {}
 

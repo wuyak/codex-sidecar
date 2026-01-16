@@ -43,7 +43,7 @@ class SidecarConfig:
     # 提示音（UI）：none（无）或预置音效 id（如 soft-1/soft-2/soft-3）。
     notify_sound: str = "none"
 
-    translator_provider: str = "stub"  # stub | none | http | openai | nvidia
+    translator_provider: str = "openai"  # http | openai | nvidia（兼容历史：stub/none）
     translator_config: Dict[str, Any] = None  # provider-specific
 
     def to_dict(self) -> Dict[str, Any]:
@@ -304,8 +304,18 @@ def default_config(config_home: Path) -> SidecarConfig:
         only_follow_when_process=True,
         translate_mode="auto",
         notify_sound="none",
-        translator_provider="stub",
-        translator_config={},
+        translator_provider="openai",
+        translator_config={
+            "openai": {
+                "base_url": "https://www.right.codes/codex/v1",
+                "model": "gpt-5.1",
+                "api_key": "",
+                "auth_header": "Authorization",
+                "auth_prefix": "Bearer ",
+                "timeout_s": 12,
+                "reasoning_effort": "",
+            }
+        },
     )
 
 
@@ -320,6 +330,50 @@ def load_config(config_home: Path) -> SidecarConfig:
             cfg.config_home = str(config_home)
             if not cfg.watch_codex_home:
                 cfg.watch_codex_home = _default_watch_codex_home()
+            # 兼容旧配置：移除 stub/none Provider 后，自动迁移到 openai（不丢失其他 provider 配置）。
+            try:
+                p = str(getattr(cfg, "translator_provider", "") or "").strip().lower()
+                if p in ("stub", "none"):
+                    cfg.translator_provider = "openai"
+                    save_config(config_home, cfg)
+            except Exception:
+                pass
+            # NVIDIA 翻译模型：仅保留 4 个可选项；同时修正历史遗留的错误 id（直接写回配置）。
+            try:
+                tc = cfg.translator_config
+                if isinstance(tc, dict):
+                    nv = None
+                    if isinstance(tc.get("nvidia"), dict):
+                        nv = tc.get("nvidia")
+                    else:
+                        # Legacy config: translator_config stored NVIDIA fields at top-level.
+                        looks_like_nvidia = False
+                        for k in ("base_url", "api_key", "auth_env", "model", "rpm", "max_tokens", "timeout_s"):
+                            if k in tc:
+                                looks_like_nvidia = True
+                                break
+                        if looks_like_nvidia:
+                            nv = tc
+                    if isinstance(nv, dict):
+                        allowed = {
+                            "moonshotai/kimi-k2-instruct",
+                            "google/gemma-3-1b-it",
+                            "mistralai/mistral-7b-instruct-v0.3",
+                            "mistralai/ministral-14b-instruct-2512",
+                        }
+                        default_model = "moonshotai/kimi-k2-instruct"
+                        m = str(nv.get("model") or "").strip()
+                        changed = False
+                        if not m or m not in allowed:
+                            nv["model"] = default_model
+                            changed = True
+                        if changed:
+                            try:
+                                save_config(config_home, cfg)
+                            except Exception:
+                                pass
+            except Exception:
+                pass
             return cfg
     except Exception:
         pass

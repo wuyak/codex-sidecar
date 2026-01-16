@@ -134,26 +134,16 @@ export function formatUnreadToastDetail(state, opts = {}) {
   const parts = [];
   parts.push(`未读：${total} 条 / ${threads} 会话`);
   if (lastLabel) parts.push(`最近：${lastLabel}`);
-  parts.push("点击右下角 🔔 跳到底部；到达底部后再点一次 🔔 可停止通知（清除未读）");
+  parts.push("未读会显示在左侧会话书签上；点击对应书签即可查看。");
   return parts.join("\n");
 }
 
 export function updateUnreadButton(dom, state) {
   const btn = dom && dom.scrollBottomBtn ? dom.scrollBottomBtn : null;
   if (!btn) return;
-  const total = getUnreadTotal(state);
   try {
-    if (total > 0) {
-      const badge = total > 99 ? "99+" : String(total);
-      btn.textContent = "🔔";
-      btn.title = `有 ${total} 条新输出（点击跳到最近未读会话；到达底部后再点一次清除未读）`;
-      btn.dataset.unread = badge;
-      if (btn.classList) btn.classList.add("has-unread");
-    } else {
-      btn.textContent = "↓";
-      btn.title = "回到页面底部";
-      try { delete btn.dataset.unread; } catch (_) { btn.dataset.unread = ""; }
-      if (btn.classList) btn.classList.remove("has-unread");
-    }
+    btn.textContent = "↓";
+    try { delete btn.dataset.unread; } catch (_) { btn.dataset.unread = ""; }
+    if (btn.classList) btn.classList.remove("has-unread");
   } catch (_) {}
 }

@@ -11,8 +11,6 @@ export async function loadControl(dom, state) {
 
   // 1) Translators（容错：接口失败时仍展示默认三项，避免“下拉为空”）
   let translators = [
-    { id: "stub", label: "Stub（占位）" },
-    { id: "none", label: "None（不翻译）" },
     { id: "nvidia", label: "NVIDIA（NIM Chat Completions）" },
     { id: "openai", label: "GPT（Responses API 兼容）" },
     { id: "http", label: "HTTP（通用适配器）" },
@@ -54,7 +52,6 @@ export async function loadControl(dom, state) {
     const canRecover = !!(recovery && typeof recovery === "object" && recovery.available);
     if (dom.recoverBtn) {
       dom.recoverBtn.disabled = !canRecover;
-      dom.recoverBtn.title = canRecover ? "从本机备份恢复翻译 Profiles" : "未检测到可恢复的本机备份";
     }
   } catch (_) {}
 
@@ -74,9 +71,9 @@ export async function loadControl(dom, state) {
     if (dom.pollInterval) dom.pollInterval.value = cfg.poll_interval ?? 0.5;
     if (dom.scanInterval) dom.scanInterval.value = cfg.file_scan_interval ?? 2.0;
     if (dom.translatorSel) {
-      const want = cfg.translator_provider || "stub";
+      const want = cfg.translator_provider || "openai";
       dom.translatorSel.value = want;
-      if (dom.translatorSel.value !== want) dom.translatorSel.value = "stub";
+      if (dom.translatorSel.value !== want) dom.translatorSel.value = "openai";
     }
     const tc = cfg.translator_config || {};
     const tcObj = (tc && typeof tc === "object") ? tc : {};
@@ -94,7 +91,6 @@ export async function loadControl(dom, state) {
       if (dom.openaiBaseUrl) dom.openaiBaseUrl.value = oh.base_url || "";
       if (dom.openaiModel) dom.openaiModel.value = oh.model || "";
       if (dom.openaiApiKey) dom.openaiApiKey.value = oh.api_key || "";
-      if (dom.openaiAuthEnv) dom.openaiAuthEnv.value = oh.auth_env || "";
       if (dom.openaiTimeout) dom.openaiTimeout.value = oh.timeout_s ?? 12;
       const ah = String(oh.auth_header || "Authorization").toLowerCase();
       if (dom.openaiAuthMode) dom.openaiAuthMode.value = (ah === "x-api-key") ? "x-api-key" : "authorization";
@@ -104,11 +100,11 @@ export async function loadControl(dom, state) {
     try {
       const nh = nvidiaTc || {};
       if (dom.nvidiaBaseUrl) dom.nvidiaBaseUrl.value = nh.base_url || "";
-      if (dom.nvidiaModel) dom.nvidiaModel.value = nh.model || "";
+      try { if (dom.nvidiaModel) dom.nvidiaModel.value = String(nh.model || "").trim(); } catch (_) {}
       if (dom.nvidiaApiKey) dom.nvidiaApiKey.value = nh.api_key || "";
-      if (dom.nvidiaAuthEnv) dom.nvidiaAuthEnv.value = nh.auth_env || "";
-      if (dom.nvidiaTimeout) dom.nvidiaTimeout.value = nh.timeout_s ?? 12;
-      if (dom.nvidiaRpm) dom.nvidiaRpm.value = nh.rpm ?? 40;
+      if (dom.nvidiaTimeout) dom.nvidiaTimeout.value = nh.timeout_s ?? 60;
+      if (dom.nvidiaRpm) dom.nvidiaRpm.value = nh.rpm ?? 0;
+      if (dom.nvidiaMaxTokens) dom.nvidiaMaxTokens.value = nh.max_tokens ?? 8192;
     } catch (_) {}
     showProviderBlocks(dom, (dom.translatorSel && dom.translatorSel.value) ? dom.translatorSel.value : "");
   } catch (e) {
@@ -117,8 +113,9 @@ export async function loadControl(dom, state) {
 
   // Keep a copy on state for render logic (no need to re-fetch cfg on every click).
   try {
+    state.watchCodexHome = String(cfg.watch_codex_home || "");
     state.translateMode = (cfg.translate_mode === "manual") ? "manual" : "auto";
-    state.translatorProvider = String(cfg.translator_provider || "stub").trim().toLowerCase() || "stub";
+    state.translatorProvider = String(cfg.translator_provider || "openai").trim().toLowerCase() || "openai";
     state.notifySound = String(cfg.notify_sound || "none").trim().toLowerCase() || "none";
   } catch (_) {}
   try { preloadNotifySound(state); } catch (_) {}
@@ -127,7 +124,6 @@ export async function loadControl(dom, state) {
     if (btn && btn.classList) {
       const isAuto = (String(state.translateMode || "").toLowerCase() !== "manual");
       btn.classList.toggle("active", isAuto);
-      btn.title = isAuto ? "自动翻译：已开启" : "自动翻译：已关闭（手动）";
     }
   } catch (_) {}
 
@@ -151,12 +147,8 @@ export async function loadControl(dom, state) {
   let st = null;
   try {
     st = await fetch(`/api/status?t=${ts}`, { cache: "no-store" }).then(r => r.json());
-    let hint = "";
     const sidecarPid = (st && (st.pid !== undefined) && (st.pid !== null)) ? String(st.pid) : "";
     const sidecarSuffix = sidecarPid ? ` | sidecar:${sidecarPid}` : "";
-    if (st.env && st.env.auth_env) {
-      hint = st.env.auth_env_set ? `（已检测到 ${st.env.auth_env}）` : `（未设置环境变量 ${st.env.auth_env}）`;
-    }
     const w = (st && st.watcher) ? st.watcher : {};
     const cur = w.current_file || "";
     const mode = w.follow_mode || "";
@@ -183,10 +175,10 @@ export async function loadControl(dom, state) {
     }
     else if (followHint) detail = `(auto${followHint})`;
     if (st.running) {
-      if (cur) setStatus(dom, `运行中：${cur} ${detail} ${hint}${sidecarSuffix}`.trim());
-      else setStatus(dom, `运行中：${detail} ${hint}${sidecarSuffix}`.trim());
+      if (cur) setStatus(dom, `运行中：${cur} ${detail}${sidecarSuffix}`.trim());
+      else setStatus(dom, `运行中：${detail}${sidecarSuffix}`.trim());
     } else {
-      setStatus(dom, `未运行 ${hint}${sidecarSuffix}`.trim());
+      setStatus(dom, `未运行${sidecarSuffix}`.trim());
     }
     try {
       if (dom.startBtn) dom.startBtn.disabled = !!st.running;

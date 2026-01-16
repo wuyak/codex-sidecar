@@ -9,6 +9,9 @@ export function parseToolCallText(text) {
     toolName = t;
     break;
   }
+  // Normalize tool names that may be recorded with namespace prefixes (Codex CLI variants),
+  // e.g. "functions.update_plan" / "functions.shell_command".
+  toolName = String(toolName || "").replace(/^functions\./, "").replace(/^multi_tool_use\./, "");
 
   let callId = "";
   let callIdx = -1;
@@ -68,7 +71,9 @@ export function parseToolCallText(text) {
 }
 
 export function inferToolName(toolName, argsRaw, argsObj) {
-  const t = String(toolName || "").trim();
+  let t = String(toolName || "").trim();
+  // Normalize namespace prefixes (keep behavior stable across Codex CLI variants).
+  t = t.replace(/^functions\./, "").replace(/^multi_tool_use\./, "");
   const raw = String(argsRaw || "");
   // If already looks like a real tool name, keep it.
   if (t && !t.startsWith("tool_call") && !t.startsWith("tool_output") && t !== "tool_call") return t;
@@ -104,4 +109,3 @@ export function parseToolOutputText(text) {
   const outputRaw = kept.join("\n").replace(/^\n+/, "");
   return { callId, outputRaw };
 }
-

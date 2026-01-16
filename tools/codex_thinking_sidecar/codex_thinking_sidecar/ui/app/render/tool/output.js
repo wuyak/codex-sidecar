@@ -45,12 +45,18 @@ export function renderToolOutput(dom, state, msg, ctx) {
 
   if (toolName === "update_plan") return null; // update_plan 已在 tool_call 里展示，避免重复
   // 容错：极少数情况下 tool_call 丢失导致无法识别 tool_name，但 update_plan 的 output 往往只有 "Plan updated"。
-  if (!toolName && String(outputBody || "").trim() === "Plan updated") return null;
+  if (!toolName && String(outputBody || "").trim() === "Plan updated") {
+    const md = ["**更新计划**", "- Plan updated"].join("\n");
+    const metaLeftExtra = `<span class="pill">更新计划</span><span class="pill">工具输出</span>`;
+    const body = `<div class="md">${renderMarkdownCached(state, `md:${mid}:update_plan_output`, md)}</div>`;
+    return { metaLeftExtra, metaRightExtra: "", body, rowClass: "tool-update_plan" };
+  }
 
   const cmdFull = (meta && meta.args_obj && toolName === "shell_command") ? String(meta.args_obj.command || "") : "";
   const argsRaw = (meta && meta.args_raw) ? String(meta.args_raw || "") : "";
   const seq = state && typeof state.renderSeq === "number" ? state.renderSeq++ : 0;
-  const rid = `${safeDomId(mid)}_${safeDomId(callId || "")}_${seq}`;
+  // Avoid leaking call_id into DOM ids (can show up as confusing "ghost labels" in some environments).
+  const rid = `${safeDomId(mid)}_${seq}`;
   const detailsId = ("tool_" + rid + "_details");
   const summaryId = ("tool_" + rid + "_summary");
 
