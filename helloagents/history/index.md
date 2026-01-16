@@ -57,3 +57,4 @@
 - 202601170024_auto_audit_refactor_ui_template_research
 - 202601170059_ui_polish_bookmarks_mid_icons_commit
 - 202601170719_ui_dock_mid_layer_tokens
+- 202601170726_ui_dock_polish_typography
