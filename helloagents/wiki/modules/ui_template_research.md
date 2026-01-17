@@ -192,10 +192,10 @@
 
 ## 10. 本仓库落地结论（2026-01-17）
 
-为解决“交互状态临时手工管理、书签易错、浮层层级不稳定”等问题，本仓库新增了 **Vue 3 + Vite + Pinia** 的 UI v2 方案作为实验入口，并保持 legacy UI 继续作为默认入口（避免丢失既有优化能力，逐项对齐迁移）：
+为解决“交互状态临时手工管理、书签易错、浮层层级不稳定”等问题，本仓库曾评估过 **Vue 3 + Vite + Pinia** 的 UI v2 作为实验入口；但为避免丢失既有优化能力、降低维护成本，当前仍以 legacy 静态 UI（`/ui`）为主，UI v2 已归档到 `old/` 仅供参考：
 
-- 默认 UI（legacy）：`/ui`（源码目录：`tools/codex_thinking_sidecar/codex_thinking_sidecar/ui/`）
-- 回滚/对照（legacy 快照）：`/ui-legacy`（目录：`tools/codex_thinking_sidecar/codex_thinking_sidecar/ui_legacy/`）
-- UI v2（实验入口）：`/ui-v2`（源码工程：`tools/codex_thinking_sidecar/codex_thinking_sidecar/ui_v2/`；`npm run build` → `ui_v2/dist/`；`deploy.sh` 仅 build）
+- 默认 UI（legacy）：`/ui`（源码目录：`ui/`）
+- 回滚/对照（legacy 快照）：已归档到 `old/`（不再提供 `/ui-legacy` 路由）
+- UI v2（已归档）：`old/tools/codex_thinking_sidecar/codex_thinking_sidecar/ui_v2/`（不再提供 `/ui-v2` 路由）
 
 > 备注：本报告中“零构建可集成”的模板/设计系统仍可作为备选路径参考；UI v2 的迁移以“逐项确认保留 legacy 交互与筛选能力”为约束推进。

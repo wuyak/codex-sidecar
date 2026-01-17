@@ -67,3 +67,7 @@
 - 202601171532_ui_rightbar_compact_controls
 - 202601171619_ui_drawer_minimal
 - 202601171633_ui_bookmarks_align_labels
+- 202601172126_repo_cleanup_old_archive
+- 202601172128_nvidia_translate_migration_guide
+- 202601172149_repo_flatten_phase2
+- 202601172128_nvidia_translate_migration_guide

@@ -1,11 +1,14 @@
 # Changelog
 
 ## [Unreleased]
+- 重构：仓库目录扁平化：后端迁移到 `codex_sidecar/`，默认 UI 迁移到 `ui/`（`/ui`）；旧 UI/实验 UI 已归档到 `old/`（不再提供 `/ui-legacy`、`/ui-v2` 路由）；启动脚本收敛到 `scripts/`（根目录 `run.sh`/`ui.sh` 保持兼容转发）；默认配置目录改为 `config/sidecar/`。
+- 整理：新增 `old/` 归档目录，将 `ui_v2*`、`ui_legacy_*` 快照与本地缓存（`.npm-cache`、`.codex-home`）移入归档，减少仓库噪音（不影响当前默认 `/ui`）。
 - UI: 移除翻译配置的“从备份恢复”能力及相关接口，避免误操作造成困扰。
 - UI: 修复右侧工具栏按钮 hover 提示不显示（overflow 裁切导致 tooltip 不可见）。
+- 文档：新增 NVIDIA 翻译迁移指南（配置/请求/响应/提示词与 curl 自检示例）。
 - 修复：UI(legacy) 配置加载脚本异常导致页面空白/不工作（恢复 `/api/config` 加载并清理遗留代码）。
 - 移除：不再采集/展示 `agent_reasoning`，并移除对应配置项与 CLI 参数，减少噪音与重复。
-- UI(v2)：新增 `Vue 3 + Vite + Pinia` 的 UI v2（实验入口 `/ui-v2`，不影响默认 `/ui` legacy）；补齐 SSE 批处理缓冲、长列表窗口化、主题切换、本机记忆与统一 Teleport 浮层挂载点。
+- UI(v2)：新增 `Vue 3 + Vite + Pinia` 的 UI v2（已归档到 `old/`，默认不启用，且不再提供路由入口）。
 - UI(legacy)：右侧工具栏收纳：按“设置/快速信息/翻译/监听/清空/关闭”排列；监听改为单一 toggle（开始/停止切换）；关闭按钮长按重启；去除右侧 dock 外框并取消主内容区为右侧预留 margin；移除“会话书签管理抽屉”入口（保持极简）。
 - UI(legacy)：设置/翻译抽屉极简化：配置项分为“常用 + 高级折叠”；抽屉/分区边框弱化，默认观感更轻。
 - UI(legacy)：抽屉与按钮文案进一步压缩：抽屉改为内容高度（限制最大高度并可滚动）；按钮文案更直观。
@@ -53,7 +56,7 @@
 - 文档：新增 UI 模板/设计系统调研报告（`helloagents/wiki/modules/ui_template_research.md`），用于后续 UI 美化与渐进式改造评估。
 - UI: 右侧操作栏新增“🌐 自动翻译”快捷开关，切换 `auto/manual` 会对运行中的 watcher 立即生效（无需重启）。
 - UI：🌐 按钮支持“长按打开翻译设置”（单击仍切换自动翻译）；翻译设置支持保存后立即生效且无需重启进程/会话。
-- UI：新增 UI v2（Vue 3 + Vite）工程骨架（`tools/codex_thinking_sidecar/codex_thinking_sidecar/ui_v2/`），用于后续全量重构（进行中）。
+- UI：新增 UI v2（Vue 3 + Vite）工程骨架（原位于 `tools/codex_thinking_sidecar/codex_thinking_sidecar/ui_v2/`；现已归档到 `old/` 默认不启用）。
 - UI：修复书签栏作为 `position: fixed` 元素时被右侧 Dock 的 `transform` 影响定位的问题，并提升图层避免被遮挡。
 - UI：修复“重译/翻译”按钮在有文本选中时无法触发的问题（选中文本仅阻止思考块切换，不阻止按钮点击）。
 - 翻译：移除 `stub/none` 占位/不翻译 Provider（历史配置会自动迁移到 `openai`，不影响现有 `http/openai/nvidia` 配置）。
@@ -106,7 +109,7 @@
 - 优化：控制面板新增“调试信息”面板，显示配置来源/Profiles 概览与加载失败原因（不展示 token/url）。
 - 修复：保存配置时不再在 Provider≠HTTP 的情况下清空已保存的 HTTP Profiles，避免误操作导致配置丢失。
 - 调整：translator_config 支持按 Provider 分区保存（`http/openai`）并在保存时合并，避免切换 Provider 覆盖其它配置。
-- 调整：配置持久化默认放在 `CODEX_HOME/tmp/codex-thinking-sidecar/config.json`（避免散落到 `~/.config`）；若检测到旧 XDG 配置会自动迁移导入。
+- 调整：配置持久化默认放在项目目录内 `./config/sidecar/config.json`（避免散落到 `~/.config` / `~/.codex`）；若检测到旧配置（XDG 或 `CODEX_HOME/tmp` 等）会自动迁移导入。
 - 诊断：HTTP 翻译失败时输出去敏后的告警日志（终端可见）。
 - 新增：HTTP 适配 `translate.json`（硅基流动 translate.js 形式，表单提交）。
 - 优化：UI 列表改为从上到下（新内容在底部），并展示用户输入/工具调用与输出/最终回答。
@@ -139,7 +142,7 @@
 - 新增：所有消息的文本块/代码块右上角增加“复制”按钮。
 - 优化：思考块（`reasoning_summary`）改为 Markdown 渲染，并将“思考（EN/ZH）”移到时间戳同行。
 - 调整：↑ 顶部 / ↓ 底部悬浮按钮移动到右侧。
-- 重构：UI HTML 从 `server.py` 抽离到 `tools/codex_thinking_sidecar/codex_thinking_sidecar/ui/index.html`，便于后续分层与迭代。
+- 重构：UI HTML 从 `server.py` 抽离到 `ui/index.html`，便于后续分层与迭代。
 - 修复：UI Markdown 渲染支持有序列表（`1.` / `1)`）与 `•/◦` 无序列表，避免回答分点在 UI 中丢失。
 - 优化：主页面控制收敛到右侧悬浮工具栏（⚙️/▶️/⏹️/🧹/⏻），顶栏仅保留标题与状态。
 - 新增：手动退出 Sidecar（`/api/control/shutdown` + UI 按钮），便于无需手动 kill PID 的情况下关闭进程。

@@ -6,9 +6,9 @@
 
 ## 运行环境
 - Python 3（运行 sidecar：标准库即可启动本地服务）
-- Node.js + npm（可选：仅用于开发/构建 UI v2：`tools/codex_thinking_sidecar/codex_thinking_sidecar/ui_v2/`）
-  - 运行时默认不依赖 Node：`/ui` 使用 legacy 静态资源；`/ui-v2` 仅在需要试用/开发 UI v2 时才需要构建 `ui_v2/dist/`。
-  - 在受限环境下建议显式指定 npm cache（示例：`npm install --cache ./.npm-cache`），避免写入不可写目录导致安装失败。
+- Node.js + npm（可选：仅在需要回看/重构已归档 UI v2 时）
+  - UI v2 已归档：`old/tools/codex_thinking_sidecar/codex_thinking_sidecar/ui_v2/`（默认不启用，运行时不依赖 Node）
+  - 在受限环境下如需 npm，建议显式指定 cache（示例：`npm install --cache ./old/.npm-cache`），避免写入不可写目录导致安装失败。
 
 ## 安全与隐私
 - 默认仅监听本地文件并在 `127.0.0.1` 提供服务。

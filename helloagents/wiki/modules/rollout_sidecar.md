@@ -7,7 +7,6 @@
 - 输入：`CODEX_HOME/sessions/YYYY/MM/DD/rollout-*.jsonl`（追加写入的 JSONL）
 - 输出：本地服务端（默认 `127.0.0.1:8787`）
   - `GET /ui`：浏览器实时面板（含配置/控制）
-  - `GET /ui-legacy`：旧版 UI（回滚/对照）
   - `GET /events`：SSE（可供其它客户端订阅）
   - `GET /api/messages`：最近消息 JSON（调试）
   - `GET /api/threads`：按 `thread_id/file` 聚合的会话列表（用于 UI 标签切换）
@@ -25,7 +24,7 @@
 - 服务端分层：`server.py` 仅负责启动/绑定；HTTP 路由、SSE 与静态资源拆分到 `http/*`
 - 控制面分层：`controller.py` 聚焦线程生命周期/配置入口；translator schema/构建与校验拆分到 `control/*`
 
-> 注：下文涉及 `ui/app/*` 的“分层/模块拆分”描述对应当前默认 legacy UI（`ui/`）；UI v2（Vue 3 + Vite + Pinia）位于 `ui_v2/`，访问路径为 `/ui-v2`（实验入口，不影响 `/ui`）。
+> 注：下文涉及 `ui/app/*` 的“分层/模块拆分”描述对应当前默认 UI（`ui/`）；此前尝试过 UI v2（Vue 3 + Vite + Pinia），现已归档到 `old/`（不再提供路由入口）。
 - 可选：WSL2/Linux 下支持“进程优先定位”当前会话文件
   - 扫描 `/proc/<pid>/fd`，优先锁定匹配到的 Codex 进程（及其子进程）正在写入的 `sessions/**/rollout-*.jsonl`
   - 并保留 sessions 扫描作为回退（用于进程已启动但文件尚未被发现的窗口期）
@@ -78,16 +77,15 @@
 
 ## 运行方式（WSL 示例）
 - 推荐（短命令，先开 UI 再开始监听）：
-  - `cd ~/src/codex-thinking-sidecar-zh && ./ui.sh`
+  - 在仓库根目录执行：`./ui.sh`
   - 打开 `http://127.0.0.1:8787/ui`，点右侧工具栏 ⚙️ 保存配置，再点 ▶/⏹️ 监听（点击切换开始/停止）
 
 - 兼容（启动即监听，命令行参数方式）：
-  - `cd ~/src/codex-thinking-sidecar-zh && ./run.sh --codex-home "$HOME/.codex" --port 8787 --replay-last-lines 5000`
+  - 在仓库根目录执行：`./run.sh --codex-home "$HOME/.codex" --port 8787 --replay-last-lines 5000`
 
 ## 配置持久化与多翻译 Profiles
-- UI 中点击“保存配置”会将配置写入本机配置目录（默认放在 `CODEX_HOME/tmp` 下）：
-  - 默认：`$CODEX_HOME/tmp/codex-thinking-sidecar/config.json`
-  - 常见路径：`~/.codex/tmp/codex-thinking-sidecar/config.json`
+- UI 中点击“保存配置”会将配置写入项目目录内（默认放在仓库根目录下）：
+  - 默认：`./config/sidecar/config.json`
 - 下次启动 `./ui.sh` 或 `./run.sh` 时会自动读取并沿用已保存配置（`./run.sh` 会立即开始监听）。
 - 当翻译 Provider 选择 `HTTP` 时，可在 `HTTP Profiles` 中保存多个翻译 API 配置并手动切换（支持新增/删除）。
   - `HTTP Profiles` 支持在 UI 中新增/删除/重命名配置。
@@ -131,13 +129,10 @@
 
 ## UI v2（Vue 3 + Vite）
 
-为降低 UI 交互与状态维护成本，新增 `Vue 3 + Vite + Pinia` 的 UI v2（实验入口，逐项对齐迁移，不影响默认 `/ui`）：
+UI v2 已归档（默认不启用），仅保留作为历史参考：
 
-- 源码目录：`tools/codex_thinking_sidecar/codex_thinking_sidecar/ui_v2/`
-- 构建产物：`tools/codex_thinking_sidecar/codex_thinking_sidecar/ui_v2/dist/`
-- 访问路径：`/ui-v2`
-- 回滚/对照：`/ui-legacy`（目录：`tools/codex_thinking_sidecar/codex_thinking_sidecar/ui_legacy/`）
-- 构建脚本：`tools/codex_thinking_sidecar/codex_thinking_sidecar/ui_v2/deploy.sh`（仅 build，不覆盖 `/ui`）
+- 归档目录：`old/tools/codex_thinking_sidecar/codex_thinking_sidecar/ui_v2/`
+- 路由入口：不再提供 `/ui-v2`（仅保留源码归档）
 
 ## 配置项速查（Watcher）
 - `进程定位`：开启后会根据进程（`/proc`）定位正在写入的会话文件，优先跟随“当前正在跑的 Codex 会话”。

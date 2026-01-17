@@ -18,6 +18,25 @@
 补充：
 - **不同 model 的请求头不需要分别配置**：在 NVIDIA integrate 的 OpenAI 兼容网关下，绝大多数模型都使用同一套 `Authorization` + `Content-Type`，主要差异在请求体的 `model` 字段与模型能力/限额。
 
+## 请求头与 Token 来源（本地实现）
+本项目发起 NVIDIA 翻译请求时，会显式设置以下请求头（不随 model 变化）：
+- `Content-Type: application/json`
+- `Authorization: Bearer <token>`
+
+`token` 的读取优先级：
+1. UI 写入 `config.json`：`translator_config.nvidia.api_key`
+2. 环境变量：`NVIDIA_API_KEY`
+
+说明：
+- NVIDIA Provider **不提供** `auth_header/auth_prefix` 这类可配置项（与 `openai/http` 不同）；如你的网关要求 `x-api-key` 等非标准头，请改用 `http` Provider 或在代码层适配。
+- 代码定位：
+  - 请求头构造：`codex_sidecar/translators/nvidia_chat.py`
+  - UI 字段定义：`codex_sidecar/control/translator_specs.py`
+
+## 迁移到其他项目（Porting）
+如果你需要把本项目的 NVIDIA 翻译接入迁移到其他项目（含配置结构、HTTP 请求/响应与提示词策略），请参考：
+- `helloagents/wiki/modules/nvidia_translate_migration.md`
+
 ## 配置（UI）
 在 UI 中选择 Provider：`NVIDIA（NIM Chat Completions）`，并填写：
 - `Base URL`
@@ -40,6 +59,11 @@
 - `google/gemma-3-1b-it`
 - `mistralai/mistral-7b-instruct-v0.3`
 - `mistralai/ministral-14b-instruct-2512`
+
+来源（本地配置/源码）：
+- UI 下拉固定：`ui/index.html`
+- 运行时允许列表与自动纠正：`codex_sidecar/config.py`
+- 翻译器候选常量：`codex_sidecar/translators/nvidia_chat.py`
 
 提示：
 - `/models` 列表里出现的模型不一定对你的账号可用；若出现 `404 ... Not found for account`，请在上述 4 个模型中手动切换到可用项。
