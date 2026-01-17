@@ -12,7 +12,7 @@
 
 说明：
 - 部分旧文档/示例里的 `nvidia/riva-translate-*` 可能不在你的 `/models` 列表里；此时调用 `/chat/completions` 可能表现为 `404 page not found`。
-- sidecar 仅在 **4 个内置模型** 间回退；不再尝试“从 /models 自动挑一个”来避免引入弱模型/噪声。
+- sidecar **默认不做自动回退模型**（避免运行中静默换模导致“同配置但输出忽好忽坏”）；需要切换时请在 UI 下拉中手动选择。
 - 为减少“重排/合并段落/把原文改成列表/漏掉 `#` 标题前缀”等格式问题，sidecar 的单条与批量翻译提示词均要求尽量逐行保留原结构。
 
 补充：
@@ -35,16 +35,16 @@
 配置会写入本机 `config.json` 的 `translator_config.nvidia` 分区；切换 Provider 不会覆盖其他 Provider 的配置。
 
 ## 内置模型（仅 4 个）
-以下为 UI 固定提供的 4 个候选（用于翻译切换与回退）：
+以下为 UI 固定提供的 4 个候选（用于翻译切换）：
 - `moonshotai/kimi-k2-instruct`
 - `google/gemma-3-1b-it`
 - `mistralai/mistral-7b-instruct-v0.3`
 - `mistralai/ministral-14b-instruct-2512`
 
 提示：
-- `/models` 列表里出现的模型不一定对你的账号可用；若出现 `404 ... Not found for account`，sidecar 会在上述 4 个模型内自动回退。
+- `/models` 列表里出现的模型不一定对你的账号可用；若出现 `404 ... Not found for account`，请在上述 4 个模型中手动切换到可用项。
 - 部分模型会把 prompt 分隔标记（如 `<<<SIDE_CAR_TEXT>>>`）回显在输出中；sidecar 会自动清理，避免污染 UI。
-- 若输出未按规则保留标题 `#` 或代码围栏 ```（输入中存在时），sidecar 会判定为“格式不保真”并在 4 个内置模型内自动回退。
+- 若输出未按规则保留标题 `#` 或代码围栏 ```（输入中存在时），sidecar 会判定为“格式不保真”并返回错误（建议换模型）。
 - 如果你本机 `config.json` 仍包含历史遗留 model id（例如 `nvidia/riva-translate-4b-instruct-v1_1`），sidecar 会在加载配置时直接重置为默认模型，避免反复 404/空译文。
 - `max_tokens` 是“输出上限”，不是“模型上下文长度”。实际必须满足：`输入 tokens + max_tokens <= 模型最大上下文`；否则会返回 400（常见提示含 “maximum context length ...”）。sidecar 会在该类 400 错误下自动降低 `max_tokens` 并重试一次，避免直接空译文。
 
