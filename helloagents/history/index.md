@@ -60,3 +60,10 @@
 - 202601170726_ui_dock_polish_typography
 - 202601170732_ui_skin_toggle_localstorage
 - 202601170737_ui_dark_skin
+- 202601170921_ui_rewrite_vue3_vite
+- 202601171126_ui_v2_bugfix
+- 202601171130_restore_legacy_ui_keep_v2
+- 202601171205_bookmarks_legacy
+- 202601171532_ui_rightbar_compact_controls
+- 202601171619_ui_drawer_minimal
+- 202601171633_ui_bookmarks_align_labels

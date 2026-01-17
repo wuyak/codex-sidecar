@@ -6,10 +6,8 @@
 - **读取优先**：先把英文原文入库/推送到 UI，避免翻译阻塞采集。
 - **翻译解耦**：翻译在后台队列慢慢补齐，完成后以 `op=update` 回填到原消息块（不改变时间线位置）；失败仅回填 `translate_error`（用于状态/重试提示），不把告警写进内容区。
 - **时间线稳定**：服务端为新增消息附加单调递增 `seq`，UI 按 `(timestamp, seq)` 插入渲染，避免“时间倒退/回跳”。
-- **切换稳定**：UI 刷新列表期间暂存 SSE 消息，刷新结束后批量回放，避免清空/插入并发导致错位或闪烁。
-- **断线恢复**：SSE 重连后自动回源同步，避免长时间挂着时网络抖动/服务重启导致漏消息。
-- **会话列表同步**：断线恢复后标记为 dirty，并在下一次列表回源时同步 `/api/threads`，避免书签栏漏会话/排序漂移。
-- **切换加速**：消息列表按会话 `key` 做视图缓存；切换时优先复用已渲染 DOM，并回放该会话的 SSE 缓冲（溢出或切到 `all` 时再回源 `refreshList()`）。
+- **切换稳定**：UI 刷新期对 SSE 做暂存与批量回放，避免“回源刷新 + 实时插入”并发导致错位或闪烁。
+- **切换可维护**：UI v2 以 Store/组件化管理状态（会话/未读/配置/浮层），避免 DOM 手工拼接导致的交互错乱。
 - **跟随策略**：选择具体会话时，后端会自动 `pin` 到该会话对应的 rollout 文件（减少“自动跳走”）；切回 `all` 时恢复 `auto`。
 - **未读提醒**：新输出会在右侧会话书签徽标显示未读数；可在设置中选择提示音或关闭。
 - **行内翻译/切换**：未译时默认只显示英文原文；翻译完成后默认切到中文；单击思考块可在 EN/ZH 间切换；“翻译/重译”按钮可手动触发翻译请求（仍以 `op=update` 原位回填）。
@@ -25,8 +23,10 @@ cd ~/src/codex-thinking-sidecar-zh
 
 打开：
 - `http://127.0.0.1:8787/ui`
+- `http://127.0.0.1:8787/ui-legacy`（旧版 UI，对照/回滚）
+- `http://127.0.0.1:8787/ui-v2`（UI v2：实验入口，逐项对齐迁移）
 
-在 UI 里配置 `监视目录（CODEX_HOME）`，保存后点击“开始监听”；也可以启用“自动开始监听（UI）”省去手动点击。
+监视目录固定为 `CODEX_HOME`（默认 `~/.codex`，UI 仅展示不提供修改入口）；保存配置后点击“开始监听”。也可以启用“自动开始监听（UI）”省去手动点击。
 
 如果你希望 **启动即开始监听**（不走 UI 按钮）：
 
@@ -55,7 +55,6 @@ cd ~/src/codex-thinking-sidecar-zh
 - `回放行数`：启动监听时从文件尾部回放最近 N 行（用于补历史）
 - `翻译模式`：`自动翻译/手动翻译`；手动模式下仅在你单击思考块或点“翻译/重译”时才会发起翻译请求
 - `并行会话`：同时 tail 最近 N 个会话文件（默认 3），用于“至少 3 个会话同时实时更新”（锁定仅影响主跟随，不阻断后台摄取）
-- `采集 reasoning`：额外采集 `agent_reasoning`（更实时但更噪）
 - `进程定位/仅跟随进程/进程 regex`：在 Linux/WSL 下用 `/proc/<pid>/fd` 更精准跟随正在写入的 rollout 文件，减少“挂着但读旧会话”
 - `poll/scan`：读文件/扫描新会话文件的频率
 
@@ -69,13 +68,7 @@ cd ~/src/codex-thinking-sidecar-zh
   - `control/`: 控制面子模块（translator schema / translator 构建 / 配置校验）
   - `server.py`: HTTP+SSE 启动器（绑定 state/controller，启动 ThreadingHTTPServer）
   - `http/`: 服务端子模块（内存 state / HTTP 路由与 SSE / UI 静态资源）
-    - `ui/`: 纯静态 UI（无构建）
-    - `ui/app/render.js`: 消息渲染门面（实现：`ui/app/render/*`）
-    - `ui/app/markdown.js`: Markdown 门面；实现位于 `ui/app/markdown/*`（含 inline/table 子模块）
-    - `ui/app/decorate.js`: 行装饰门面；实现位于 `ui/app/decorate/core.js`
-    - `ui/app/events.js`: SSE/事件流门面；实现位于 `ui/app/events/*`（timeline/buffer/stream）
-    - `ui/app/sidebar.js`: 侧栏门面；实现位于 `ui/app/sidebar/*`（labels/tabs）
-    - `ui/app/utils.js`: 工具函数门面；实现位于 `ui/app/utils/*`（time/id/color/json/clipboard/error）
-    - `ui/app/list.js`: 列表门面；实现位于 `ui/app/list/*`（threads/refresh/bootstrap）
-    - `ui/app/views.js`: 多会话 list 视图缓存（切换复用 DOM + 还原滚动）
+    - `ui/`: legacy UI 静态源码（默认入口，服务端以 `/ui/*` 提供）
+    - `ui_legacy/`: legacy UI 快照（服务端以 `/ui-legacy/*` 提供，用于对照/回滚）
+    - `ui_v2/`: UI v2 源码工程（Vue 3 + Vite + Pinia；`npm run build` → `ui_v2/dist/`；服务端以 `/ui-v2/*` 提供）
 - `helloagents/`: 知识库（CHANGELOG / wiki / history）

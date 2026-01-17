@@ -1,8 +1,26 @@
 import { fmtErr } from "../utils.js";
 import { api } from "./api.js";
-import { applyProfileToInputs, countValidHttpProfiles, normalizeHttpProfiles, refreshHttpProfileSelect } from "./http_profiles.js";
+import { applyProfileToInputs, normalizeHttpProfiles, refreshHttpProfileSelect } from "./http_profiles.js";
 import { setDebug, setStatus, showProviderBlocks } from "./ui.js";
 import { preloadNotifySound } from "../sound.js";
+
+function _prettyPath(p) {
+  const s = String(p || "").trim();
+  if (!s) return "";
+  // Linux/WSL: /home/<user>/...
+  let m = s.match(/^\/home\/[^/]+(\/.*)?$/);
+  if (m) return `~${m[1] || ""}`;
+  // macOS: /Users/<user>/...
+  m = s.match(/^\/Users\/[^/]+(\/.*)?$/);
+  if (m) return `~${m[1] || ""}`;
+  // WSL (Windows home mounted): /mnt/<drive>/Users/<user>/...
+  m = s.match(/^\/mnt\/[a-zA-Z]\/Users\/[^/]+(\/.*)?$/);
+  if (m) return `/mnt/<drive>/Users/~${m[1] || ""}`;
+  // Windows: C:\Users\<user>\...
+  m = s.match(/^[a-zA-Z]:\\Users\\[^\\]+(\\.*)?$/);
+  if (m) return `~${m[1] || ""}`;
+  return s;
+}
 
 export async function loadControl(dom, state) {
   const ts = Date.now();
@@ -38,27 +56,20 @@ export async function loadControl(dom, state) {
 
   // 2) Config
   let cfg = {};
-  let recovery = {};
   try {
-    const c = await fetch(`/api/config?t=${ts}`, { cache: "no-store" }).then(r => r.json());
-    cfg = c.config || c || {};
-    recovery = (c && typeof c === "object") ? (c.recovery || {}) : {};
+    const c = await api("GET", "/api/config");
+    const raw = (c && typeof c === "object") ? c : {};
+    const inner = (raw.config && typeof raw.config === "object") ? raw.config : raw;
+    cfg = (inner && typeof inner === "object") ? inner : {};
   } catch (e) {
-    debugLines.push(`[error] /api/config: ${fmtErr(e)}`);
+    debugLines.push(`[warn] /api/config: ${fmtErr(e)}`);
     cfg = {};
-    recovery = {};
   }
-  try {
-    const canRecover = !!(recovery && typeof recovery === "object" && recovery.available);
-    if (dom.recoverBtn) {
-      dom.recoverBtn.disabled = !canRecover;
-    }
-  } catch (_) {}
 
   // 3) Apply config to UI（尽量继续，不让某个字段报错导致整体“全无”）
   try {
-    if (dom.cfgHome) dom.cfgHome.value = cfg.config_home || "";
-    if (dom.watchHome) dom.watchHome.value = cfg.watch_codex_home || "";
+    if (dom.cfgHome) dom.cfgHome.value = _prettyPath(cfg.config_home || "");
+    if (dom.watchHome) dom.watchHome.value = _prettyPath(cfg.watch_codex_home || "");
     if (dom.autoStart) dom.autoStart.value = cfg.auto_start ? "1" : "0";
     if (dom.translateMode) dom.translateMode.value = (cfg.translate_mode === "manual") ? "manual" : "auto";
     if (dom.notifySound) dom.notifySound.value = String(cfg.notify_sound || "none").trim().toLowerCase() || "none";
@@ -67,7 +78,6 @@ export async function loadControl(dom, state) {
     if (dom.procRegex) dom.procRegex.value = cfg.codex_process_regex || "codex";
     if (dom.replayLines) dom.replayLines.value = cfg.replay_last_lines ?? 0;
     if (dom.maxSessions) dom.maxSessions.value = cfg.watch_max_sessions ?? 3;
-    if (dom.includeAgent) dom.includeAgent.value = cfg.include_agent_reasoning ? "1" : "0";
     if (dom.pollInterval) dom.pollInterval.value = cfg.poll_interval ?? 0.5;
     if (dom.scanInterval) dom.scanInterval.value = cfg.file_scan_interval ?? 2.0;
     if (dom.translatorSel) {
@@ -124,24 +134,13 @@ export async function loadControl(dom, state) {
     if (btn && btn.classList) {
       const isAuto = (String(state.translateMode || "").toLowerCase() !== "manual");
       btn.classList.toggle("active", isAuto);
+      try {
+        const hint = "（长按打开翻译设置）";
+        btn.setAttribute("aria-label", isAuto ? `自动翻译：已开启${hint}` : `自动翻译：已关闭${hint}`);
+      } catch (_) {}
+      try { btn.dataset.mode = isAuto ? "A" : "手"; } catch (_) {}
     }
   } catch (_) {}
-
-  // 3.1) 提示恢复：Profiles 为空但存在可恢复备份（仅提示一次）
-  try {
-    if (!window.__sidecarRecoveryPrompted) window.__sidecarRecoveryPrompted = false;
-    const provider = String(cfg.translator_provider || "").trim().toLowerCase();
-    const canRecover = !!(recovery && typeof recovery === "object" && recovery.available);
-    const valid = countValidHttpProfiles(state.httpProfiles);
-    if (!window.__sidecarRecoveryPrompted && provider === "http" && valid <= 0 && canRecover) {
-      window.__sidecarRecoveryPrompted = true;
-      if (confirm("检测到翻译 HTTP Profiles 为空，但本机备份中存在可恢复配置。是否现在恢复？")) {
-        await api("POST", "/api/config/recover", {});
-        await loadControl(dom, state);
-        return;
-      }
-    }
-  } catch (e) {}
 
   // 4) Status（运行态提示）
   let st = null;
@@ -180,10 +179,17 @@ export async function loadControl(dom, state) {
     } else {
       setStatus(dom, `未运行${sidecarSuffix}`.trim());
     }
+    try { if (state) state.running = !!st.running; } catch (_) {}
     try {
-      if (dom.startBtn) dom.startBtn.disabled = !!st.running;
-      if (dom.stopBtn) dom.stopBtn.disabled = !st.running;
-      if (dom.restartBtn) dom.restartBtn.disabled = false;
+      const btn = (dom && dom.watchToggleBtn) ? dom.watchToggleBtn : null;
+      if (btn) {
+        try { btn.classList.toggle("active", !!st.running); } catch (_) {}
+        try { btn.setAttribute("aria-label", st.running ? "停止监听" : "开始监听"); } catch (_) {}
+        try {
+          const use = btn.querySelector ? btn.querySelector("use") : null;
+          if (use && use.setAttribute) use.setAttribute("href", st.running ? "#i-stop" : "#i-play");
+        } catch (_) {}
+      }
     } catch (_) {}
   } catch (e) {
     debugLines.push(`[warn] /api/status: ${fmtErr(e)}`);
@@ -195,13 +201,10 @@ export async function loadControl(dom, state) {
     const profNames = (state.httpProfiles || []).map(p => (p && p.name) ? String(p.name) : "").filter(Boolean);
     const cfgHomePath = String(cfg.config_home || "").replace(/\/+$/, "");
     const cfgFile = cfgHomePath ? `${cfgHomePath}/config.json` : "";
-    const rAvail = (recovery && typeof recovery === "object" && recovery.available) ? "yes" : "no";
-    const rSrc = (recovery && typeof recovery === "object" && recovery.source) ? String(recovery.source || "") : "";
     debugLines.unshift(
       `config_home: ${cfg.config_home || ""}`,
       `watch_codex_home: ${cfg.watch_codex_home || ""}`,
       `config_file: ${cfgFile}`,
-      `recovery_available: ${rAvail}${rSrc ? " (" + rSrc + ")" : ""}`,
       `translator_provider: ${provider}`,
       `http_profiles: ${profNames.length}${profNames.length ? " (" + profNames.join(", ") + ")" : ""}`,
       `http_selected: ${state.httpSelected || ""}`,

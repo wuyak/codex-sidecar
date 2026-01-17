@@ -1,0 +1,15 @@
+/* V2 先复用现有 UI 的视觉风格（CSS variables + 组件类名），避免重构期“功能回归 + 样式重做”双重风险。 */
+@import "./styles_legacy.css";
+
+/* Teleport 统一挂载点：保证抽屉/对话框/toast 永远在最上层。 */
+#overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9200;
+  pointer-events: none;
+}
+
+#overlay .drawer-overlay,
+#overlay .drawer {
+  pointer-events: auto;
+}

@@ -45,7 +45,7 @@ export function setViewMode(dom, state, mode, opts = {}) {
   _applyButton(dom, m);
   try { localStorage.setItem(_LS_KEY, m); } catch (_) {}
   if (!opts.silent) {
-    _toastFromButton(dom, m === "quick" ? "快速浏览：已开启" : "快速浏览：已关闭");
+    _toastFromButton(dom, m === "quick" ? "精简信息：已开启" : "精简信息：已关闭");
   }
   return m;
 }

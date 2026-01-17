@@ -92,7 +92,7 @@ export async function saveTranslateConfig(dom, state) {
   if (saved && saved.ok === false) {
     const err = String(saved.error || "");
     if (err === "empty_http_profiles") {
-      alert("保存被拒绝：HTTP Profiles 为空/不可用。可点击“恢复配置”从备份找回。");
+      alert("保存被拒绝：HTTP Profiles 为空/不可用。请至少保留 1 个可用的 Profile（name + http/https URL），或切换翻译 Provider。");
     } else {
       alert(`保存失败：${err || "unknown_error"}`);
     }
@@ -100,7 +100,7 @@ export async function saveTranslateConfig(dom, state) {
     return;
   }
   await loadControl(dom, state);
-  setStatus(dom, "已保存翻译设置（已热加载）");
+  setStatus(dom, "已保存翻译设置");
 
   // 保存后自动自检翻译（无需 UI 里单独的“测试按钮”）。
   try {
@@ -142,9 +142,7 @@ export async function saveConfig(dom, state) {
     wasRunning = !!(st && st.running);
   } catch (e) {}
 
-  const prevWatchHome = String(state && state.watchCodexHome ? state.watchCodexHome : "");
   const patch = {
-    watch_codex_home: (dom.watchHome && dom.watchHome.value) ? dom.watchHome.value : "",
     auto_start: (dom.autoStart && dom.autoStart.value) === "1",
     notify_sound: (dom.notifySound && dom.notifySound.value) ? dom.notifySound.value : "none",
     follow_codex_process: (dom.followProc && dom.followProc.value) === "1",
@@ -152,7 +150,6 @@ export async function saveConfig(dom, state) {
     codex_process_regex: ((dom.procRegex && dom.procRegex.value) ? dom.procRegex.value : "codex").trim(),
     watch_max_sessions: Number((dom.maxSessions && dom.maxSessions.value) ? dom.maxSessions.value : 3),
     replay_last_lines: Number((dom.replayLines && dom.replayLines.value) ? dom.replayLines.value : 0),
-    include_agent_reasoning: (dom.includeAgent && dom.includeAgent.value) === "1",
     poll_interval: Number((dom.pollInterval && dom.pollInterval.value) ? dom.pollInterval.value : 0.5),
     file_scan_interval: Number((dom.scanInterval && dom.scanInterval.value) ? dom.scanInterval.value : 2.0),
   };
@@ -170,21 +167,5 @@ export async function saveConfig(dom, state) {
     await api("POST", "/api/control/start");
   }
   await loadControl(dom, state);
-  const nextWatchHome = String(patch.watch_codex_home || "");
-  const needsRestart = !!(wasRunning && prevWatchHome && nextWatchHome && prevWatchHome !== nextWatchHome);
-  setStatus(dom, needsRestart ? "已保存配置（监视目录需停止后再开始）" : "已保存配置（已热更新）");
-}
-
-export async function recoverConfig(dom, state) {
-  if (!confirm("将从本机配置备份尝试恢复翻译 Profiles，并覆盖当前翻译配置。是否继续？")) return;
-  try {
-    const r = await api("POST", "/api/config/recover", {});
-    await loadControl(dom, state);
-    const src = (r && r.source) ? `（${r.source}）` : "";
-    setStatus(dom, `已恢复配置${src}`);
-  } catch (e) {
-    const msg = `恢复失败：${fmtErr(e)}`;
-    setStatus(dom, msg);
-    setDebug(dom, msg);
-  }
+  setStatus(dom, "已保存配置");
 }

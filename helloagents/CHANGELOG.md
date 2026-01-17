@@ -1,6 +1,21 @@
 # Changelog
 
 ## [Unreleased]
+- UI: 移除翻译配置的“从备份恢复”能力及相关接口，避免误操作造成困扰。
+- UI: 修复右侧工具栏按钮 hover 提示不显示（overflow 裁切导致 tooltip 不可见）。
+- 修复：UI(legacy) 配置加载脚本异常导致页面空白/不工作（恢复 `/api/config` 加载并清理遗留代码）。
+- 移除：不再采集/展示 `agent_reasoning`，并移除对应配置项与 CLI 参数，减少噪音与重复。
+- UI(v2)：新增 `Vue 3 + Vite + Pinia` 的 UI v2（实验入口 `/ui-v2`，不影响默认 `/ui` legacy）；补齐 SSE 批处理缓冲、长列表窗口化、主题切换、本机记忆与统一 Teleport 浮层挂载点。
+- UI(legacy)：右侧工具栏收纳：按“设置/快速信息/翻译/监听/清空/关闭”排列；监听改为单一 toggle（开始/停止切换）；关闭按钮长按重启；去除右侧 dock 外框并取消主内容区为右侧预留 margin；移除“会话书签管理抽屉”入口（保持极简）。
+- UI(legacy)：设置/翻译抽屉极简化：配置项分为“常用 + 高级折叠”；抽屉/分区边框弱化，默认观感更轻。
+- UI(legacy)：抽屉与按钮文案进一步压缩：抽屉改为内容高度（限制最大高度并可滚动）；按钮文案更直观。
+- UI(legacy)：会话书签栏改为“整列 hover 展开 / 离开收起”，避免常驻占用页面宽度。
+- UI(legacy)：会话切换改回左侧“自动隐藏会话列表”：鼠标移到最左侧热区浮现、离开自动隐藏；列表展示短时间戳（MM-DD HH:MM）+ shortId，hover 提示完整时间戳 + shortId；不占用主列表宽度（覆盖式浮层）。
+- UI(legacy)：右侧工具栏不再遮挡对话内容（主内容区预留安全右侧 padding）；按钮 hover/聚焦恢复文字提示；🌐 自动翻译开关状态更明显并提示“长按打开翻译设置”。
+- UI(legacy)：设置页增强可用性：皮肤新增“柔和/对比”；提示音新增“轻/中/强”音量档并支持变更时预览；高级选项补充说明文案，并明确哪些设置即时生效/哪些需要保存后生效。
+- UI(legacy)：`update_plan` 渲染改为终端风格（计划项使用 `✔/↻/○/↷/✖` 符号并以代码块展示），提升可读性。
+- 修复：`codex_sidecar_pin_on_select` 语义与生效范围统一：启动同步与会话切换均以 `"0"` 为关闭，否则默认开启。
+- 修复：UI(v2) `/api/messages?thread_id=` 的 cache-bust 参数拼接错误导致单会话拉取为空；tool_call/tool_output 默认展示预览，减少“看起来没输出”的困惑。
 - 移除：内置 SDK 控制模式（`src/codex-sdk`、`/api/sdk/*`、UI 底部 composer），聚焦旁路只读并降低代码复杂度。
 - 重构：拆分 `watcher.py`，抽离 `watch/*`（rollout 路径/进程扫描/跟随策略/翻译批处理与队列），提升可读性与可维护性。
 - 重构：进一步抽离 rollout JSONL 单条记录解析/提取到 `watch/rollout_extract.py`，Watcher 更聚焦“读行→入库→翻译入队”。
@@ -37,7 +52,8 @@
 - UI: 配置抽屉增加“皮肤（default/flat/dark）”切换并本机记忆（localStorage），用于快速更换书签/Dock 观感。
 - 文档：新增 UI 模板/设计系统调研报告（`helloagents/wiki/modules/ui_template_research.md`），用于后续 UI 美化与渐进式改造评估。
 - UI: 右侧操作栏新增“🌐 自动翻译”快捷开关，切换 `auto/manual` 会对运行中的 watcher 立即生效（无需重启）。
-- UI：🌐 按钮支持“长按打开翻译设置”（单击仍切换自动翻译）；翻译设置新增“保存翻译设置（热加载）”，保存后立即生效且无需重启进程/会话。
+- UI：🌐 按钮支持“长按打开翻译设置”（单击仍切换自动翻译）；翻译设置支持保存后立即生效且无需重启进程/会话。
+- UI：新增 UI v2（Vue 3 + Vite）工程骨架（`tools/codex_thinking_sidecar/codex_thinking_sidecar/ui_v2/`），用于后续全量重构（进行中）。
 - UI：修复书签栏作为 `position: fixed` 元素时被右侧 Dock 的 `transform` 影响定位的问题，并提升图层避免被遮挡。
 - UI：修复“重译/翻译”按钮在有文本选中时无法触发的问题（选中文本仅阻止思考块切换，不阻止按钮点击）。
 - 翻译：移除 `stub/none` 占位/不翻译 Provider（历史配置会自动迁移到 `openai`，不影响现有 `http/openai/nvidia` 配置）。
@@ -49,7 +65,7 @@
 - 修复：工具输出（tool_output）的 DOM id 不再包含 `call_id`，并清理 tool_call/tool_output 行内残留 `title`，避免出现 uuid “幽灵标签/悬浮提示”干扰阅读。
 - UI: `all` 视图移除每条消息的会话标识 pill（减少信息噪音），并移除会话 tab/消息行的 thread_id 悬停提示（避免遮挡/干扰）。
 - UI: 配置抽屉不再区分“基础/高级”，统一为单页表单；表单输入统一 `box-sizing:border-box`，修复文本框宽度溢出。
-- 翻译: `auto` 模式仅自动翻译 `reasoning_summary`；`agent_reasoning` 默认改为手动触发，避免翻译队列堆积导致整体变慢。
+- 翻译: `auto` 模式仅自动翻译 `reasoning_summary`，避免翻译队列堆积导致整体变慢。
 - 新增：NVIDIA NIM 翻译 Provider（`nvidia`，Chat Completions 兼容）：支持 `NVIDIA_API_KEY` 环境变量鉴权、RPM 节流与 429 退避重试。
 - 修复：NVIDIA Provider 响应解析更健壮（兼容 `message.content` 非字符串形态），并提取错误信息便于定位；UI 为 NVIDIA Model 增加常用预设候选。
 - 调整：NVIDIA Provider 在 404/疑似未翻译输出时仅在 4 个内置模型内自动回退；同时更新 UI 默认模型为 `moonshotai/kimi-k2-instruct`，并在加载配置时强制纠正到允许列表以避免过时/无权限 id 导致空译文。
@@ -90,11 +106,11 @@
 - 优化：控制面板新增“调试信息”面板，显示配置来源/Profiles 概览与加载失败原因（不展示 token/url）。
 - 修复：保存配置时不再在 Provider≠HTTP 的情况下清空已保存的 HTTP Profiles，避免误操作导致配置丢失。
 - 调整：translator_config 支持按 Provider 分区保存（`http/openai`）并在保存时合并，避免切换 Provider 覆盖其它配置。
-- 调整：配置持久化迁移到 XDG（`~/.config/codex-thinking-sidecar/config.json`），备份机制简化为单文件 `config.json.bak`；Profiles 为空时 UI 提示一键恢复，后端拒绝保存空 Profiles 以防误覆盖。
+- 调整：配置持久化默认放在 `CODEX_HOME/tmp/codex-thinking-sidecar/config.json`（避免散落到 `~/.config`）；若检测到旧 XDG 配置会自动迁移导入。
 - 诊断：HTTP 翻译失败时输出去敏后的告警日志（终端可见）。
 - 新增：HTTP 适配 `translate.json`（硅基流动 translate.js 形式，表单提交）。
 - 优化：UI 列表改为从上到下（新内容在底部），并展示用户输入/工具调用与输出/最终回答。
-- 调整：仅翻译思考类内容（reasoning summary / agent_reasoning），工具输出与最终回答不翻译。
+- 调整：仅翻译思考类内容（`reasoning_summary`），工具输出与最终回答不翻译。
 - 新增：WSL2/Linux 下可选“进程优先定位”当前会话文件（扫描 `/proc/<pid>/fd`），更精准地跟随正在进行的会话。
 - 新增：会话切换列表固定在页面左侧 sidebar，滚动到中后段也可随时切换。
 - 新增：UI 配置支持“自动开始监听（UI）”与进程匹配规则。
@@ -121,7 +137,7 @@
 - 优化：`update_plan` 不再折叠展示，按“计划→说明”输出并使用 Markdown 排版，移除原始参数与工具元信息。
 - 优化：回答内容（assistant_message）改为 Markdown 渲染。
 - 新增：所有消息的文本块/代码块右上角增加“复制”按钮。
-- 优化：思考块（`reasoning_summary`/`agent_reasoning`）改为 Markdown 渲染，并将“思考（EN/ZH）”移到时间戳同行。
+- 优化：思考块（`reasoning_summary`）改为 Markdown 渲染，并将“思考（EN/ZH）”移到时间戳同行。
 - 调整：↑ 顶部 / ↓ 底部悬浮按钮移动到右侧。
 - 重构：UI HTML 从 `server.py` 抽离到 `tools/codex_thinking_sidecar/codex_thinking_sidecar/ui/index.html`，便于后续分层与迭代。
 - 修复：UI Markdown 渲染支持有序列表（`1.` / `1)`）与 `•/◦` 无序列表，避免回答分点在 UI 中丢失。
@@ -184,7 +200,7 @@
 - 修复：Markdown 渲染对终端换行更友好（中文不再出现“会 话”这类断词空格），并将 `────` 分隔行独立成块，避免与下一行合并导致结构错乱。
 - 新增：Watcher 支持并行 tail 最近 N 个会话文件（配置项 `watch_max_sessions`，默认 3），满足“至少 3 个会话同时实时更新”；锁定（pin）仅影响主跟随，不阻断后台摄取与侧栏会话发现。
 - 新增：UI 配置加入“并行会话”输入框（maxSessions），用于配置 `watch_max_sessions`（保存后立即生效，无需重启监听）。
-- 优化：保存配置后可运行时热更新 watcher 参数（采集 `agent_reasoning`、进程定位/regex、poll/scan 等）；仅“监视目录”需要停止后再开始监听才能切换。
+- 优化：保存配置后可运行时热更新 watcher 参数（进程定位/regex、poll/scan 等）；仅“监视目录”需要停止后再开始监听才能切换。
 - 修复：UI 状态/调试信息里可显示 `tail:N` 与翻译队列统计，便于定位“翻译慢”是队列积压还是模型/网络耗时。
 - 新增：翻译模式 `translate_mode=auto|manual`：`auto` 自动翻译思考；`manual` 仅在单击思考块或点“翻译/重译”时才发起翻译请求。
 - 优化：未译时默认只显示英文原文，状态栏以 pill 提示“ZH 待翻译/翻译中/已就绪”；译文回填后默认切到中文，单击思考块可在 EN/ZH 间切换。

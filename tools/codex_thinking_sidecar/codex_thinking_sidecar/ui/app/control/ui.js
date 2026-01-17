@@ -9,6 +9,7 @@ export function setDebug(dom, s) {
 export function openDrawer(dom) {
   // Keep UI clean: config drawer and translate drawer are mutually exclusive.
   try { closeTranslateDrawer(dom); } catch (_) {}
+  try { closeBookmarkDrawer(dom); } catch (_) {}
   try {
     if (dom.drawerOverlay) dom.drawerOverlay.classList.remove("hidden");
     if (dom.drawer) dom.drawer.classList.remove("hidden");
@@ -18,9 +19,20 @@ export function openDrawer(dom) {
 export function openTranslateDrawer(dom) {
   // Keep UI clean: config drawer and translate drawer are mutually exclusive.
   try { closeDrawer(dom); } catch (_) {}
+  try { closeBookmarkDrawer(dom); } catch (_) {}
   try {
     if (dom.translateDrawerOverlay) dom.translateDrawerOverlay.classList.remove("hidden");
     if (dom.translateDrawer) dom.translateDrawer.classList.remove("hidden");
+  } catch (_) {}
+}
+
+export function openBookmarkDrawer(dom) {
+  // Keep UI clean: bookmark drawer is exclusive with config/translate drawers.
+  try { closeTranslateDrawer(dom); } catch (_) {}
+  try { closeDrawer(dom); } catch (_) {}
+  try {
+    if (dom.bookmarkDrawerOverlay) dom.bookmarkDrawerOverlay.classList.remove("hidden");
+    if (dom.bookmarkDrawer) dom.bookmarkDrawer.classList.remove("hidden");
   } catch (_) {}
 }
 
@@ -44,6 +56,13 @@ export function closeTranslateDrawer(dom) {
   try {
     if (dom.translateDrawerOverlay) dom.translateDrawerOverlay.classList.add("hidden");
     if (dom.translateDrawer) dom.translateDrawer.classList.add("hidden");
+  } catch (_) {}
+}
+
+export function closeBookmarkDrawer(dom) {
+  try {
+    if (dom.bookmarkDrawerOverlay) dom.bookmarkDrawerOverlay.classList.add("hidden");
+    if (dom.bookmarkDrawer) dom.bookmarkDrawer.classList.add("hidden");
   } catch (_) {}
 }
 

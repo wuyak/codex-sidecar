@@ -44,7 +44,7 @@ def _parse_args(argv):
     p.add_argument(
         "--config-home",
         default=str(default_config_home()),
-        help="Sidecar 配置目录（默认: $XDG_CONFIG_HOME/codex-thinking-sidecar 或 ~/.config/codex-thinking-sidecar）",
+        help="Sidecar 配置目录（默认: $CODEX_HOME/tmp/codex-thinking-sidecar 或 ~/.codex/tmp/codex-thinking-sidecar）",
     )
     p.add_argument("--host", default="127.0.0.1", help="本地服务监听地址（默认: 127.0.0.1）")
     p.add_argument("--port", type=int, default=8787, help="本地服务端口（默认: 8787）")
@@ -52,7 +52,6 @@ def _parse_args(argv):
     p.add_argument("--replay-last-lines", type=int, default=200, help="启动时从文件尾部回放的行数（默认: 200）")
     p.add_argument("--poll-interval", type=float, default=0.5, help="轮询间隔秒数（默认: 0.5）")
     p.add_argument("--file-scan-interval", type=float, default=2.0, help="扫描最新会话文件的间隔秒数（默认: 2.0）")
-    p.add_argument("--include-agent-reasoning", action="store_true", help="同时采集 event_msg.agent_reasoning（更实时但不如 summary 稳定）")
     p.add_argument("--follow-codex-process", action="store_true", help="优先基于 Codex 进程定位当前 rollout 文件（WSL2/Linux）")
     p.add_argument("--codex-process-regex", default=None, help="匹配 Codex 进程 cmdline 的正则（默认: codex）")
     p.add_argument("--allow-follow-without-process", action="store_true", help="允许在未检测到 Codex 进程时仍按 sessions 扫描回退")
@@ -180,8 +179,6 @@ def main(argv=None) -> int:
                     patch["poll_interval"] = float(args.poll_interval)
                 if _argv_has("--file-scan-interval"):
                     patch["file_scan_interval"] = float(args.file_scan_interval)
-                if _argv_has("--include-agent-reasoning"):
-                    patch["include_agent_reasoning"] = bool(args.include_agent_reasoning)
                 if _argv_has("--follow-codex-process"):
                     patch["follow_codex_process"] = True
                 if _argv_has("--codex-process-regex"):
@@ -206,7 +203,6 @@ def main(argv=None) -> int:
                 translate_mode=str(getattr(cfg, "translate_mode", "auto") or "auto"),
                 poll_interval_s=float(args.poll_interval),
                 file_scan_interval_s=float(args.file_scan_interval),
-                include_agent_reasoning=bool(args.include_agent_reasoning),
                 follow_codex_process=bool(args.follow_codex_process),
                 codex_process_regex=str(args.codex_process_regex or "codex"),
                 only_follow_when_process=not bool(args.allow_follow_without_process),

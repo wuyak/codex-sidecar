@@ -15,7 +15,7 @@ WSL/Linux：
 打开页面：
 - `http://127.0.0.1:8787/ui`
 
-在 UI 里设置“监视目录（CODEX_HOME）”、回放行数、是否采集 `agent_reasoning` 等；保存配置后点击“开始监听”。
+监视目录固定为 `CODEX_HOME`（默认 `~/.codex`，UI 仅展示不提供修改入口）；在 UI 里设置回放行数等，保存配置后点击“开始监听”。
 翻译开关/设置在右侧按钮中：
 - 单击“地球”按钮：切换自动翻译（开/关）
 - 长按“地球”按钮：打开翻译设置抽屉（保存后立即热加载生效）
@@ -47,17 +47,14 @@ WSL/Linux：
 - 请勿在未审计的情况下将日志内容转发到第三方服务。
 
 ## 配置持久化与多翻译 API
-- UI 中点击“保存配置”会写入用户级配置目录（XDG）：
-  - 默认：`$XDG_CONFIG_HOME/codex-thinking-sidecar/config.json`
-  - 常见路径：`~/.config/codex-thinking-sidecar/config.json`
-  下次启动会自动读取并沿用。
+- UI 中点击“保存配置”会写入本机配置目录（默认放在 `CODEX_HOME/tmp` 下）：
+  - 默认：`$CODEX_HOME/tmp/codex-thinking-sidecar/config.json`
+  - 常见路径：`~/.codex/tmp/codex-thinking-sidecar/config.json`
+  下次启动会自动读取并沿用（也可用 `--config-home` 显式指定）。
 - 当翻译 Provider 选择 `HTTP` 时，UI 支持 `HTTP Profiles`：可保存多个翻译 API 配置并手动切换（新增/删除）。
   - 对 DeepLX 这类“token 在 URL 路径里”的接口：可将 URL 写为 `https://api.deeplx.org/{token}/translate`，并在 `HTTP Token` 中填写 token，sidecar 会自动替换 `{token}`。
   - ⚠️ token 会随配置一起持久化到本机配置文件中；请勿把包含 token 的配置文件加入版本控制。
-- 为避免误操作丢失翻译配置，sidecar 会在保存前自动生成 1 份备份（覆盖式）：
-  - `config.json.bak`
-- 如遇到“Profiles 变空/配置丢失”，UI 会提示是否从备份恢复；也可手动点击“恢复配置”从备份中自动恢复。
-- 兼容说明：旧版本写入在 `CODEX_HOME/tmp/` 下的 `.lastgood` / `.bak-*` 仍会被纳入恢复候选来源（只读，不再继续写入）。
+- 如遇到“Profiles 变空/配置丢失”，请在翻译设置中重新填写并保存（不再提供“一键从备份恢复”）。
 
 ## 进程优先定位当前会话（WSL2/Linux，可选）
 默认的文件选择策略是扫描 `sessions/**/rollout-*.jsonl` 并跟随“最近修改”的文件。为了更精准地跟随“正在进行的会话”，可以启用进程优先定位：
@@ -75,16 +72,16 @@ WSL/Linux：
 UI 支持三种显示模式：`中英文对照 / 仅中文 / 仅英文`，该选择保存在浏览器 `localStorage` 中（不写入服务端配置文件）。
 
 ## 配置生效时机
-大多数配置会在保存后立即热更新到运行中的 watcher；其中“监视目录”需要停止后再开始监听才能切换到新目录。
+大多数配置会在保存后立即热更新到运行中的 watcher；“监视目录”由启动参数/环境变量决定（UI 不再提供修改入口），如需切换请停止后再开始监听（或重启进程）。
 
 ## UI 内容（更完整的 turn 视图）
 UI 会展示：
 - 用户输入（`user_message`）
 - 工具调用与输出（`tool_call` / `tool_output`，输出默认折叠）
 - 最终回答（`assistant_message`）
-- 思考摘要（`reasoning_summary`，并可选采集 `agent_reasoning`）
+- 思考摘要（`reasoning_summary`）
 
-翻译仅作用于思考类内容（`reasoning_summary` / `agent_reasoning`）。
+翻译仅作用于思考摘要（`reasoning_summary`）。
 
 会话切换位于页面右侧“书签栏”，当前会话会自动展开；长按书签可就地重命名。
 

@@ -25,7 +25,18 @@ export async function initApp() {
 
   const applyFollowPolicy = async (key) => {
     try {
+      let pinOnSelect = true;
+      try { pinOnSelect = localStorage.getItem("codex_sidecar_pin_on_select") !== "0"; } catch (_) { pinOnSelect = true; }
+
       if (key === "all") {
+        await fetch("/api/control/follow", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mode: "auto" }),
+        });
+        return;
+      }
+      if (!pinOnSelect) {
         await fetch("/api/control/follow", {
           method: "POST",
           headers: { "Content-Type": "application/json" },

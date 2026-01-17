@@ -189,3 +189,13 @@
 ## 9. 明确不建议（除非你愿意接受明显复杂度上升）
 - 直接上 Tailwind + 组件库（Flowbite 等）：虽然看起来很现代，但通常需要构建链与 class 体系迁移，后续维护成本更高。
 - 直接套“付费主题市场模板”（ThemeForest 等）：短期好看，但授权/二次分发/长期维护不确定性更高。
+
+## 10. 本仓库落地结论（2026-01-17）
+
+为解决“交互状态临时手工管理、书签易错、浮层层级不稳定”等问题，本仓库新增了 **Vue 3 + Vite + Pinia** 的 UI v2 方案作为实验入口，并保持 legacy UI 继续作为默认入口（避免丢失既有优化能力，逐项对齐迁移）：
+
+- 默认 UI（legacy）：`/ui`（源码目录：`tools/codex_thinking_sidecar/codex_thinking_sidecar/ui/`）
+- 回滚/对照（legacy 快照）：`/ui-legacy`（目录：`tools/codex_thinking_sidecar/codex_thinking_sidecar/ui_legacy/`）
+- UI v2（实验入口）：`/ui-v2`（源码工程：`tools/codex_thinking_sidecar/codex_thinking_sidecar/ui_v2/`；`npm run build` → `ui_v2/dist/`；`deploy.sh` 仅 build）
+
+> 备注：本报告中“零构建可集成”的模板/设计系统仍可作为备选路径参考；UI v2 的迁移以“逐项确认保留 legacy 交互与筛选能力”为约束推进。

@@ -6,6 +6,20 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 
+_VALID_NOTIFY_SOUNDS = (
+    "none",
+    "soft-1",
+    "soft-1-low",
+    "soft-1-high",
+    "soft-2",
+    "soft-2-low",
+    "soft-2-high",
+    "soft-3",
+    "soft-3-low",
+    "soft-3-high",
+)
+
+
 @dataclass
 class SidecarConfig:
     # Where sidecar config is stored (NOT the watched Codex home).
@@ -18,7 +32,6 @@ class SidecarConfig:
     watch_max_sessions: int = 3
     poll_interval: float = 0.5
     file_scan_interval: float = 2.0
-    include_agent_reasoning: bool = False
     max_messages: int = 1000
 
     # UI 友好：自动开始监听（通常用于 /ui 模式）。
@@ -36,11 +49,11 @@ class SidecarConfig:
     only_follow_when_process: bool = True
 
     # 翻译模式：
-    # - auto  : 自动翻译思考内容（reasoning_summary/agent_reasoning）
+    # - auto  : 自动翻译思考内容（reasoning_summary）
     # - manual: 仅在 UI 触发（点击思考块 / 重译按钮）时翻译
     translate_mode: str = "auto"
 
-    # 提示音（UI）：none（无）或预置音效 id（如 soft-1/soft-2/soft-3）。
+    # 提示音（UI）：none（无）或预置音效 id（如 soft-1/soft-2/soft-3，支持 -low/-high 音量档）。
     notify_sound: str = "none"
 
     translator_provider: str = "openai"  # http | openai | nvidia
@@ -101,7 +114,7 @@ class SidecarConfig:
         if tm not in ("auto", "manual"):
             tm = "auto"
         ns = str(d.get("notify_sound") or "none").strip().lower()
-        if ns not in ("none", "soft-1", "soft-2", "soft-3"):
+        if ns not in _VALID_NOTIFY_SOUNDS:
             ns = "none"
         return SidecarConfig(
             config_home=cfg_home,
@@ -110,7 +123,6 @@ class SidecarConfig:
             watch_max_sessions=_to_int(d.get("watch_max_sessions") or d.get("max_sessions"), 3),
             poll_interval=_to_float(d.get("poll_interval"), 0.5),
             file_scan_interval=_to_float(d.get("file_scan_interval"), 2.0),
-            include_agent_reasoning=bool(d.get("include_agent_reasoning") or False),
             max_messages=_to_int(d.get("max_messages"), 1000),
             auto_start=bool(d.get("auto_start") or False),
             follow_codex_process=bool(d.get("follow_codex_process") or False),
@@ -132,70 +144,25 @@ def _default_watch_codex_home() -> str:
 
 def default_config_home() -> Path:
     """
-    Where sidecar stores user-level config by default (XDG).
+    Where sidecar stores user-level config by default.
+
+    设计取舍：
+    - 配置与 Codex 数据同域（默认放在 $CODEX_HOME/tmp 下），避免把 sidecar 的临时/实验性配置散落到 ~/.config。
+    - 兼容 WSL/Linux；Windows 可通过 $CODEX_HOME 或显式 --config-home 覆盖。
     """
-    base = os.environ.get("XDG_CONFIG_HOME")
-    root = Path(base).expanduser() if base else (Path.home() / ".config")
-    return root / "codex-thinking-sidecar"
+    try:
+        codex_home = Path(_default_watch_codex_home()).expanduser()
+    except Exception:
+        codex_home = Path.home() / ".codex"
+    return (codex_home / "tmp" / "codex-thinking-sidecar").resolve()
 
 
 def config_path(config_home: Path) -> Path:
     return config_home / "config.json"
 
 
-def backup_path(config_home: Path) -> Path:
-    p = config_path(config_home)
-    return p.with_name(p.name + ".bak")
-
-
 def _legacy_config_path(watch_codex_home: Path) -> Path:
     return watch_codex_home / "tmp" / "codex_thinking_sidecar.config.json"
-
-
-def lastgood_path(config_home: Path) -> Path:
-    """
-    Legacy path kept for backward compatibility (no longer written by default).
-    """
-    # When config lived under CODEX_HOME/tmp:
-    #   codex_thinking_sidecar.config.json.lastgood
-    return config_path(config_home).with_name("codex_thinking_sidecar.config.json.lastgood")
-
-
-def _score_http_profiles(translator_config: Dict[str, Any]) -> int:
-    """
-    Score translator_config for recovery purposes.
-
-    - New format: {profiles:[{name,url,...},...], selected:"..."} => count valid profiles
-    - Old format: {url:"http(s)://..."} => 1
-    """
-    if isinstance(translator_config.get("http"), dict):
-        translator_config = translator_config.get("http") or {}
-    try:
-        profiles = translator_config.get("profiles")
-        if isinstance(profiles, list):
-            score = 0
-            for p in profiles:
-                if not isinstance(p, dict):
-                    continue
-                name = str(p.get("name") or "").strip()
-                url = str(p.get("url") or "").strip()
-                if not name or not url:
-                    continue
-                if not (url.startswith("http://") or url.startswith("https://")):
-                    continue
-                score += 1
-            return score
-    except Exception:
-        return 0
-
-    # Legacy single-url format
-    try:
-        url = str(translator_config.get("url") or "").strip()
-        if url.startswith("http://") or url.startswith("https://"):
-            return 1
-    except Exception:
-        pass
-    return 0
 
 
 def _safe_write_text(path: Path, text: str) -> None:
@@ -203,88 +170,6 @@ def _safe_write_text(path: Path, text: str) -> None:
         path.write_text(text, encoding="utf-8")
     except Exception:
         return
-
-
-def _backup_existing_config_file(config_home: Path) -> None:
-    """
-    Simple backup mechanism: keep 1 backup file next to config.json.
-    """
-    p = config_path(config_home)
-    b = backup_path(config_home)
-    try:
-        if not p.exists():
-            return
-        raw = p.read_text(encoding="utf-8")
-        if not raw.strip():
-            return
-        _safe_write_text(b, raw)
-    except Exception:
-        return
-
-
-def find_recoverable_translator_snapshot(
-    config_home: Path, watch_codex_home: Optional[Path] = None
-) -> Tuple[Optional[Dict[str, Any]], str]:
-    """
-    Find the best translator snapshot from:
-    - current config
-    - config backup (single file)
-    - legacy lastgood / backups / legacy config under CODEX_HOME/tmp
-
-    Returns: (snapshot, source_path_str)
-    snapshot = {"translator_provider": "...", "translator_config": {...}}
-    """
-    candidates = []
-    p = config_path(config_home)
-    b = backup_path(config_home)
-    if p.exists():
-        candidates.append(p)
-    if b.exists():
-        candidates.append(b)
-
-    # Legacy sources (older versions stored config in CODEX_HOME/tmp)
-    try:
-        wh = watch_codex_home or Path(_default_watch_codex_home())
-        legacy = _legacy_config_path(wh)
-        lg = legacy.with_name(legacy.name + ".lastgood")
-        if lg.exists():
-            candidates.append(lg)
-        try:
-            backups = sorted(legacy.parent.glob(legacy.name + ".bak-*"), key=lambda x: x.stat().st_mtime, reverse=True)
-            candidates.extend(backups)
-        except Exception:
-            pass
-        if legacy.exists():
-            candidates.append(legacy)
-    except Exception:
-        pass
-
-    best = None
-    best_score = -1
-    best_path = ""
-    for path in candidates:
-        try:
-            raw = path.read_text(encoding="utf-8")
-            obj = json.loads(raw)
-            if not isinstance(obj, dict):
-                continue
-            tc = obj.get("translator_config")
-            if not isinstance(tc, dict):
-                continue
-            score = _score_http_profiles(tc)
-            if score <= 0:
-                continue
-            if score > best_score:
-                best_score = score
-                http_tc = tc.get("http") if isinstance(tc.get("http"), dict) else tc
-                best = {
-                    "translator_provider": "http",
-                    "translator_config": http_tc if isinstance(http_tc, dict) else {},
-                }
-                best_path = str(path)
-        except Exception:
-            continue
-    return best, best_path
 
 
 def default_config(config_home: Path) -> SidecarConfig:
@@ -296,7 +181,6 @@ def default_config(config_home: Path) -> SidecarConfig:
         watch_max_sessions=3,
         poll_interval=0.5,
         file_scan_interval=2.0,
-        include_agent_reasoning=False,
         max_messages=1000,
         auto_start=False,
         follow_codex_process=False,
@@ -378,6 +262,33 @@ def load_config(config_home: Path) -> SidecarConfig:
     except Exception:
         pass
 
+    # Migration: if the new default config_home has changed, but an old XDG config exists,
+    # import it once so users don't "lose" settings after upgrade.
+    try:
+        base = os.environ.get("XDG_CONFIG_HOME")
+        xdg_home = (Path(base).expanduser() if base else (Path.home() / ".config")) / "codex-thinking-sidecar"
+        xdg_cfg = config_path(xdg_home)
+        same = False
+        try:
+            same = (xdg_home.resolve() == Path(config_home).resolve())
+        except Exception:
+            same = str(xdg_home) == str(config_home)
+        if (not same) and xdg_cfg.exists() and xdg_cfg.is_file():
+            raw = xdg_cfg.read_text(encoding="utf-8")
+            obj = json.loads(raw)
+            if isinstance(obj, dict):
+                cfg = SidecarConfig.from_dict(obj)
+                cfg.config_home = str(config_home)
+                if not cfg.watch_codex_home:
+                    cfg.watch_codex_home = _default_watch_codex_home()
+                try:
+                    save_config(config_home, cfg)
+                except Exception:
+                    pass
+                return cfg
+    except Exception:
+        pass
+
     # First-run migration: try legacy snapshots in CODEX_HOME/tmp if present.
     #
     # Older versions stored config in:
@@ -440,7 +351,6 @@ def save_config(config_home: Path, cfg: SidecarConfig) -> None:
     except Exception:
         return
     data = json.dumps(cfg.to_dict(), ensure_ascii=False, indent=2) + "\n"
-    _backup_existing_config_file(config_home)
     tmp_dir = p.parent if p.parent.exists() else Path(tempfile.gettempdir())
     try:
         fd, tmp_path = tempfile.mkstemp(prefix="codex_thinking_sidecar.", suffix=".tmp", dir=str(tmp_dir))

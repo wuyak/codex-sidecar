@@ -10,7 +10,7 @@ from typing import Any, Dict, Optional
 from urllib.parse import parse_qs, urlparse
 
 from .state import SidecarState
-from .ui_assets import load_ui_text, resolve_ui_path, ui_content_type
+from .ui_assets import load_ui_text, resolve_ui_path, ui_content_type, ui_dir
 
 
 def _json_bytes(obj: dict) -> bytes:
@@ -82,7 +82,7 @@ class SidecarHandler(BaseHTTPRequestHandler):
 
         if path == "/api/config":
             cfg = self._controller.get_config()
-            payload = {"ok": True, "config": cfg, "recovery": self._controller.recovery_info()}
+            payload = {"ok": True, "config": cfg}
             if isinstance(cfg, dict):
                 payload.update(cfg)
             self._send_json(HTTPStatus.OK, payload)
@@ -106,14 +106,36 @@ class SidecarHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/ui":
-            self._serve_ui_file("index.html")
+            self._serve_ui_file("index.html", ui="ui")
             return
 
         if path.startswith("/ui/"):
             rel = path[len("/ui/") :]
             if not rel or rel == "index.html":
                 rel = "index.html"
-            self._serve_ui_file(rel)
+            self._serve_ui_file(rel, ui="ui")
+            return
+
+        if path == "/ui-legacy":
+            self._serve_ui_file("index.html", ui="legacy")
+            return
+
+        if path.startswith("/ui-legacy/"):
+            rel = path[len("/ui-legacy/") :]
+            if not rel or rel == "index.html":
+                rel = "index.html"
+            self._serve_ui_file(rel, ui="legacy")
+            return
+
+        if path == "/ui-v2":
+            self._serve_ui_file("index.html", ui="v2")
+            return
+
+        if path.startswith("/ui-v2/"):
+            rel = path[len("/ui-v2/") :]
+            if not rel or rel == "index.html":
+                rel = "index.html"
+            self._serve_ui_file(rel, ui="v2")
             return
 
         if path == "/events":
@@ -122,7 +144,7 @@ class SidecarHandler(BaseHTTPRequestHandler):
 
         self._send_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": "not_found"})
 
-    def _serve_ui_file(self, rel: str) -> None:
+    def _serve_ui_file(self, rel: str, ui: str = "ui") -> None:
         """
         Serve static UI assets from the local ui/ folder.
 
@@ -135,7 +157,8 @@ class SidecarHandler(BaseHTTPRequestHandler):
             "Pragma": "no-cache",
         }
         try:
-            cand = resolve_ui_path(rel)
+            root = ui_dir(ui)
+            cand = resolve_ui_path(rel, root_dir=root)
             if cand is None:
                 self._send_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": "not_found"})
                 return
@@ -221,18 +244,6 @@ class SidecarHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         # Control plane (JSON).
-        if self.path == "/api/config/recover":
-            r = self._controller.recover_translator_config()
-            if not isinstance(r, dict) or not r.get("ok"):
-                self._send_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": "no_recovery_source"})
-                return
-            cfg = r.get("config")
-            payload = {"ok": True, "restored": True, "source": r.get("source") or "", "config": cfg}
-            if isinstance(cfg, dict):
-                payload.update(cfg)
-            self._send_json(HTTPStatus.OK, payload)
-            return
-
         if self.path == "/api/config":
             length = int(self.headers.get("Content-Length") or "0")
             raw = self.rfile.read(length) if length > 0 else b"{}"

@@ -4,7 +4,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from .config import SidecarConfig, find_recoverable_translator_snapshot, load_config, save_config
+from .config import SidecarConfig, load_config, save_config
 from .control.translator_build import build_translator, count_valid_http_profiles, select_http_profile
 from .control.translator_specs import TRANSLATORS
 from .watcher import HttpIngestClient, RolloutWatcher
@@ -124,18 +124,6 @@ class SidecarController:
         with self._lock:
             return self._cfg.to_dict()
 
-    def recovery_info(self) -> Dict[str, Any]:
-        """
-        Return whether translator profiles are recoverable from local backups (without leaking secrets).
-        """
-        try:
-            with self._lock:
-                wh = Path(str(self._cfg.watch_codex_home or "")).expanduser()
-            snap, source = find_recoverable_translator_snapshot(self._config_home, watch_codex_home=wh)
-            return {"available": bool(snap), "source": source or ""}
-        except Exception:
-            return {"available": False, "source": ""}
-
     def update_config(self, patch: Dict[str, Any]) -> Dict[str, Any]:
         allow_empty = bool(patch.pop("__allow_empty_translator_config", False))
         return self._patch_config(patch, persist=True, allow_empty_translator_config=allow_empty)
@@ -143,34 +131,6 @@ class SidecarController:
     def apply_runtime_overrides(self, patch: Dict[str, Any]) -> Dict[str, Any]:
         patch.pop("__allow_empty_translator_config", None)
         return self._patch_config(patch, persist=False, allow_empty_translator_config=True)
-
-    def recover_translator_config(self) -> Dict[str, Any]:
-        """
-        Recover translator config (HTTP profiles) from local backups (and legacy snapshots).
-        """
-        with self._lock:
-            wh = Path(str(self._cfg.watch_codex_home or "")).expanduser()
-        snap, source = find_recoverable_translator_snapshot(self._config_home, watch_codex_home=wh)
-        if not snap:
-            return {"ok": False, "error": "no_recovery_source"}
-
-        with self._lock:
-            cur = self._cfg.to_dict()
-            provider = str(snap.get("translator_provider") or cur.get("translator_provider") or "http").strip() or "http"
-            tc = snap.get("translator_config")
-            if not isinstance(tc, dict):
-                tc = {}
-            cur["translator_provider"] = provider
-            # Preserve other provider configs while restoring HTTP profiles.
-            prev = cur.get("translator_config")
-            merged = dict(prev) if isinstance(prev, dict) else {}
-            merged["http"] = tc
-            cur["translator_config"] = merged
-            # config_home is immutable (controls where the config is stored)
-            cur["config_home"] = str(self._config_home)
-            self._cfg = SidecarConfig.from_dict(cur)
-            save_config(self._config_home, self._cfg)
-            return {"ok": True, "restored": True, "source": source, "config": self._cfg.to_dict()}
 
     def _patch_config(self, patch: Dict[str, Any], persist: bool, allow_empty_translator_config: bool) -> Dict[str, Any]:
         with self._lock:
@@ -237,7 +197,6 @@ class SidecarController:
                 if watcher is not None and running:
                     watcher.set_watch_max_sessions(int(getattr(self._cfg, "watch_max_sessions", 3) or 3))
                     watcher.set_replay_last_lines(int(getattr(self._cfg, "replay_last_lines", 0) or 0))
-                    watcher.set_include_agent_reasoning(bool(getattr(self._cfg, "include_agent_reasoning", False)))
                     watcher.set_poll_interval_s(float(getattr(self._cfg, "poll_interval", 0.5) or 0.5))
                     watcher.set_file_scan_interval_s(float(getattr(self._cfg, "file_scan_interval", 2.0) or 2.0))
                     watcher.set_follow_picker_config(
@@ -272,7 +231,7 @@ class SidecarController:
             return {"ok": False, "error": "not_found"}
 
         kind = str(msg.get("kind") or "")
-        if kind not in ("reasoning_summary", "agent_reasoning"):
+        if kind != "reasoning_summary":
             return {"ok": False, "error": "not_thinking"}
 
         text = str(msg.get("text") or "")
@@ -327,7 +286,6 @@ class SidecarController:
                 translate_mode=str(getattr(cfg, "translate_mode", "auto") or "auto"),
                 poll_interval_s=float(cfg.poll_interval),
                 file_scan_interval_s=float(cfg.file_scan_interval),
-                include_agent_reasoning=bool(cfg.include_agent_reasoning),
                 follow_codex_process=bool(getattr(cfg, "follow_codex_process", False)),
                 codex_process_regex=str(getattr(cfg, "codex_process_regex", "codex") or "codex"),
                 only_follow_when_process=bool(getattr(cfg, "only_follow_when_process", True)),

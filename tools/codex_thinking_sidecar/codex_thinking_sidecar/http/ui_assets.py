@@ -3,14 +3,32 @@ from typing import Optional
 from urllib.parse import unquote
 
 
-_UI_DIR = Path(__file__).resolve().parent.parent / "ui"
+_UI_DIR = (Path(__file__).resolve().parent.parent / "ui").resolve()
+_UI_LEGACY_DIR = (Path(__file__).resolve().parent.parent / "ui_legacy").resolve()
+_UI_V2_DIST_DIR = (Path(__file__).resolve().parent.parent / "ui_v2" / "dist").resolve()
 
 
-def resolve_ui_path(rel: str) -> Optional[Path]:
+def ui_dir(name: str = "ui") -> Path:
+    """
+    Resolve the on-disk UI root directory.
+
+    - name="ui": current UI (served at /ui)
+    - name="legacy": legacy UI snapshot (served at /ui-legacy, if present)
+    - name="v2": UI v2 build output (served at /ui-v2, if present)
+    """
+    n = str(name or "").strip().lower()
+    if n in ("legacy", "ui_legacy", "old"):
+        return _UI_LEGACY_DIR
+    if n in ("v2", "ui_v2", "next", "ui-v2"):
+        return _UI_V2_DIST_DIR
+    return _UI_DIR
+
+
+def resolve_ui_path(rel: str, root_dir: Optional[Path] = None) -> Optional[Path]:
     rel_norm = unquote(rel or "").lstrip("/")
     try:
-        cand = (_UI_DIR / rel_norm).resolve()
-        root = _UI_DIR.resolve()
+        root = (root_dir or _UI_DIR).resolve()
+        cand = (root / rel_norm).resolve()
         if root not in cand.parents and cand != root:
             return None
         return cand
@@ -26,7 +44,7 @@ def ui_content_type(path: Path) -> str:
         return "text/css; charset=utf-8"
     if ext == ".js":
         return "application/javascript; charset=utf-8"
-    if ext == ".json":
+    if ext in (".json", ".map"):
         return "application/json; charset=utf-8"
     if ext == ".ogg":
         return "audio/ogg"

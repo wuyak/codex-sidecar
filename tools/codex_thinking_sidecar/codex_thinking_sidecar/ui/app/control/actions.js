@@ -67,7 +67,7 @@ export async function clearView(dom, state, refreshList) {
   try { state.lastRenderedMs = NaN; } catch (_) {}
   try { clearViews(dom, state); } catch (_) {}
   await refreshList();
-  setStatus(dom, "已清空显示");
+  setStatus(dom, "已清空消息");
 }
 
 export async function maybeAutoStartOnce(dom, state) {

@@ -32,3 +32,6 @@ npm-debug.log*
 # Local tool state / caches
 .codex-home/
 .npm-cache/
+
+# Sidecar UI deploy backups
+tools/codex_thinking_sidecar/codex_thinking_sidecar/ui_legacy_*/

@@ -2,7 +2,7 @@ import json
 from typing import Any, Dict, List, Tuple
 
 
-def extract_rollout_items(obj: Dict[str, Any], *, include_agent_reasoning: bool) -> Tuple[str, List[Dict[str, str]]]:
+def extract_rollout_items(obj: Dict[str, Any]) -> Tuple[str, List[Dict[str, str]]]:
     """
     从 rollout-*.jsonl 的单条记录中提取 UI 需要展示的消息块（可多条）。
 
@@ -80,11 +80,6 @@ def extract_rollout_items(obj: Dict[str, Any], *, include_agent_reasoning: bool)
 
     if top_type == "event_msg":
         ptype = payload.get("type")
-        if include_agent_reasoning and ptype == "agent_reasoning":
-            txt = payload.get("text")
-            if isinstance(txt, str) and txt.strip():
-                extracted.append({"kind": "agent_reasoning", "text": txt})
-
         # User message echo in event stream (usually the most concise)
         if ptype == "user_message":
             msg = payload.get("message")
@@ -92,4 +87,3 @@ def extract_rollout_items(obj: Dict[str, Any], *, include_agent_reasoning: bool)
                 extracted.append({"kind": "user_message", "text": msg})
 
     return (str(ts or ""), extracted)
-

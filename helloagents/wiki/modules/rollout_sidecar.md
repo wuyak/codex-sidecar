@@ -1,19 +1,20 @@
 # rollout_sidecar
 
 ## 职责
-提供一个**不修改 Codex** 的旁路工具：实时监听 `CODEX_HOME` 下的 `rollout-*.jsonl`（结构化会话记录），提取思考摘要（`reasoning.summary`）与可选的 `agent_reasoning`，并将原文/译文推送到本地 HTTP 服务（含 SSE/Web UI）便于实时查看与调试。
+提供一个**不修改 Codex** 的旁路工具：实时监听 `CODEX_HOME` 下的 `rollout-*.jsonl`（结构化会话记录），提取思考摘要（`reasoning.summary`），并将原文/译文推送到本地 HTTP 服务（含 SSE/Web UI）便于实时查看与调试。
 
 ## 输入/输出
 - 输入：`CODEX_HOME/sessions/YYYY/MM/DD/rollout-*.jsonl`（追加写入的 JSONL）
 - 输出：本地服务端（默认 `127.0.0.1:8787`）
   - `GET /ui`：浏览器实时面板（含配置/控制）
+  - `GET /ui-legacy`：旧版 UI（回滚/对照）
   - `GET /events`：SSE（可供其它客户端订阅）
   - `GET /api/messages`：最近消息 JSON（调试）
   - `GET /api/threads`：按 `thread_id/file` 聚合的会话列表（用于 UI 标签切换）
 
 ## 时间戳说明
 - `rollout-*.jsonl` 里的 `timestamp` 通常是 UTC（形如 `...Z`）。
-- UI 默认以北京时间（Asia/Shanghai）展示时间戳，减少 UTC/本地对照带来的视觉噪音（原始 timestamp 仍保留在数据中，便于必要时排查）。
+- UI 默认使用**浏览器本地时区**展示时间戳（在国内环境通常为 Asia/Shanghai），减少 UTC/本地对照带来的视觉噪音（原始 timestamp 仍保留在数据中，便于必要时排查）。
 
 ## 关键实现点
 - 只读解析 JSONL（不改写原始日志）
@@ -23,13 +24,17 @@
   - 其中 `watch/rollout_extract.py` 负责“单条 JSONL 记录 → UI 事件块”提取（assistant/user/tool/reasoning）
 - 服务端分层：`server.py` 仅负责启动/绑定；HTTP 路由、SSE 与静态资源拆分到 `http/*`
 - 控制面分层：`controller.py` 聚焦线程生命周期/配置入口；translator schema/构建与校验拆分到 `control/*`
+
+> 注：下文涉及 `ui/app/*` 的“分层/模块拆分”描述对应当前默认 legacy UI（`ui/`）；UI v2（Vue 3 + Vite + Pinia）位于 `ui_v2/`，访问路径为 `/ui-v2`（实验入口，不影响 `/ui`）。
 - 可选：WSL2/Linux 下支持“进程优先定位”当前会话文件
   - 扫描 `/proc/<pid>/fd`，优先锁定匹配到的 Codex 进程（及其子进程）正在写入的 `sessions/**/rollout-*.jsonl`
   - 并保留 sessions 扫描作为回退（用于进程已启动但文件尚未被发现的窗口期）
 - UI 顶栏：标题与运行状态
-- UI 右侧工具栏：⚙️ 配置、⚡ 快速浏览（仅输入/输出/思考）、▶️ 开始监听、⏹️ 停止监听、🔄 重启 Sidecar、🧹 清空显示、⏻ 退出 Sidecar
-- UI 配置抽屉：保存配置、恢复配置；皮肤切换（默认/扁平/深色，仅影响前端观感，本机记忆）
-- UI 会话切换：右侧中间为“会话书签栏”（默认窄条，不挤压主列表；hover/当前会话时展开并覆盖内容）；单击切换会话；长按在原位重命名（Enter/失焦提交，Esc 取消）
+- UI 右侧工具栏：⚙️ 设置、⚡ 快速信息（快速浏览开关）、🌐 翻译（点击开关，长按设置）、▶/⏹️ 监听（开始/停止切换）、🧹 清空消息、⏻ 关闭（长按重启）
+- 交互提示：右侧工具栏按钮 hover/聚焦会显示文字提示；🌐 翻译按钮带“自动翻译开/关”状态点并在提示中注明“长按打开翻译设置”
+- UI 设置抽屉：常用配置 + “高级选项”折叠；保存配置/调试信息；皮肤切换（默认/柔和/对比/扁平/深色，仅影响前端观感，本机记忆）
+- UI 会话切换：左侧为“自动隐藏会话列表”（鼠标移到最左侧热区浮现、离开自动隐藏；覆盖式浮层，不占用主列表宽度）；列表项展示短时间戳（MM-DD HH:MM）+ shortId，hover 提示完整时间戳 + shortId；单击切换会话；长按在原位重命名（Enter/失焦提交，Esc 取消）
+  - 选中即锁定跟随（pin-on-select）：开启时切换会话会向后端发送 `follow=pin`；关闭时仅切换视图并释放为 `follow=auto`，避免“监听跑偏/新会话不出现”的错觉
 - UI 未读提醒：回答输出/审批提示计入未读；未读数显示在对应会话书签徽标上，“全部”书签显示总未读；切换到会话时自动清空该会话未读
 - 会话列表性能：书签渲染做了降频与增量更新（复用节点），降低高频 SSE 下的重排/重绘
 - UI 事件流分层：`ui/app/events/*`（timeline/buffer/stream）拆分，便于维护与进一步优化
@@ -46,13 +51,9 @@
 - 会话列表同步：断线恢复后会标记 `threadsDirty`，下一次列表回源时同步 `/api/threads`，避免侧栏漏会话/排序漂移
 - 多会话不串线：推荐通过会话书签栏切换（或启用“锁定”）来浏览单会话；`all` 视图更适合快速总览（不再在每条消息上额外展示会话标识，避免信息噪音）
 - 翻译 Provider 可插拔并可在 UI 中切换：`http/openai/nvidia`（旧配置中的 `stub/none` 会自动迁移到 `openai`）
-- `--include-agent-reasoning` 说明：
-  - 该类型通常是“流式推理文本”，同一段内容可能重复出现（模型/客户端实现差异）。
-  - sidecar 会对 `agent_reasoning` 做更激进的去重（不依赖 timestamp），但仍建议仅在需要更实时内容时开启。
-
 ## UI 展示内容与翻译策略
 - UI 现在会展示更多事件类型：用户输入（`user_message`）、工具调用与输出（`tool_call` / `tool_output`）、最终回答（`assistant_message`）、思考摘要（`reasoning_summary`）。
-- 翻译策略：仅对“思考内容”（`reasoning_summary` / 可选 `agent_reasoning`）进行翻译；工具输出与最终回答不翻译。
+- 翻译策略：仅对“思考摘要”（`reasoning_summary`）进行翻译；工具输出与最终回答不翻译。
 - 展示顺序：列表按时间从上到下（新内容在底部）；工具输出默认折叠展示。
 - tool_call/tool_output 会做友好格式化（例如 `update_plan` 计划分行、`shell_command` 命令块展示）；原始参数/输出仍可展开查看，便于排障。
 - tool_call/tool_output 不展示 `call_id`（仅用于内部关联 tool_call ↔ tool_output），避免 UI 出现无意义的 uuid 干扰阅读。
@@ -65,7 +66,7 @@
   - 右下角悬浮“↑ 顶部 / ↓ 底部”按钮，便于快速跳转（底部按钮不再承载未读提示）
 - 右下角通知：tool gate / 回答新输出等关键状态弹出提醒（含“可能是历史残留”的提示）；新输出未读以右侧书签徽标为准
 - 右侧“翻译”按钮：单击切换自动翻译 `auto/manual`（对运行中的 watcher 立即生效，无需重启）；长按打开独立的“翻译设置”抽屉（含自动翻译开关、Provider/模型/Key/超时等）
-  - 提示音：高级设置中可选择“无/舒缓-1/2/3”，用于“回答输出/审批提示”的通知（音效来源：Kenney UI SFX Set，CC0；文件在 `ui/music/`）
+  - 提示音：设置中可选择“无/提示音-1/2/3（轻/中/强）”，用于“回答输出/审批提示”的通知（选择后会播放预览；音效来源：Kenney UI SFX Set，CC0；文件在 `ui/music/`）
 
 ## 关于“在页面内输入并让 Codex 执行”
 本 sidecar 的核心原则是**不修改 Codex、只读监听**（旁路查看/调试）。因此：
@@ -73,33 +74,28 @@
 - 本项目不提供任何“在浏览器里触发本机执行”的控制入口，避免把旁路 UI 变成远程执行面。
 
 更“非侵入”的替代思路（更安全、也更贴合旁路定位）仍然有价值：
-- UI 提供“导出为 .md/.txt”以便归档或回放，而不直接执行任何本机命令（避免 Web UI 变成远程执行入口）。
+- UI 以旁路查看/复制为主；如需归档可手动复制（后续可再补“导出为 .md/.txt”入口），而不直接执行任何本机命令（避免 Web UI 变成远程执行入口）。
 
 ## 运行方式（WSL 示例）
 - 推荐（短命令，先开 UI 再开始监听）：
   - `cd ~/src/codex-thinking-sidecar-zh && ./ui.sh`
-  - 打开 `http://127.0.0.1:8787/ui`，点右侧工具栏 ⚙️ 保存配置，再点 ▶️ 开始监听
+  - 打开 `http://127.0.0.1:8787/ui`，点右侧工具栏 ⚙️ 保存配置，再点 ▶/⏹️ 监听（点击切换开始/停止）
 
 - 兼容（启动即监听，命令行参数方式）：
-  - `cd ~/src/codex-thinking-sidecar-zh && ./run.sh --codex-home "$HOME/.codex" --port 8787 --replay-last-lines 5000 --include-agent-reasoning`
+  - `cd ~/src/codex-thinking-sidecar-zh && ./run.sh --codex-home "$HOME/.codex" --port 8787 --replay-last-lines 5000`
 
 ## 配置持久化与多翻译 Profiles
-- UI 中点击“保存配置”会将配置写入用户级配置目录（XDG）：
-  - 默认：`$XDG_CONFIG_HOME/codex-thinking-sidecar/config.json`
-  - 常见路径：`~/.config/codex-thinking-sidecar/config.json`
+- UI 中点击“保存配置”会将配置写入本机配置目录（默认放在 `CODEX_HOME/tmp` 下）：
+  - 默认：`$CODEX_HOME/tmp/codex-thinking-sidecar/config.json`
+  - 常见路径：`~/.codex/tmp/codex-thinking-sidecar/config.json`
 - 下次启动 `./ui.sh` 或 `./run.sh` 时会自动读取并沿用已保存配置（`./run.sh` 会立即开始监听）。
 - 当翻译 Provider 选择 `HTTP` 时，可在 `HTTP Profiles` 中保存多个翻译 API 配置并手动切换（支持新增/删除）。
   - `HTTP Profiles` 支持在 UI 中新增/删除/重命名配置。
   - DeepLX 等“token 在 URL 路径里”的接口：将 URL 写为 `https://api.deeplx.org/{token}/translate`，并在 `HTTP Token` 中填写 token，sidecar 会自动替换 `{token}`。
   - ⚠️ token 会随配置一起持久化到本机配置文件中；请勿把包含 token 的配置文件加入版本控制。
-- 为避免误操作丢失翻译配置，sidecar 会在保存前自动生成 1 份备份（覆盖式）：
-  - `config.json.bak`
-- 如遇到“Profiles 变空/配置丢失”，UI 会提示是否从备份恢复；也可手动点击“恢复配置”。
-- 兼容说明：旧版本写入在 `CODEX_HOME/tmp/` 下的 `.lastgood` / `.bak-*` 仍会被纳入恢复候选来源（只读，不再继续写入）。
-
+- 已移除“从备份恢复”功能：避免误用导致配置混乱；如需调整翻译配置请直接修改并保存。
 ## 翻译模式（auto/manual）
 - `auto`：自动翻译思考摘要（`reasoning_summary`）。未译时默认显示英文原文；译文回填后默认切到中文；单击思考块可在 EN/ZH 间切换。
-- `agent_reasoning`（如启用采集）默认不做自动翻译：避免噪音/量大导致翻译队列堆积；可点击“翻译/重译”按钮或单击思考块手动触发翻译。
 - `manual`：不自动翻译；仅当你单击思考块或点击“翻译/重译”按钮时才会发起翻译请求。UI 侧会做 in-flight 防抖；当某条仍在翻译中再次点击“重译”时，会将重译请求加入队列（等待当前翻译完成后执行）。
 - 失败处理：翻译失败（超时/空译文等）不会把告警写进 `zh` 内容区；会以 `translate_error` 字段回填，UI 状态 pill 显示“失败/重试”，可点击按钮重新发起翻译。
 
@@ -131,10 +127,19 @@
 ## 配置生效提示
 翻译相关配置（`translate_mode`、`translator_provider`、`translator_config.*`）已支持**热加载**：在“已开始监听”状态下保存后会立即对新翻译请求生效，无需重启进程/会话。
 
-注：监视目录（`watch_codex_home`）变更仍需“停止监听 → 再开始监听”才会切换到新目录；其余大多数 watcher 参数已支持运行时热更新。
+注：监视目录（`watch_codex_home` / `CODEX_HOME`）仅能通过启动参数或环境变量调整；切换后需“停止监听 → 再开始监听”（或重启进程）才会生效。其余大多数 watcher 参数已支持运行时热更新。
+
+## UI v2（Vue 3 + Vite）
+
+为降低 UI 交互与状态维护成本，新增 `Vue 3 + Vite + Pinia` 的 UI v2（实验入口，逐项对齐迁移，不影响默认 `/ui`）：
+
+- 源码目录：`tools/codex_thinking_sidecar/codex_thinking_sidecar/ui_v2/`
+- 构建产物：`tools/codex_thinking_sidecar/codex_thinking_sidecar/ui_v2/dist/`
+- 访问路径：`/ui-v2`
+- 回滚/对照：`/ui-legacy`（目录：`tools/codex_thinking_sidecar/codex_thinking_sidecar/ui_legacy/`）
+- 构建脚本：`tools/codex_thinking_sidecar/codex_thinking_sidecar/ui_v2/deploy.sh`（仅 build，不覆盖 `/ui`）
 
 ## 配置项速查（Watcher）
-- `采集 agent_reasoning`：是否额外采集更长、更噪的 `agent_reasoning`。关闭时仍会照常显示 `reasoning_summary`（这是默认“思考摘要”）。
 - `进程定位`：开启后会根据进程（`/proc`）定位正在写入的会话文件，优先跟随“当前正在跑的 Codex 会话”。
 - `仅在有进程时跟随`：开启后若未检测到匹配的 Codex 进程，则 sidecar 会进入 idle（不跟随任何文件）；关闭则会回退为 sessions 扫描（仍可看到最新会话）。
 - `进程匹配 regex`：用于匹配 Codex 进程命令行（默认 `codex`），只影响“进程定位”的检测范围。

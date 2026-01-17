@@ -60,11 +60,14 @@ export function renderToolCall(dom, state, msg, ctx) {
       const st = statusIcon(it.status);
       const step = String(it.step || "").trim();
       if (!step) continue;
-      items.push(`- ${st} ${step}`);
+      items.push(`${st} ${step}`);
     }
+    const lines = items.length ? items : ["（无变更）"];
     const md = [
       "**更新计划**",
-      ...(items.length ? items : ["- （无变更）"]),
+      "```text",
+      ...lines,
+      "```",
       ...(explanation.trim() ? ["", "**说明**", explanation.trim()] : []),
     ].join("\n");
     const extra = (toolName === "parallel") ? `<span class="pill">并行</span>` : "";
@@ -75,7 +78,9 @@ export function renderToolCall(dom, state, msg, ctx) {
   if (isPlanUpdate) {
     const md = [
       "**更新计划**",
-      "- （参数解析失败：建议切换到全量视图查看原始 tool_call）",
+      "```text",
+      "（参数解析失败：建议切换到全量视图查看原始 tool_call）",
+      "```",
     ].join("\n");
     const extra = (toolName === "parallel") ? `<span class="pill">并行</span>` : "";
     const metaLeftExtra = `<span class="pill">更新计划</span>${extra}<span class="pill">未解析</span>`;

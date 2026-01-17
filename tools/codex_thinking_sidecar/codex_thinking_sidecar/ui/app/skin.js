@@ -1,9 +1,18 @@
 const _LS_SKIN = "codex_sidecar_ui_skin";
+const _SKIN_LABEL = {
+  default: "默认",
+  soft: "柔和",
+  contrast: "对比",
+  flat: "扁平",
+  dark: "深色",
+};
 
 function _sanitize(v) {
   const s = String(v || "").trim().toLowerCase();
   if (s === "flat") return "flat";
   if (s === "dark") return "dark";
+  if (s === "soft") return "soft";
+  if (s === "contrast") return "contrast";
   return "default";
 }
 
@@ -24,7 +33,7 @@ export function initSkin(dom, opts = {}) {
       _apply(next);
       try { localStorage.setItem(_LS_SKIN, next); } catch (_) {}
       try { dom.uiSkin.value = next; } catch (_) {}
-      if (setStatus) setStatus(dom, `皮肤已切换：${next}`);
+      if (setStatus) setStatus(dom, `皮肤已切换：${_SKIN_LABEL[next] || next}`);
     });
   }
 }

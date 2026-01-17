@@ -10,7 +10,7 @@ export async function bootstrap(dom, state, renderTabs, renderMessage, renderEmp
     // Sync UI selection with watcher follow mode (avoid “UI 显示全部，但实际上已锁定跟随某会话”).
     try {
       let pinOnSelect = false;
-      try { pinOnSelect = localStorage.getItem("codex_sidecar_pin_on_select") === "1"; } catch (_) {}
+      try { pinOnSelect = localStorage.getItem("codex_sidecar_pin_on_select") !== "0"; } catch (_) { pinOnSelect = true; }
       const st = await fetch("/api/status", { cache: "no-store" }).then(r => r.json());
       const follow = (st && typeof st === "object") ? (st.follow || {}) : {};
       const mode = String((follow && follow.mode) ? follow.mode : "").trim().toLowerCase();

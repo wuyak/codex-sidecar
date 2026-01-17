@@ -148,7 +148,6 @@ class RolloutWatcher:
         translate_mode: str,
         poll_interval_s: float,
         file_scan_interval_s: float,
-        include_agent_reasoning: bool,
         follow_codex_process: bool = False,
         codex_process_regex: str = "codex",
         only_follow_when_process: bool = True,
@@ -162,7 +161,6 @@ class RolloutWatcher:
         self._translate_mode = tm if tm in ("auto", "manual") else "auto"
         self._poll_interval_s = max(0.05, float(poll_interval_s))
         self._file_scan_interval_s = max(0.2, float(file_scan_interval_s))
-        self._include_agent_reasoning = include_agent_reasoning
         self._follow_picker = FollowPicker(
             codex_home=self._codex_home,
             follow_codex_process=bool(follow_codex_process),
@@ -332,12 +330,6 @@ class RolloutWatcher:
         except Exception:
             nn = 0
         self._replay_last_lines = nn
-
-    def set_include_agent_reasoning(self, enabled: bool) -> None:
-        """
-        运行时切换是否采集 agent_reasoning（更长、更噪的思考流）。
-        """
-        self._include_agent_reasoning = bool(enabled)
 
     def set_poll_interval_s(self, seconds: float) -> None:
         """
@@ -702,7 +694,7 @@ class RolloutWatcher:
         except Exception:
             return 0
 
-        ts, extracted = extract_rollout_items(obj, include_agent_reasoning=self._include_agent_reasoning)
+        ts, extracted = extract_rollout_items(obj)
 
         ingested = 0
         for item in extracted:
@@ -711,18 +703,13 @@ class RolloutWatcher:
             # Dedup across replay expansions.
             #
             # - reasoning_summary: 通常每条是“最终摘要”，用 timestamp 参与 key 能更好地区分不同轮次
-            # - agent_reasoning: 往往是流式/重复广播（同一段 text 可能出现多次），避免把 ts 纳入 key
-            #   以减少 UI 里“同一段内容重复两次”的噪音
-            if kind == "agent_reasoning":
-                hid = _sha1_hex(f"{file_path}:{kind}:{text}")
-            else:
-                hid = _sha1_hex(f"{file_path}:{kind}:{ts}:{text}")
+            hid = _sha1_hex(f"{file_path}:{kind}:{ts}:{text}")
             if self._dedupe(hid, kind=kind):
                 continue
             if self._stop_requested():
                 return ingested
             mid = hid[:16]
-            is_thinking = kind in ("reasoning_summary", "agent_reasoning")
+            is_thinking = kind == "reasoning_summary"
             msg = {
                 "id": mid,
                 "ts": ts,
@@ -757,7 +744,7 @@ class RolloutWatcher:
                         pass
                 if is_thinking and text.strip():
                     # 翻译走后台支路：
-                    # - auto：只自动翻译 reasoning_summary（agent_reasoning 噪音大且量多，默认手动触发更稳）
+                    # - auto：只自动翻译 reasoning_summary
                     # - 回放阶段可聚合，实时阶段按单条慢慢补齐。
                     if kind == "reasoning_summary" and self._translate_mode == "auto":
                         thread_key = str(thread_id or "") or str(file_path)

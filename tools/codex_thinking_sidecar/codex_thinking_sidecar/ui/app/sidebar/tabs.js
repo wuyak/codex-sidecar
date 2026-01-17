@@ -3,11 +3,26 @@ import { getCustomLabel, setCustomLabel } from "./labels.js";
 import { loadHiddenThreads } from "./hidden.js";
 import { getUnreadCount, getUnreadTotal } from "../unread.js";
 
-function threadLabel(t) {
-  const stamp = rolloutStampFromFile(t.file || "");
+function _parseStamp(stamp) {
+  const s = String(stamp || "").trim();
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (!m) return null;
+  return { yyyy: m[1], mm: m[2], dd: m[3], HH: m[4], MM: m[5] };
+}
+
+function _stampShort(stamp) {
+  const p = _parseStamp(stamp);
+  if (p) return `${p.mm}-${p.dd} ${p.HH}:${p.MM}`;
+  return String(stamp || "").trim();
+}
+
+function threadLabels(t) {
+  const stampFull = rolloutStampFromFile(t.file || "");
+  const stampShort = _stampShort(stampFull);
   const idPart = t.thread_id ? shortId(t.thread_id) : shortId(((t.file || "").split("/").slice(-1)[0]) || (t.key || ""));
-  if (stamp && idPart) return `${stamp} · ${idPart}`;
-  return idPart || stamp || "unknown";
+  const full = (stampFull && idPart) ? `${stampFull} · ${idPart}` : (stampFull || idPart || "unknown");
+  const label = (stampShort && idPart) ? `${stampShort} · ${idPart}` : (idPart || stampShort || stampFull || "unknown");
+  return { label, full };
 }
 
 export function clearTabs(dom) {
@@ -200,6 +215,7 @@ export function renderTabs(dom, state, onSelectKey) {
   const hidden = (state && state.hiddenThreads && typeof state.hiddenThreads.has === "function")
     ? state.hiddenThreads
     : loadHiddenThreads();
+  const showHidden = !!(state && state.showHiddenThreads);
   const frag = document.createDocumentFragment();
 
   const totalUnread = getUnreadTotal(state);
@@ -222,11 +238,14 @@ export function renderTabs(dom, state, onSelectKey) {
 
   for (const t of items) {
     const isHidden = !!(hidden && typeof hidden.has === "function" && hidden.has(t.key));
+    if (isHidden && !showHidden) continue;
     const btn = _getOrCreateBookmark(host, existing, t.key, () => document.createElement("button"));
     const u = getUnreadCount(state, t.key);
     btn.className = "bookmark" + (isHidden ? " tab-hidden" : "") + (state.currentKey === t.key ? " active" : "") + (u > 0 ? " has-unread" : "");
     const clr = colorForKey(t.key || "");
-    const defaultLabel = threadLabel(t);
+    const labels = threadLabels(t);
+    const defaultLabel = labels.label;
+    const fullLabel = labels.full;
     const custom = getCustomLabel(t.key);
     const label = custom || defaultLabel;
 
@@ -246,6 +265,7 @@ export function renderTabs(dom, state, onSelectKey) {
       btn.dataset.label = label;
       btn.dataset.defaultLabel = defaultLabel;
     } catch (_) {}
+    try { btn.title = custom ? `${custom}\n${fullLabel}` : fullLabel; } catch (_) {}
     btn.__bmOnSelect = onSelectKey;
     btn.__bmRender = () => renderTabs(dom, state, onSelectKey);
     _wireBookmarkInteractions(btn);
