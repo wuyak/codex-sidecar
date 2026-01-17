@@ -380,7 +380,7 @@ class NvidiaChatTranslator:
     rpm: int = 0
     max_tokens: int = 8192
     max_retries: int = 3
-    allow_fallback: bool = True
+    allow_fallback: bool = False
     last_error: str = ""
     cache_size: int = 64
     _cache: "OrderedDict[str, str]" = field(default_factory=OrderedDict, init=False, repr=False)

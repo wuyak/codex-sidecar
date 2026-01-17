@@ -9,10 +9,10 @@ import time
 import urllib.request
 from pathlib import Path
 
-from .config import default_config_home
+from .config import default_config_home, load_config
+from .control.translator_build import build_translator
 from .controller import SidecarController
 from .server import SidecarServer
-from .translator import StubTranslator
 from .watcher import HttpIngestClient, RolloutWatcher
 
 
@@ -195,14 +195,15 @@ def main(argv=None) -> int:
         else:
             # no-server mode: behave like the original watcher-only sidecar.
             ingest = HttpIngestClient(server_url=server_url)
-            translator = StubTranslator()
+            cfg = load_config(config_home)
+            translator = build_translator(cfg)
             watcher = RolloutWatcher(
                 codex_home=codex_home,
                 ingest=ingest,
                 translator=translator,
                 replay_last_lines=int(args.replay_last_lines),
-                watch_max_sessions=3,
-                translate_mode="auto",
+                watch_max_sessions=int(getattr(cfg, "watch_max_sessions", 3) or 3),
+                translate_mode=str(getattr(cfg, "translate_mode", "auto") or "auto"),
                 poll_interval_s=float(args.poll_interval),
                 file_scan_interval_s=float(args.file_scan_interval),
                 include_agent_reasoning=bool(args.include_agent_reasoning),

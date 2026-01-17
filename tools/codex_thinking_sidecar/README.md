@@ -2,7 +2,7 @@
 
 本工具用于**不修改 Codex** 的前提下，实时监听 `CODEX_HOME/sessions/**/rollout-*.jsonl`，提取思考摘要（`reasoning.summary`），并通过本地 HTTP 服务（含 SSE）展示。
 
-> 翻译 Provider 支持 `stub/none/http/openai`：`stub` 为占位便于自测链路，`none` 表示不生成译文，`http` 可对接自建翻译服务，`openai` 为 Responses API 兼容适配（含自建代理）。
+> 翻译 Provider 支持 `http/openai/nvidia`：`http` 可对接自建翻译服务，`openai` 为 Responses API 兼容适配（含自建代理），`nvidia` 为 NVIDIA NIM（Chat Completions 兼容）。
 
 ## 运行（推荐：先开 UI 再开始监听）
 
@@ -15,7 +15,10 @@ WSL/Linux：
 打开页面：
 - `http://127.0.0.1:8787/ui`
 
-在 UI 里设置“监视目录（CODEX_HOME）”、回放行数、是否采集 `agent_reasoning`、翻译 Provider 等；保存配置后点击“开始监听”。
+在 UI 里设置“监视目录（CODEX_HOME）”、回放行数、是否采集 `agent_reasoning` 等；保存配置后点击“开始监听”。
+翻译开关/设置在右侧按钮中：
+- 单击“地球”按钮：切换自动翻译（开/关）
+- 长按“地球”按钮：打开翻译设置抽屉（保存后立即热加载生效）
 也可以启用“自动开始监听（UI）”，保存配置后会自动开始（无需手动点击）。
 
 ## 关于“在页面内输入并让 Codex 执行”
@@ -72,7 +75,7 @@ WSL/Linux：
 UI 支持三种显示模式：`中英文对照 / 仅中文 / 仅英文`，该选择保存在浏览器 `localStorage` 中（不写入服务端配置文件）。
 
 ## 配置生效时机
-监听线程启动时会读取一次配置；如果你在“已开始监听”的状态下修改翻译配置，UI 会提示是否重启监听以立即生效。
+大多数配置会在保存后立即热更新到运行中的 watcher；其中“监视目录”需要停止后再开始监听才能切换到新目录。
 
 ## UI 内容（更完整的 turn 视图）
 UI 会展示：
@@ -83,7 +86,7 @@ UI 会展示：
 
 翻译仅作用于思考类内容（`reasoning_summary` / `agent_reasoning`）。
 
-会话切换列表固定在页面左侧，滚动到中后段也可随时切换不同会话视图。
+会话切换位于页面右侧“书签栏”，当前会话会自动展开；长按书签可就地重命名。
 
 ## 硅基流动 translate.json（免费优先的简单方案）
 如果你想用硅基流动 translate.js 暴露的翻译接口（`application/x-www-form-urlencoded`），无需新增 Provider：直接使用 `HTTP（通用适配器）` 并把 URL 指向 `translate.json` 即可。

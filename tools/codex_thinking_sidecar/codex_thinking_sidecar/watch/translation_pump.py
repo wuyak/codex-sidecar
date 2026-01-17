@@ -4,7 +4,7 @@ import time
 from collections import deque
 from typing import Any, Callable, Deque, Dict, List, Optional, Set, Tuple
 
-from ..translator import NoneTranslator, Translator
+from ..translator import Translator
 from .translate_batch import _pack_translate_batch, _unpack_translate_batch
 
 
@@ -296,8 +296,6 @@ class TranslationPump:
         """
         if not str(text or "").strip():
             return ("", "")
-        if isinstance(self._translator, NoneTranslator):
-            return ("", "未启用翻译（Provider=none）")
         try:
             out = self._translator.translate(text)
         except Exception as e:
@@ -321,9 +319,6 @@ class TranslationPump:
         return err
 
     def _emit_translate(self, mid: str, zh: str, err: str) -> None:
-        # NoneTranslator: still emit an error for manual "retranslate" so UI can clear in-flight and show a hint.
-        if isinstance(self._translator, NoneTranslator) and (not str(zh or "").strip()) and (not str(err or "").strip()):
-            return
         try:
             self._emit_update({"op": "update", "id": mid, "zh": zh, "translate_error": err})
         except Exception:

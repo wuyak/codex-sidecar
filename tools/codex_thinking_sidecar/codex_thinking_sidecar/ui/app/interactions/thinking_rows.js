@@ -108,7 +108,6 @@ export function wireThinkingRowActions(dom, state) {
 
   host.addEventListener("click", async (e) => {
     if (!e || !e.target) return;
-    if (_hasActiveSelection()) return;
 
     // Do not hijack link clicks inside markdown.
     try { if (e.target.closest && e.target.closest("a")) return; } catch (_) {}
@@ -122,13 +121,6 @@ export function wireThinkingRowActions(dom, state) {
       const hadZh = !!(row && _hasZhReady(row));
       const oldZh = hadZh ? _getCachedZhClean(state, mid) : "";
       try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
-      try {
-        const p = String(state.translatorProvider || "").trim().toLowerCase();
-        if (p === "none") {
-          flashToastAt(Number(e.clientX) || 0, Number(e.clientY) || 0, "未启用翻译（Provider=none）", { isLight: true });
-          return;
-        }
-      } catch (_) {}
       const alreadyInFlight = !!(state.translateInFlight && typeof state.translateInFlight.has === "function" && state.translateInFlight.has(mid));
       let addedInFlight = false;
       try {
@@ -163,6 +155,8 @@ export function wireThinkingRowActions(dom, state) {
     // - after ZH ready: toggle EN/ZH
     const think = e.target.closest ? e.target.closest(".think") : null;
     if (!think) return;
+    // Preserve text selection UX: do not toggle modes / fire translate when user is selecting text.
+    if (_hasActiveSelection()) return;
     const row = think.closest ? think.closest(".row") : null;
     if (!row || !row.classList) return;
     if (!(row.classList.contains("kind-reasoning_summary") || row.classList.contains("kind-agent_reasoning"))) return;
@@ -170,7 +164,7 @@ export function wireThinkingRowActions(dom, state) {
     if (!mid) return;
 
     const hasZh = _hasZhReady(row);
-    if (!hasZh) {
+      if (!hasZh) {
       const isAgent = !!(row && row.classList && row.classList.contains("kind-agent_reasoning"));
       const tmode = isAgent ? "manual" : ((String(state.translateMode || "").toLowerCase() === "manual") ? "manual" : "auto");
       if (tmode !== "manual") {
@@ -183,13 +177,6 @@ export function wireThinkingRowActions(dom, state) {
         );
         return;
       }
-      try {
-        const p = String(state.translatorProvider || "").trim().toLowerCase();
-        if (p === "none") {
-          flashToastAt(Number(e.clientX) || 0, Number(e.clientY) || 0, "未启用翻译（Provider=none）", { isLight: true });
-          return;
-        }
-      } catch (_) {}
       const inFlight = !!(state.translateInFlight && typeof state.translateInFlight.has === "function" && state.translateInFlight.has(mid));
       if (inFlight) {
         flashToastAt(Number(e.clientX) || 0, Number(e.clientY) || 0, "正在翻译…", { isLight: true });

@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
-from .translator import NoneTranslator, Translator
+from .translator import Translator
 
 from .watch.rollout_paths import (
     _ROLLOUT_RE,
@@ -759,7 +759,7 @@ class RolloutWatcher:
                     # 翻译走后台支路：
                     # - auto：只自动翻译 reasoning_summary（agent_reasoning 噪音大且量多，默认手动触发更稳）
                     # - 回放阶段可聚合，实时阶段按单条慢慢补齐。
-                    if kind == "reasoning_summary" and self._translate_mode == "auto" and not isinstance(self._translator, NoneTranslator):
+                    if kind == "reasoning_summary" and self._translate_mode == "auto":
                         thread_key = str(thread_id or "") or str(file_path)
                         self._translate.enqueue(mid=mid, text=text, thread_key=thread_key, batchable=is_replay)
         return ingested

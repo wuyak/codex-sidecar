@@ -1,13 +1,13 @@
 from typing import Any, Dict
 
 from ..config import SidecarConfig
-from ..translator import HttpTranslator, NvidiaChatTranslator, NoneTranslator, OpenAIResponsesTranslator, StubTranslator, Translator
+from ..translator import HttpTranslator, NvidiaChatTranslator, OpenAIResponsesTranslator, Translator
 
 
 def build_translator(cfg: SidecarConfig) -> Translator:
     provider = (cfg.translator_provider or "openai").strip().lower()
-    if provider == "none":
-        return NoneTranslator()
+    if provider not in ("openai", "nvidia", "http"):
+        provider = "openai"
     if provider == "openai":
         tc = cfg.translator_config or {}
         tc = tc if isinstance(tc, dict) else {}
@@ -80,7 +80,8 @@ def build_translator(cfg: SidecarConfig) -> Translator:
             auth_header=auth_header,
             auth_prefix=auth_prefix,
         )
-    return StubTranslator()
+    # Fallback is already normalized above.
+    return OpenAIResponsesTranslator(base_url="", model="", api_key="", timeout_s=12.0)
 
 
 def select_http_profile(tc: Dict[str, Any]) -> Dict[str, Any]:

@@ -58,9 +58,9 @@ class SidecarController:
         """
         with self._lock:
             cfg = self._cfg
-        provider = str(getattr(cfg, "translator_provider", "") or "stub").strip().lower()
-        if provider in ("stub", "none"):
-            return {"ok": False, "provider": provider, "error": "translator_disabled"}
+        provider = str(getattr(cfg, "translator_provider", "") or "openai").strip().lower()
+        if provider not in ("openai", "nvidia", "http"):
+            return {"ok": False, "provider": provider, "error": "unknown_provider"}
 
         # Keep it small but structurally rich (heading + code fence).
         sample = (
@@ -176,7 +176,7 @@ class SidecarController:
         with self._lock:
             cur = self._cfg.to_dict()
             prev_tm = str(cur.get("translate_mode") or "auto").strip().lower()
-            prev_provider = str(cur.get("translator_provider") or "stub").strip().lower()
+            prev_provider = str(cur.get("translator_provider") or "openai").strip().lower()
             touched_translator = ("translator_provider" in patch) or ("translator_config" in patch)
             # merge shallow
             for k, v in patch.items():
@@ -197,7 +197,7 @@ class SidecarController:
             cur["config_home"] = str(self._config_home)
             # Guard: avoid accidentally clearing HTTP profiles (user can recover or switch provider).
             try:
-                provider = str(cur.get("translator_provider") or "stub").strip().lower()
+                provider = str(cur.get("translator_provider") or "openai").strip().lower()
                 if provider == "http":
                     tc = cur.get("translator_config") or {}
                     if count_valid_http_profiles(tc) <= 0 and not allow_empty_translator_config:
