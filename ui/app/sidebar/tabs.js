@@ -17,6 +17,13 @@ function _stampShort(stamp) {
   return String(stamp || "").trim();
 }
 
+function _baseName(p) {
+  const s = String(p || "");
+  if (!s) return "";
+  const parts = s.split(/[\\/]/g);
+  return parts[parts.length - 1] || s;
+}
+
 function threadLabels(t) {
   const stampFull = rolloutStampFromFile(t.file || "");
   const stampShort = _stampShort(stampFull);
@@ -420,9 +427,8 @@ export function renderTabs(dom, state, onSelectKey) {
         else { try { delete btn.dataset.unread; } catch (_) { btn.dataset.unread = ""; } }
       } catch (_) {}
       try {
-        const base = custom ? `${custom}\n${fullLabel}` : fullLabel;
-        const hint = isHidden ? "右键：恢复到列表" : "右键：从列表移除";
-        btn.title = `${base}\n×：关闭标签（新输出会自动回来）\n长按：重命名\n${hint}\nDelete：从列表移除`;
+        const fileBase = _baseName(t.file || "");
+        btn.title = `${label}${fileBase ? `\n${fileBase}` : ""}\n长按：重命名`;
       } catch (_) {}
       btn.__bmOnSelect = onSelectKey;
       btn.__bmOnContext = async (k) => { await _toggleHiddenKey(k, label); };

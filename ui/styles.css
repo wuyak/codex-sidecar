@@ -1,6 +1,8 @@
 		      *, *::before, *::after { box-sizing: border-box; }
-			      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji"; margin: 0; background: var(--c-bg, #fff); color: var(--c-text, #0f172a); }
+			      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji"; font-size: var(--ui-font-size, 14px); margin: 0; background: var(--c-bg, #fff); color: var(--c-text, #0f172a); }
 					      :root {
+                  --ui-font-size: 14px;
+                  --ui-ico-size: 18px;
 					        --safe-top: env(safe-area-inset-top, 0px);
 					        --safe-right: env(safe-area-inset-right, 0px);
 					        --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -385,8 +387,8 @@
 			      .rightbar {
 			        position: fixed;
 			        right: var(--rightbar-right);
-			        bottom: calc(16px + var(--safe-bottom) + 96px);
-			        top: auto;
+			        top: calc(16px + var(--safe-top));
+			        bottom: auto;
 			        transform: none;
 			        display: flex;
 			        flex-direction: column;
@@ -465,9 +467,9 @@
 	      .icon-btn:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
 		      .icon-btn.danger { background: var(--c-surface); border-color: rgba(248,113,113,.45); color: var(--c-danger); }
 		      .icon-btn.danger:hover { background: var(--c-danger-bg); }
-	      @media (max-height: 640px) {
-	        .rightbar { top: calc(12px + var(--safe-top)); bottom: auto; }
-	      }
+		      @media (max-height: 640px) {
+		        .rightbar { top: calc(12px + var(--safe-top)); }
+		      }
       .grid { display:grid; grid-template-columns: 140px 1fr; gap: 6px 10px; align-items:center; margin-top: 10px; }
       .grid.grid-compact { grid-template-columns: 110px 1fr; gap: 6px 8px; margin-top: 8px; }
 		      .grid input, .grid select { width: 100%; padding: 6px 8px; border: 1px solid var(--c-border); border-radius: 10px; background: var(--c-surface); color: var(--c-text); }
@@ -712,4 +714,4 @@
 		      .mini-btn:hover::after,
 		      .mini-btn:focus-visible::after { opacity: 1; transform: translateX(-50%) translateY(0); }
 	      .tab.tab-hidden { opacity: .55; filter: saturate(.8); }
-	      .ico { width: 18px; height: 18px; display:block; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; pointer-events:none; }
+	      .ico { width: var(--ui-ico-size, 18px); height: var(--ui-ico-size, 18px); display:block; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; pointer-events:none; }

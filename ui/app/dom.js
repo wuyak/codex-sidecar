@@ -22,6 +22,8 @@ export function getDom() {
 	    translateMode: byId("translateMode"),
 	    notifySound: byId("notifySound"),
 	    uiSkin: byId("uiSkin"),
+    uiFontSize: byId("uiFontSize"),
+    uiBtnSize: byId("uiBtnSize"),
 	    followProc: byId("followProc"),
     onlyWhenProc: byId("onlyWhenProc"),
     procRegex: byId("procRegex"),

@@ -24,17 +24,53 @@ function _kindLabel(kind) {
 function _formatHeader(t) {
   const ts = String((t && t.ts) ? t.ts : "");
   const kind = _kindLabel(t && t.kind);
-  return `## ${ts ? ts + " · " : ""}${kind}`;
+  return `**${kind}${ts ? ` · ${ts}` : ""}**`;
 }
 
-function _wrapMaybeFence(kind, text) {
-  const k = String(kind || "");
-  const s = String(text || "").trimEnd();
+function _fmtLocal(dt) {
+  const d = dt instanceof Date ? dt : new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  const mm = pad(d.getMonth() + 1);
+  const dd = pad(d.getDate());
+  const HH = pad(d.getHours());
+  const MM = pad(d.getMinutes());
+  const SS = pad(d.getSeconds());
+  return `${yyyy}-${mm}-${dd} ${HH}:${MM}:${SS}`;
+}
+
+function _baseName(p) {
+  const s = String(p || "");
   if (!s) return "";
-  if (k === "reasoning_summary") {
-    return ["```text", s, "```"].join("\n");
+  const parts = s.split(/[\\/]/g);
+  return parts[parts.length - 1] || s;
+}
+
+function _balanceFences(md) {
+  const src = String(md ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").trimEnd();
+  if (!src) return "";
+  const lines = src.split("\n");
+  let fenceToggles = 0;
+  for (const ln of lines) {
+    if (/^\s*```/.test(String(ln ?? "").trimEnd())) fenceToggles += 1;
   }
-  return s;
+  if (fenceToggles % 2 === 1) return `${src}\n\`\`\``;
+  return src;
+}
+
+function _renderReasoning(m, opts = {}) {
+  const en = String((m && m.text) ? m.text : "").trimEnd();
+  const zh = String((m && m.zh) ? m.zh : "").trimEnd();
+  const err = String((m && m.translate_error) ? m.translate_error : "").trim();
+  const mode = String(opts.lang || "auto").trim().toLowerCase();
+  const hasZh = !!(zh && !err);
+  if (mode === "en") return _balanceFences(en);
+  if (mode === "zh") return _balanceFences(hasZh ? zh : en);
+  if (mode === "both" && hasZh && en) {
+    return _balanceFences([`### 中文`, "", zh, "", `### English`, "", en].join("\n").trimEnd());
+  }
+  // auto: prefer zh when available, otherwise keep original.
+  return _balanceFences(hasZh ? zh : en);
 }
 
 function _download(name, text) {
@@ -58,6 +94,7 @@ export async function exportThreadMarkdown(state, key, opts = {}) {
 
   const mode = String(opts.mode || "").trim().toLowerCase() === "full" ? "full" : "quick";
   const allowKindsQuick = new Set(["user_message", "assistant_message", "reasoning_summary"]);
+  const reasoningLang = String(opts.reasoningLang || "auto").trim().toLowerCase();
 
   let messages = [];
   const thread = (state && state.threadIndex && typeof state.threadIndex.get === "function")
@@ -77,33 +114,36 @@ export async function exportThreadMarkdown(state, key, opts = {}) {
   const selected = threadId ? messages : messages.filter(m => keyOf(m) === k);
   selected.sort((a, b) => (Number(a && a.seq) || 0) - (Number(b && b.seq) || 0));
 
+  const now = new Date();
+  const custom = String(getCustomLabel(k) || "").trim();
+  const fileBase = _baseName(file);
+  const title = custom || fileBase || (threadId ? shortId(threadId) : shortId(k)) || "导出";
+
   const lines = [];
-  lines.push(`# Codex Sidecar 导出（${mode === "quick" ? "精简" : "全量"}）`);
-  lines.push("");
-  lines.push(`- key: ${k}`);
-  if (threadId) lines.push(`- thread_id: ${threadId}`);
-  if (file) lines.push(`- file: ${file}`);
-  lines.push(`- exported_at: ${new Date().toISOString()}`);
-  lines.push("");
+  lines.push(`# ${title}`);
+  if (fileBase) lines.push(`> 原始文件：${fileBase}`);
+  lines.push(`> 导出时间：${_fmtLocal(now)}${mode === "quick" ? " · 精简" : ""}`);
   lines.push("---");
   lines.push("");
 
   for (const m of selected) {
     const kind = String(m && m.kind ? m.kind : "");
     if (mode === "quick" && !allowKindsQuick.has(kind)) continue;
-    const text = _wrapMaybeFence(kind, m && m.text);
-    lines.push(_formatHeader(m));
+    const text = (kind === "reasoning_summary")
+      ? _renderReasoning(m, { lang: reasoningLang })
+      : _balanceFences(String((m && m.text) ? m.text : "").trimEnd());
+    const head = _formatHeader(m);
+    if (head) lines.push(head);
     lines.push("");
     if (text) lines.push(text);
     lines.push("");
   }
 
-  const custom = String(getCustomLabel(k) || "").trim();
   const labelBase = custom ? _sanitizeFileName(custom) : "";
   const idBase = _sanitizeFileName(threadId ? shortId(threadId) : (k.split("/").slice(-1)[0] || k));
   const base = labelBase || idBase || "thread";
   const stamp = new Date().toISOString().replaceAll(/[:.]/g, "-");
-  const name = `codex-sidecar_${base}${labelBase && idBase && labelBase !== idBase ? `_${idBase}` : ""}_${stamp}.md`;
+  const name = `codex-sidecar_${base}_${stamp}.md`;
   _download(name, lines.join("\n").trim() + "\n");
   return { ok: true, mode, count: selected.length };
 }

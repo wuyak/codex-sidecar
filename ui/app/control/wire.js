@@ -20,6 +20,26 @@ export function wireControlEvents(dom, state, helpers) {
   const onSelectKey = typeof h.onSelectKey === "function" ? h.onSelectKey : (async () => {});
   const renderTabs = typeof h.renderTabs === "function" ? h.renderTabs : (() => {});
   const MASK = "********";
+  const _LS_UI_FONT = "codex_sidecar_ui_font_size";
+  const _LS_UI_BTN = "codex_sidecar_ui_btn_size";
+
+  const _applyUiFontSize = (px) => {
+    const n = Number(px);
+    const v = Number.isFinite(n) && n >= 12 && n <= 22 ? n : 14;
+    try { document.documentElement.style.setProperty("--ui-font-size", `${v}px`); } catch (_) {}
+    return v;
+  };
+
+  const _applyUiButtonSize = (px) => {
+    const n = Number(px);
+    const v = Number.isFinite(n) && n >= 32 && n <= 60 ? n : 38;
+    try { document.documentElement.style.setProperty("--rightbar-w", `${v}px`); } catch (_) {}
+    try {
+      const ico = v >= 46 ? 22 : v >= 42 ? 20 : 18;
+      document.documentElement.style.setProperty("--ui-ico-size", `${ico}px`);
+    } catch (_) {}
+    return v;
+  };
 
   const syncTranslateToggle = () => {
     const btn = dom && dom.translateToggleBtn ? dom.translateToggleBtn : null;
@@ -207,6 +227,18 @@ export function wireControlEvents(dom, state, helpers) {
     try { if (v !== "none") maybePlayNotifySound(dom, state); } catch (_) {}
   });
 
+  if (dom.uiFontSize) dom.uiFontSize.addEventListener("change", () => {
+    const v = _applyUiFontSize(dom.uiFontSize.value);
+    try { localStorage.setItem(_LS_UI_FONT, String(v)); } catch (_) {}
+    _toastFromEl(dom.uiFontSize, `字体大小：${v}px`);
+  });
+
+  if (dom.uiBtnSize) dom.uiBtnSize.addEventListener("change", () => {
+    const v = _applyUiButtonSize(dom.uiBtnSize.value);
+    try { localStorage.setItem(_LS_UI_BTN, String(v)); } catch (_) {}
+    _toastFromEl(dom.uiBtnSize, `按钮大小：${v}px`);
+  });
+
   if (dom.configToggleBtn) dom.configToggleBtn.addEventListener("click", () => {
     try {
       if (dom.drawer && !dom.drawer.classList.contains("hidden")) closeDrawer(dom);
@@ -280,84 +312,103 @@ export function wireControlEvents(dom, state, helpers) {
     // 正在重命名时不重绘，避免输入焦点丢失。
     if (_isBookmarkDrawerEditing()) return;
 
-    const q = String(dom.bookmarkSearch && dom.bookmarkSearch.value ? dom.bookmarkSearch.value : "").trim().toLowerCase();
-    const items = [];
-    const hiddenItems = [];
+	    const q = String(dom.bookmarkSearch && dom.bookmarkSearch.value ? dom.bookmarkSearch.value : "").trim().toLowerCase();
+	    const items = [];
+	    const hiddenItems = [];
 
-    try {
-      const arr = Array.from(state.threadIndex.values());
-      _sortThreads(arr);
-      const hidden = _ensureHiddenSet();
-      const closed = (state && state.closedThreads && typeof state.closedThreads.has === "function") ? state.closedThreads : new Map();
+	    try {
+      const followFiles = (state && Array.isArray(state.statusFollowFiles)) ? state.statusFollowFiles : [];
+	      const arr = Array.from(state.threadIndex.values());
+	      _sortThreads(arr);
+	      const hidden = _ensureHiddenSet();
+	      const closed = (state && state.closedThreads && typeof state.closedThreads.has === "function") ? state.closedThreads : new Map();
 
-      for (const t of arr) {
-        const key = String((t && t.key) ? t.key : "");
-        if (!key) continue;
-        const label = _threadLabel(t);
-        const file = String((t && t.file) ? t.file : "");
-        const tid = String((t && t.thread_id) ? t.thread_id : "");
-        const hay = `${label}\n${key}\n${file}\n${tid}`.toLowerCase();
-        if (q && !hay.includes(q)) continue;
-        const isHidden = !!(hidden && typeof hidden.has === "function" && hidden.has(key));
-        const unread = getUnreadCount(state, key);
-        const clr = colorForKey(key);
-        const entry = {
-          key,
-          label,
-          unread,
-          hidden: isHidden,
-          closed: !!(closed && typeof closed.has === "function" && closed.has(key)),
-          active: String(state.currentKey || "all") === key,
-          color: clr,
-        };
-        if (isHidden) hiddenItems.push(entry);
-        else items.push(entry);
+	      for (const t of arr) {
+	        const key = String((t && t.key) ? t.key : "");
+	        if (!key) continue;
+	        const label = _threadLabel(t);
+	        const file = String((t && t.file) ? t.file : "");
+        const fileBase = file ? (String(file).split("/").slice(-1)[0] || file) : "";
+        const followed = !!(file && followFiles && followFiles.includes(file));
+	        const tid = String((t && t.thread_id) ? t.thread_id : "");
+	        const hay = `${label}\n${key}\n${file}\n${tid}`.toLowerCase();
+	        if (q && !hay.includes(q)) continue;
+	        const isHidden = !!(hidden && typeof hidden.has === "function" && hidden.has(key));
+	        const unread = getUnreadCount(state, key);
+	        const clr = colorForKey(key);
+	        const entry = {
+	          key,
+	          label,
+	          unread,
+          file,
+          fileBase,
+          followed,
+	          hidden: isHidden,
+	          closed: !!(closed && typeof closed.has === "function" && closed.has(key)),
+	          active: String(state.currentKey || "all") === key,
+	          color: clr,
+	        };
+	        if (isHidden) hiddenItems.push(entry);
+	        else items.push(entry);
       }
     } catch (_) {}
 
-    const _renderList = (target, rows, opts = {}) => {
-      const isHiddenList = !!opts.hiddenList;
-      try { target.replaceChildren(); } catch (_) { while (target.firstChild) target.removeChild(target.firstChild); }
-      const frag = document.createDocumentFragment();
+	    const _renderList = (target, rows, opts = {}) => {
+	      const isHiddenList = !!opts.hiddenList;
+	      try { target.replaceChildren(); } catch (_) { while (target.firstChild) target.removeChild(target.firstChild); }
+	      const frag = document.createDocumentFragment();
 
-      if (!rows.length) {
-        const empty = document.createElement("div");
-        empty.className = "meta";
-        empty.style.opacity = "0.7";
-        empty.style.padding = "6px 2px";
-        empty.textContent = isHiddenList ? "暂无已移除会话" : "暂无会话";
-        frag.appendChild(empty);
-        target.appendChild(frag);
-        return;
-      }
+	      if (!rows.length) {
+	        const empty = document.createElement("div");
+	        empty.className = "meta";
+	        empty.style.opacity = "0.7";
+	        empty.style.padding = "6px 2px";
+	        empty.textContent = isHiddenList ? "暂无已关闭监听会话" : "暂无会话";
+	        frag.appendChild(empty);
+	        target.appendChild(frag);
+	        return;
+	      }
 
-      for (const it of rows) {
-        const row = document.createElement("div");
-        row.className = "tab"
-          + (it.active ? " active" : "")
-          + (it.unread > 0 ? " has-unread" : "")
-          + (it.closed ? " tab-closed" : "")
-          + (isHiddenList ? " tab-hidden" : "");
-        row.dataset.key = String(it.key || "");
-        if (isHiddenList) row.dataset.hidden = "1";
-        if (it.unread > 0) row.dataset.unread = it.unread > 99 ? "99+" : String(it.unread);
-        row.setAttribute("role", "button");
-        row.tabIndex = 0;
+	      for (const it of rows) {
+	        const row = document.createElement("div");
+	        row.className = "tab"
+	          + (it.active ? " active" : "")
+	          + (it.closed ? " tab-closed" : "")
+	          + (isHiddenList ? " tab-hidden" : "");
+	        row.dataset.key = String(it.key || "");
+	        if (isHiddenList) row.dataset.hidden = "1";
+	        row.setAttribute("role", "button");
+	        row.tabIndex = 0;
+          try {
+            const base = String(it.fileBase || "");
+            const followFiles = (state && Array.isArray(state.statusFollowFiles)) ? state.statusFollowFiles : [];
+            const suffix = followFiles.length ? (it.followed ? " · 跟随中" : " · 历史") : "";
+            row.title = `${String(it.label || "")}${base ? `\n${base}${suffix}` : ""}\n长按：重命名`;
+          } catch (_) {}
 
-        const dot = document.createElement("span");
-        dot.className = "tab-dot";
-        try { dot.style.background = String((it.color && it.color.fg) ? it.color.fg : "#64748b"); } catch (_) {}
+	        const dot = document.createElement("span");
+	        dot.className = "tab-dot";
+	        try { dot.style.background = String((it.color && it.color.fg) ? it.color.fg : "#64748b"); } catch (_) {}
 
-        const label = document.createElement("span");
-        label.className = "tab-label";
-        label.textContent = String(it.label || "");
+	        const label = document.createElement("span");
+	        label.className = "tab-label";
+	        label.textContent = String(it.label || "");
 
-        const input = document.createElement("input");
-        input.className = "tab-edit";
-        input.type = "text";
-        input.autocomplete = "off";
-        input.spellcheck = false;
-        input.value = String(it.label || "");
+          const sub = document.createElement("span");
+          sub.className = "tab-sub";
+          try {
+            const base = String(it.fileBase || "");
+            const followFiles = (state && Array.isArray(state.statusFollowFiles)) ? state.statusFollowFiles : [];
+            const suffix = followFiles.length ? (it.followed ? " · 跟随中" : " · 历史") : "";
+            sub.textContent = base ? `${base}${suffix}` : "";
+          } catch (_) { sub.textContent = ""; }
+
+	        const input = document.createElement("input");
+	        input.className = "tab-edit";
+	        input.type = "text";
+	        input.autocomplete = "off";
+	        input.spellcheck = false;
+	        input.value = String(it.label || "");
 
         const actions = document.createElement("div");
         actions.className = "tab-actions";
@@ -376,26 +427,67 @@ export function wireControlEvents(dom, state, helpers) {
         exportBtn.setAttribute("aria-label", "导出");
         exportBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="#i-download"></use></svg>`;
 
-        const toggleBtn = document.createElement("button");
-        toggleBtn.className = "mini-btn" + (isHiddenList ? " active" : "");
-        toggleBtn.type = "button";
-        toggleBtn.dataset.action = isHiddenList ? "restore" : "remove";
-        toggleBtn.setAttribute("aria-label", isHiddenList ? "恢复到标签栏" : "从标签栏移除");
-        toggleBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="${isHiddenList ? "#i-eye" : "#i-eye-off"}"></use></svg>`;
+	        const toggleBtn = document.createElement("button");
+	        toggleBtn.className = "mini-btn";
+	        toggleBtn.type = "button";
+	        toggleBtn.dataset.action = isHiddenList ? "listenOn" : "listenOff";
+	        toggleBtn.setAttribute("aria-label", isHiddenList ? "开启监听" : "关闭监听");
+	        toggleBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="${isHiddenList ? "#i-eye" : "#i-eye-off"}"></use></svg>`;
 
-        actions.appendChild(renameBtn);
-        actions.appendChild(exportBtn);
-        actions.appendChild(toggleBtn);
+	        actions.appendChild(renameBtn);
+	        actions.appendChild(exportBtn);
+	        actions.appendChild(toggleBtn);
 
-        row.appendChild(dot);
-        row.appendChild(label);
-        row.appendChild(input);
-        row.appendChild(actions);
-        frag.appendChild(row);
-      }
+          const main = document.createElement("div");
+          main.className = "tab-main";
+          main.appendChild(label);
+          if (sub && String(sub.textContent || "").trim()) main.appendChild(sub);
+          main.appendChild(input);
 
-      target.appendChild(frag);
-    };
+	        row.appendChild(dot);
+	        row.appendChild(main);
+	        row.appendChild(actions);
+	        frag.appendChild(row);
+
+          // Long press to rename (more direct than opening dialogs).
+          try {
+            let pressT = 0;
+            let startX = 0;
+            let startY = 0;
+            let moved = false;
+            const clear = () => { if (pressT) { try { clearTimeout(pressT); } catch (_) {} } pressT = 0; moved = false; };
+            row.addEventListener("pointerdown", (e) => {
+              try {
+                if (e && typeof e.button === "number" && e.button !== 0) return;
+                const t = e && e.target;
+                if (t && t.closest && t.closest("button")) return;
+              } catch (_) {}
+              clear();
+              startX = Number(e && e.clientX) || 0;
+              startY = Number(e && e.clientY) || 0;
+              moved = false;
+              pressT = setTimeout(() => {
+                if (moved) return;
+                try { row.dataset.lp = "1"; } catch (_) {}
+                _enterInlineRename(row, String(it.key || ""));
+              }, 460);
+            });
+            row.addEventListener("pointermove", (e) => {
+              if (!pressT) return;
+              const x = Number(e && e.clientX) || 0;
+              const y = Number(e && e.clientY) || 0;
+              const dx = x - startX;
+              const dy = y - startY;
+              if ((dx * dx + dy * dy) > (8 * 8)) { moved = true; clear(); }
+            });
+            row.addEventListener("pointerup", clear);
+            row.addEventListener("pointercancel", clear);
+            row.addEventListener("pointerleave", clear);
+          } catch (_) {}
+	      }
+
+	      target.appendChild(frag);
+	    };
 
     _renderList(host, items, { hiddenList: false });
     _renderList(hiddenHost, hiddenItems, { hiddenList: true });
@@ -484,21 +576,42 @@ export function wireControlEvents(dom, state, helpers) {
     const isHiddenRow = !!(row.dataset && row.dataset.hidden === "1");
     if (row.classList && row.classList.contains("editing")) return;
 
-    if (btn && btn.dataset) {
-      const action = String(btn.dataset.action || "");
-      try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
-      if (action === "rename") { _enterInlineRename(row, key); return; }
-      if (action === "export") {
+	    if (btn && btn.dataset) {
+	      const action = String(btn.dataset.action || "");
+	      try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+	      if (action === "rename") { _enterInlineRename(row, key); return; }
+	      if (action === "export") {
         _toastFromEl(btn, "正在导出…");
         const mode = (String(state.viewMode || "").toLowerCase() === "quick") ? "quick" : "full";
         const r = await exportThreadMarkdown(state, key, { mode });
-        _toastFromEl(btn, r && r.ok ? "已导出（下载）" : "导出失败");
-        return;
-      }
-      if (action === "remove") {
-        const hidden = _ensureHiddenSet();
-        if (!hidden.has(key)) hidden.add(key);
-        saveHiddenThreads(hidden);
+	        _toastFromEl(btn, r && r.ok ? "已导出（下载）" : "导出失败");
+	        return;
+	      }
+	      if (action === "listenOff") {
+	        const hidden = _ensureHiddenSet();
+	        if (!hidden.has(key)) hidden.add(key);
+	        saveHiddenThreads(hidden);
+	        _toastFromEl(btn, "监听：已关闭");
+	        try { renderTabs(); } catch (_) {}
+	        _renderBookmarkDrawerList();
+	        if (String(state.currentKey || "all") === key) {
+	          await onSelectKey(_pickFallbackKey(key));
+	        }
+	        return;
+	      }
+	      if (action === "listenOn") {
+	        const hidden = _ensureHiddenSet();
+	        if (hidden.has(key)) hidden.delete(key);
+	        saveHiddenThreads(hidden);
+	        _toastFromEl(btn, "监听：已开启");
+	        try { renderTabs(); } catch (_) {}
+	        _renderBookmarkDrawerList();
+	        return;
+	      }
+	      if (action === "remove") {
+	        const hidden = _ensureHiddenSet();
+	        if (!hidden.has(key)) hidden.add(key);
+	        saveHiddenThreads(hidden);
         _toastFromEl(btn, "已从标签栏移除");
         try { renderTabs(); } catch (_) {}
         _renderBookmarkDrawerList();
