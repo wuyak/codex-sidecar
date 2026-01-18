@@ -1,6 +1,7 @@
 import { escapeHtml } from "../../utils.js";
 import { renderMarkdownCached } from "../md_cache.js";
 import { deriveThinkingData } from "./derive.js";
+import { renderMathInMd } from "../../math.js";
 
 export function tryPatchThinkingRow(dom, state, msg, row, ctx) {
   const mid = (ctx && typeof ctx.mid === "string") ? ctx.mid : "";
@@ -34,6 +35,7 @@ export function tryPatchThinkingRow(dom, state, msg, row, ctx) {
       if (enEl) {
         const enRendered = renderMarkdownCached(state, `md:${mid}:think_en`, d.enText);
         enEl.innerHTML = enRendered || "";
+        try { renderMathInMd(enEl); } catch (_) {}
       }
     }
 
@@ -43,6 +45,7 @@ export function tryPatchThinkingRow(dom, state, msg, row, ctx) {
     if (!zhEl) throw new Error("missing zh container");
     zhEl.className = `think-zh md`;
     zhEl.innerHTML = zhRendered || "";
+    try { renderMathInMd(zhEl); } catch (_) {}
 
     return true;
   } catch (_) {

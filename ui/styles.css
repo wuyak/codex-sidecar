@@ -52,6 +52,7 @@
 			        --bm-radius: 14px;
 			        --bm-gap-y: 6px;
 			        --bm-collapsed-h: 248px;
+			        --rightbar-stack-h: calc(6 * var(--rightbar-w) + 5 * var(--rightbar-gap));
 
 		        --bm-bg: rgba(248, 250, 252, .92);
 		        --bm-bg-hover: rgba(255,255,255,.98);
@@ -114,14 +115,14 @@
 			        --bm-bg-hover: rgba(15,23,42,.90);
 			        --bm-shadow: 0 18px 52px rgba(0,0,0,.45);
 			      }
-		      /* 会话书签：右侧中部“书签栏”（默认仅露出窄边，悬停/聚焦展开） */
+		      /* 会话书签：右侧“书签栏”（默认仅露出窄边，悬停/聚焦展开） */
 			      #bookmarks {
 			        position: fixed;
-			        top: 54%;
+			        top: auto;
 			        right: var(--safe-right);
 			        left: auto;
-			        bottom: auto;
-			        transform: translateY(-50%) translateX(calc(var(--bm-panel-w) - var(--bm-peek-w)));
+			        bottom: calc(16px + var(--safe-bottom) + 96px + var(--rightbar-stack-h) + 16px);
+			        transform: translateX(calc(var(--bm-panel-w) - var(--bm-peek-w)));
 			        width: var(--bm-panel-w);
 			        display: block;
 			        z-index: var(--z-bookmarks);
@@ -134,7 +135,7 @@
 			      }
 			      #bookmarks:hover,
 			      #bookmarks:focus-within {
-			        transform: translateY(-50%) translateX(0);
+			        transform: translateX(0);
 			      }
 			      #bookmarks .bm-rail {
 			        display: flex;
@@ -165,6 +166,40 @@
 			      }
 			      body[data-bm-skin="dark"] #bookmarks .bm-rail::-webkit-scrollbar-thumb { background: rgba(148,163,184,.22); }
 			      #bookmarks .bm-rail { scrollbar-width: thin; scrollbar-color: rgba(148,163,184,.35) transparent; }
+
+			      /* 常显当前会话提示（不需要 hover 才知道“现在在哪个会话”） */
+			      #bookmarks .bookmark .bm-tip {
+			        display: block;
+			        position: absolute;
+			        right: calc(100% + 10px);
+			        top: 50%;
+			        transform: translateY(-50%) translateX(4px);
+			        padding: 6px 10px;
+			        border-radius: 999px;
+			        border: 1px solid rgba(148,163,184,.35);
+			        background: rgba(255,255,255,.96);
+			        color: var(--c-text);
+			        font-size: 12px;
+			        white-space: nowrap;
+			        box-shadow: var(--shadow-sm);
+			        opacity: 0;
+			        pointer-events: none;
+			        transition: opacity .12s ease, transform .12s ease;
+			        z-index: calc(var(--z-bookmarks) + 3);
+			      }
+			      body[data-bm-skin="dark"] #bookmarks .bookmark .bm-tip {
+			        background: rgba(15,23,42,.92);
+			        color: rgba(226,232,240,.98);
+			        border-color: rgba(148,163,184,.22);
+			      }
+			      #bookmarks .bookmark.active .bm-tip { opacity: 1; transform: translateY(-50%) translateX(0); }
+			      #bookmarks .bookmark:hover .bm-tip,
+			      #bookmarks .bookmark:focus-visible .bm-tip { opacity: 1; transform: translateY(-50%) translateX(0); }
+			      /* 展开列表时 tip 容易遮挡条目：仅保留 active */
+			      #bookmarks:hover .bookmark .bm-tip,
+			      #bookmarks:focus-within .bookmark .bm-tip { opacity: 0; }
+			      #bookmarks:hover .bookmark.active .bm-tip,
+			      #bookmarks:focus-within .bookmark.active .bm-tip { opacity: 1; }
 
 		      .bookmark {
 		        width: 100%;
@@ -447,7 +482,7 @@
 		      .icon-btn.danger:hover { background: var(--c-danger-bg); }
 	      @media (max-height: 640px) {
 	        .rightbar { top: calc(12px + var(--safe-top)); bottom: auto; }
-	        #bookmarks { top: 50%; }
+	        #bookmarks { top: calc(12px + var(--safe-top) + var(--rightbar-stack-h) + 16px); bottom: auto; }
 	      }
       .grid { display:grid; grid-template-columns: 140px 1fr; gap: 6px 10px; align-items:center; margin-top: 10px; }
       .grid.grid-compact { grid-template-columns: 110px 1fr; gap: 6px 8px; margin-top: 8px; }
@@ -569,10 +604,9 @@
 			      .md li { margin: 2px 0; }
 			      .md code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; background: var(--c-soft); border: 1px solid var(--c-border); padding: 1px 6px; border-radius: 6px; }
 		      .md pre code { background: transparent; padding: 0; }
-		      /* Math (KaTeX -> MathML) */
-		      .md .katex { display: inline-block; max-width: 100%; overflow-x: auto; overflow-y: hidden; vertical-align: -0.15em; }
-		      .md .katex > math { font-size: 1em; }
-		      .md .katex > math[display="block"] { display: block; margin: 8px auto; }
+		      /* Math (KaTeX) */
+		      .md .katex { max-width: 100%; overflow-x: auto; overflow-y: hidden; }
+		      .md .katex-display { max-width: 100%; overflow-x: auto; overflow-y: hidden; }
 		      .md .md-sep { margin: 10px 0; color:#cbd5e1; }
 	        .md-table { margin: 8px 0 0; overflow-x: auto; border: 1px solid var(--c-border); border-radius: 10px; background: var(--c-surface); }
         .md-table table { border-collapse: collapse; width: 100%; min-width: 420px; }

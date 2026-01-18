@@ -2,11 +2,6 @@ export function renderMathInMd(root) {
   const el = root && root.nodeType === 1 ? root : null;
   if (!el) return;
 
-  try {
-    const ds = el.dataset || null;
-    if (ds && ds.mathRendered === "1") return;
-  } catch (_) {}
-
   let text = "";
   try { text = String(el.textContent || ""); } catch (_) { text = ""; }
   // Fast-path: no common math delimiters.
@@ -14,6 +9,14 @@ export function renderMathInMd(root) {
 
   const fn = (typeof window !== "undefined") ? window.renderMathInElement : null;
   if (typeof fn !== "function") return;
+
+  try {
+    const ds = el.dataset || null;
+    if (ds) {
+      if (ds.mathRendered === "1" && ds.mathSource === text) return;
+      ds.mathSource = text;
+    }
+  } catch (_) {}
 
   try {
     fn(el, {
@@ -27,9 +30,8 @@ export function renderMathInMd(root) {
       throwOnError: false,
       strict: "ignore",
       trust: false,
-      output: "mathml",
+      output: "htmlAndMathml",
     });
     try { el.dataset.mathRendered = "1"; } catch (_) {}
   } catch (_) {}
 }
-
