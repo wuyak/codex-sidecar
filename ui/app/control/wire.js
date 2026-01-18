@@ -2,7 +2,7 @@ import { api } from "./api.js";
 import { clearView, restartProcess, startWatch, stopWatch } from "./actions.js";
 import { saveConfig, saveTranslateConfig } from "./config.js";
 import { applyProfileToInputs, readHttpInputs, refreshHttpProfileSelect, upsertSelectedProfileFromInputs } from "./http_profiles.js";
-import { closeBookmarkDrawer, closeDrawer, closeTranslateDrawer, openBookmarkDrawer, openDrawer, openTranslatorSettings, setDebug, setStatus, showProviderBlocks } from "./ui.js";
+import { closeBookmarkDrawer, closeDrawer, closeTranslateDrawer, confirmDialog, openBookmarkDrawer, openDrawer, openTranslatorSettings, setDebug, setStatus, setTopStatusSummary, showProviderBlocks } from "./ui.js";
 import { showShutdownScreen } from "../shutdown.js";
 import { toggleViewMode } from "../view_mode.js";
 import { flashToastAt } from "../utils/toast.js";
@@ -76,6 +76,7 @@ export function wireControlEvents(dom, state, helpers) {
     try { if (dom.translateMode) dom.translateMode.value = m; } catch (_) {}
     syncTranslateToggle();
     refreshThinkingMetaRight();
+    try { setTopStatusSummary(dom, state); } catch (_) {}
     return m;
   };
 
@@ -501,7 +502,7 @@ export function wireControlEvents(dom, state, helpers) {
     }
   });
   if (dom.clearBtn) dom.clearBtn.addEventListener("click", async () => { await clearView(dom, state, refreshList); });
-  if (dom.quickViewBtn) dom.quickViewBtn.addEventListener("click", () => { toggleViewMode(dom, state); });
+  if (dom.quickViewBtn) dom.quickViewBtn.addEventListener("click", () => { toggleViewMode(dom, state); try { setTopStatusSummary(dom, state); } catch (_) {} });
   if (dom.translateMode) dom.translateMode.addEventListener("change", async () => {
     const next = _sanitizeTranslateMode(dom.translateMode.value);
     await _setTranslateMode(next, dom.translateMode);
@@ -627,7 +628,14 @@ export function wireControlEvents(dom, state, helpers) {
 
     btn.addEventListener("click", async (e) => {
       if (longFired) { longFired = false; try { e.preventDefault(); e.stopPropagation(); } catch (_) {} return; }
-      if (!confirm("确定要退出 sidecar 进程？（将停止监听并关闭服务）")) return;
+      const ok = await confirmDialog(dom, {
+        title: "退出 Sidecar？",
+        desc: "将停止监听并关闭服务。",
+        confirmText: "退出",
+        cancelText: "取消",
+        danger: true,
+      });
+      if (!ok) return;
       setStatus(dom, "正在退出 sidecar…");
       try { if (state.uiEventSource) state.uiEventSource.close(); } catch (_) {}
       try { await api("POST", "/api/control/shutdown", {}); } catch (e) {}
@@ -639,9 +647,17 @@ export function wireControlEvents(dom, state, helpers) {
     });
   }
 
-  if (dom.scrollTopBtn) dom.scrollTopBtn.addEventListener("click", () => { window.scrollTo({ top: 0, behavior: "smooth" }); });
+  const _scrollBehavior = () => {
+    try {
+      const mq = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
+      if (mq && mq.matches) return "auto";
+    } catch (_) {}
+    return "smooth";
+  };
+
+  if (dom.scrollTopBtn) dom.scrollTopBtn.addEventListener("click", () => { window.scrollTo({ top: 0, behavior: _scrollBehavior() }); });
   if (dom.scrollBottomBtn) dom.scrollBottomBtn.addEventListener("click", async () => {
-    window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+    window.scrollTo({ top: document.body.scrollHeight, behavior: _scrollBehavior() });
   });
 
   if (dom.httpProfile) dom.httpProfile.addEventListener("change", () => {
@@ -679,9 +695,16 @@ export function wireControlEvents(dom, state, helpers) {
     if (dom.httpProfile) dom.httpProfile.value = state.httpSelected;
   });
 
-  if (dom.httpProfileDelBtn) dom.httpProfileDelBtn.addEventListener("click", () => {
+  if (dom.httpProfileDelBtn) dom.httpProfileDelBtn.addEventListener("click", async () => {
     if (!state.httpSelected) return;
-    if (!confirm(`删除 Profile：${state.httpSelected} ?`)) return;
+    const ok = await confirmDialog(dom, {
+      title: "删除翻译 Profile？",
+      desc: `将删除：${state.httpSelected}`,
+      confirmText: "删除",
+      cancelText: "取消",
+      danger: true,
+    });
+    if (!ok) return;
     state.httpProfiles = state.httpProfiles.filter(p => !(p && p.name === state.httpSelected));
     state.httpSelected = state.httpProfiles.length > 0 ? (state.httpProfiles[0].name || "") : "";
     refreshHttpProfileSelect(dom, state);

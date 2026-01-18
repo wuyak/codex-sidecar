@@ -5,6 +5,7 @@
 - 整理：新增 `old/` 归档目录，将 `ui_v2*`、`ui_legacy_*` 快照与本地缓存（`.npm-cache`、`.codex-home`）移入归档，减少仓库噪音（不影响当前默认 `/ui`）。
 - UI: 移除翻译配置的“从备份恢复”能力及相关接口，避免误操作造成困扰。
 - UI: 修复右侧工具栏按钮 hover 提示不显示（overflow 裁切导致 tooltip 不可见）。
+- UI: 对齐 ui-skills（轻量不改逻辑）：移除 `letter-spacing`/渐变/大面积 blur；fixed 元素支持 `safe-area-inset`；支持 `prefers-reduced-motion`；触控设备下自动放大触控目标；退出/重启/删除 Profile 使用统一确认弹窗；保存错误就地提示；空状态给出单一明确下一步。
 - 文档：新增 NVIDIA 翻译迁移指南（配置/请求/响应/提示词与 curl 自检示例）。
 - 修复：UI(legacy) 配置加载脚本异常导致页面空白/不工作（恢复 `/api/config` 加载并清理遗留代码）。
 - 移除：不再采集/展示 `agent_reasoning`，并移除对应配置项与 CLI 参数，减少噪音与重复。

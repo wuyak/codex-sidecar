@@ -5,6 +5,50 @@ import { countValidHttpProfiles, refreshHttpProfileSelect, upsertSelectedProfile
 import { loadControl } from "./load.js";
 import { setDebug, setStatus } from "./ui.js";
 
+function _clearFormError(dom, which) {
+  try {
+    if (which === "config") {
+      if (dom.configErrorText) dom.configErrorText.textContent = "";
+      return;
+    }
+    if (which === "translate") {
+      if (dom.translateErrorText) dom.translateErrorText.textContent = "";
+      return;
+    }
+  } catch (_) {}
+}
+
+function _setFormError(dom, which, msg) {
+  const text = String(msg || "").trim();
+  try {
+    if (which === "config") {
+      if (dom.configErrorText) dom.configErrorText.textContent = text;
+      return;
+    }
+    if (which === "translate") {
+      if (dom.translateErrorText) dom.translateErrorText.textContent = text;
+      return;
+    }
+  } catch (_) {}
+}
+
+function _clearInvalidFields(dom) {
+  const els = [
+    dom.openaiBaseUrl, dom.openaiModel, dom.openaiApiKey,
+    dom.nvidiaBaseUrl, dom.nvidiaModel, dom.nvidiaApiKey,
+    dom.httpUrl, dom.httpToken,
+  ];
+  for (const el of els) {
+    try { if (el && el.classList) el.classList.remove("field-invalid"); } catch (_) {}
+  }
+}
+
+function _markInvalid(dom, el, msg) {
+  try { _setFormError(dom, "translate", msg); } catch (_) {}
+  try { if (el && el.classList) el.classList.add("field-invalid"); } catch (_) {}
+  try { if (el && typeof el.focus === "function") el.focus(); } catch (_) {}
+}
+
 function _buildTranslatorPatch(dom, state) {
   const provider = (dom.translatorSel && dom.translatorSel.value) ? dom.translatorSel.value : "openai";
   const patch = { translator_provider: provider };
@@ -65,16 +109,19 @@ function _buildTranslatorPatch(dom, state) {
 }
 
 export async function saveTranslateConfig(dom, state) {
+  _clearFormError(dom, "translate");
+  _clearInvalidFields(dom);
+
   const built = _buildTranslatorPatch(dom, state);
   if (!built || built.ok === false) {
     const err = String(built && built.error ? built.error : "invalid_translate_config");
-    if (err === "missing_openai_base_url") { alert("请填写 Base URL（例如 https://www.right.codes/codex/v1）"); return; }
-    if (err === "missing_openai_model") { alert("请填写 Model（例如 gpt-5.1）"); return; }
-    if (err === "missing_openai_key") { alert("请填写 API Key"); return; }
-    if (err === "missing_nvidia_base_url") { alert("请填写 Base URL（例如 https://integrate.api.nvidia.com/v1）"); return; }
-    if (err === "missing_nvidia_model") { alert("请填写 Model（例如 moonshotai/kimi-k2-instruct）"); return; }
-    if (err === "missing_nvidia_key") { alert("请填写 API Key"); return; }
-    alert("翻译设置不完整，请检查输入。");
+    if (err === "missing_openai_base_url") { _markInvalid(dom, dom.openaiBaseUrl, "请填写 Base URL（例如 https://www.right.codes/codex/v1）"); return; }
+    if (err === "missing_openai_model") { _markInvalid(dom, dom.openaiModel, "请填写 Model（例如 gpt-5.1）"); return; }
+    if (err === "missing_openai_key") { _markInvalid(dom, dom.openaiApiKey, "请填写 API Key"); return; }
+    if (err === "missing_nvidia_base_url") { _markInvalid(dom, dom.nvidiaBaseUrl, "请填写 Base URL（例如 https://integrate.api.nvidia.com/v1）"); return; }
+    if (err === "missing_nvidia_model") { _markInvalid(dom, dom.nvidiaModel, "请填写 Model（例如 moonshotai/kimi-k2-instruct）"); return; }
+    if (err === "missing_nvidia_key") { _markInvalid(dom, dom.nvidiaApiKey, "请填写 API Key"); return; }
+    _setFormError(dom, "translate", "翻译设置不完整，请检查输入。");
     return;
   }
   const provider = built.provider;
@@ -82,7 +129,7 @@ export async function saveTranslateConfig(dom, state) {
   if (provider === "http") {
     const valid = countValidHttpProfiles(state.httpProfiles);
     if (valid <= 0) {
-      alert("请至少保留 1 个可用的 HTTP Profile（需要 name + http/https URL），或切换翻译 Provider。");
+      _markInvalid(dom, dom.httpUrl, "请至少保留 1 个可用的 HTTP Profile（需要 name + http/https URL），或切换翻译 Provider。");
       return;
     }
   }
@@ -92,9 +139,9 @@ export async function saveTranslateConfig(dom, state) {
   if (saved && saved.ok === false) {
     const err = String(saved.error || "");
     if (err === "empty_http_profiles") {
-      alert("保存被拒绝：HTTP Profiles 为空/不可用。请至少保留 1 个可用的 Profile（name + http/https URL），或切换翻译 Provider。");
+      _setFormError(dom, "translate", "保存被拒绝：HTTP Profiles 为空/不可用。请至少保留 1 个可用的 Profile（name + http/https URL），或切换翻译 Provider。");
     } else {
-      alert(`保存失败：${err || "unknown_error"}`);
+      _setFormError(dom, "translate", `保存失败：${err || "unknown_error"}`);
     }
     setStatus(dom, "保存失败");
     return;
@@ -136,6 +183,8 @@ export async function saveTranslateConfig(dom, state) {
 }
 
 export async function saveConfig(dom, state) {
+  _clearFormError(dom, "config");
+
   let wasRunning = false;
   try {
     const st = await fetch(`/api/status?t=${Date.now()}`, { cache: "no-store" }).then(r => r.json());
@@ -158,7 +207,7 @@ export async function saveConfig(dom, state) {
   const saved = await api("POST", "/api/config", patch);
   if (saved && saved.ok === false) {
     const err = String(saved.error || "");
-    alert(`保存失败：${err || "unknown_error"}`);
+    _setFormError(dom, "config", `保存失败：${err || "unknown_error"}`);
     setStatus(dom, "保存失败");
     return;
   }

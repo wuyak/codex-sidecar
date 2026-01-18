@@ -26,6 +26,7 @@ export function getDom() {
 	    nvidiaBlock: byId("nvidiaBlock"),
 	    openaiBlock: byId("openaiBlock"),
 	    saveTranslateBtn: byId("saveTranslateBtn"),
+	    translateErrorText: byId("translateErrorText"),
 	    nvidiaBaseUrl: byId("nvidiaBaseUrl"),
 	    nvidiaModel: byId("nvidiaModel"),
 	    nvidiaApiKey: byId("nvidiaApiKey"),
@@ -48,9 +49,10 @@ export function getDom() {
     httpUrl: byId("httpUrl"),
     httpToken: byId("httpToken"),
     httpTokenEyeBtn: byId("httpTokenEyeBtn"),
-    httpTimeout: byId("httpTimeout"),
+	    httpTimeout: byId("httpTimeout"),
 
-    saveBtn: byId("saveBtn"),
+	    saveBtn: byId("saveBtn"),
+	    configErrorText: byId("configErrorText"),
 
 	    clearBtn: byId("clearBtn"),
 	    powerBtn: byId("powerBtn"),
@@ -66,6 +68,12 @@ export function getDom() {
     translateDrawerCloseBtn: byId("translateDrawerCloseBtn"),
     scrollTopBtn: byId("scrollTopBtn"),
     scrollBottomBtn: byId("scrollBottomBtn"),
+
+    confirmDialog: byId("confirmDialog"),
+    confirmDialogTitle: byId("confirmDialogTitle"),
+    confirmDialogDesc: byId("confirmDialogDesc"),
+    confirmDialogCancel: byId("confirmDialogCancel"),
+    confirmDialogOk: byId("confirmDialogOk"),
 
     list: byId("list"),
   };

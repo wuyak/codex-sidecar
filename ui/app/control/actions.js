@@ -1,6 +1,6 @@
 import { api, healthPid, waitForRestartCycle } from "./api.js";
 import { loadControl } from "./load.js";
-import { closeDrawer, setStatus } from "./ui.js";
+import { closeDrawer, confirmDialog, setStatus } from "./ui.js";
 import { clearViews } from "../views.js";
 
 export async function startWatch(dom, state) {
@@ -30,7 +30,14 @@ export async function stopWatch(dom, state) {
 export async function restartProcess(dom, state, opts) {
   const skipConfirm = !!(opts && typeof opts === "object" && opts.skipConfirm);
   if (!skipConfirm) {
-    if (!confirm("确定要重启 sidecar 进程？（将杀死并重新拉起服务）")) return;
+    const ok = await confirmDialog(dom, {
+      title: "重启 Sidecar？",
+      desc: "将停止监听并重新拉起服务。",
+      confirmText: "重启",
+      cancelText: "取消",
+      danger: true,
+    });
+    if (!ok) return;
   }
   const beforePid = await healthPid();
   setStatus(dom, beforePid ? `正在重启 sidecar…（pid:${beforePid}）` : "正在重启 sidecar…");

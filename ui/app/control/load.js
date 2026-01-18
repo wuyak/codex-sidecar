@@ -1,7 +1,7 @@
 import { fmtErr, rolloutStampFromFile, shortId } from "../utils.js";
 import { api } from "./api.js";
 import { applyProfileToInputs, normalizeHttpProfiles, refreshHttpProfileSelect } from "./http_profiles.js";
-import { setDebug, setStatus, showProviderBlocks } from "./ui.js";
+import { setDebug, setTopStatusSummary, showProviderBlocks } from "./ui.js";
 import { preloadNotifySound } from "../sound.js";
 
 function _prettyPath(p) {
@@ -177,18 +177,13 @@ export async function loadControl(dom, state) {
       }
     })();
 
-    const isTranslateAuto = String((state && state.translateMode) ? state.translateMode : "").trim().toLowerCase() !== "manual";
-    const isQuick = String((state && state.viewMode) ? state.viewMode : "").trim().toLowerCase() === "quick";
     const err = String((st && st.last_error) ? st.last_error : (w && w.last_error) ? w.last_error : "").trim();
 
-    const parts = [];
-    parts.push(st.running ? "监听中" : "未监听");
-    parts.push(`会话:${fs.length}`);
-    parts.push(`翻译:${isTranslateAuto ? "开" : "关"}`);
-    parts.push(`精简:${isQuick ? "开" : "关"}`);
-    if (selMode === "pin") parts.push("固定");
-    if (err) parts.push("异常");
-    setStatus(dom, parts.join(" · "));
+    try { if (state) state.statusFollowFiles = fs; } catch (_) {}
+    try { if (state) state.statusSelectionMode = selMode; } catch (_) {}
+    try { if (state) state.statusLastError = err; } catch (_) {}
+    try { if (state) state.running = !!st.running; } catch (_) {}
+    setTopStatusSummary(dom, state);
 
     // Hover details: only what users care about (which sessions are followed).
     let hoverHtml = "";
@@ -222,7 +217,6 @@ export async function loadControl(dom, state) {
       if (dom.statusHover) dom.statusHover.innerHTML = hoverHtml || "";
       if (dom.statusText) dom.statusText.title = "悬停查看当前跟随会话";
     } catch (_) {}
-    try { if (state) state.running = !!st.running; } catch (_) {}
     try {
       const btn = (dom && dom.watchToggleBtn) ? dom.watchToggleBtn : null;
       if (btn) {

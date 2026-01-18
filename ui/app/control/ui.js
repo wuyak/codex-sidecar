@@ -9,6 +9,25 @@ export function setDebug(dom, s) {
   try { if (dom.debugText) dom.debugText.textContent = s || ""; } catch (_) {}
 }
 
+export function setTopStatusSummary(dom, state) {
+  const isRunning = !!(state && state.running);
+  const followFiles = (state && Array.isArray(state.statusFollowFiles)) ? state.statusFollowFiles : [];
+  const followN = followFiles.length;
+  const translateAuto = String((state && state.translateMode) ? state.translateMode : "").trim().toLowerCase() !== "manual";
+  const isQuick = String((state && state.viewMode) ? state.viewMode : "").trim().toLowerCase() === "quick";
+  const selMode = String((state && state.statusSelectionMode) ? state.statusSelectionMode : "").trim().toLowerCase();
+  const err = String((state && state.statusLastError) ? state.statusLastError : "").trim();
+
+  const parts = [];
+  parts.push(isRunning ? "监听中" : "未监听");
+  parts.push(`会话:${followN}`);
+  parts.push(`翻译:${translateAuto ? "开" : "关"}`);
+  parts.push(`精简:${isQuick ? "开" : "关"}`);
+  if (selMode === "pin") parts.push("固定");
+  if (err) parts.push("异常");
+  setStatus(dom, parts.join(" · "));
+}
+
 export function openDrawer(dom) {
   // Keep UI clean: config drawer and translate drawer are mutually exclusive.
   try { closeTranslateDrawer(dom); } catch (_) {}
@@ -67,6 +86,47 @@ export function closeBookmarkDrawer(dom) {
     if (dom.bookmarkDrawerOverlay) dom.bookmarkDrawerOverlay.classList.add("hidden");
     if (dom.bookmarkDrawer) dom.bookmarkDrawer.classList.add("hidden");
   } catch (_) {}
+}
+
+export async function confirmDialog(dom, opts = {}) {
+  const o = (opts && typeof opts === "object") ? opts : {};
+  const title = String(o.title || "确认操作").trim() || "确认操作";
+  const desc = String(o.desc || "").trim();
+  const confirmText = String(o.confirmText || "确认").trim() || "确认";
+  const cancelText = String(o.cancelText || "取消").trim() || "取消";
+  const danger = !!o.danger;
+
+  const dlg = dom && dom.confirmDialog ? dom.confirmDialog : null;
+  const canModal = !!(dlg && typeof dlg.showModal === "function");
+  if (!canModal) {
+    const msg = `${title}${desc ? "\n\n" + desc : ""}`;
+    return !!confirm(msg);
+  }
+
+  try { if (dom.confirmDialogTitle) dom.confirmDialogTitle.textContent = title; } catch (_) {}
+  try { if (dom.confirmDialogDesc) dom.confirmDialogDesc.textContent = desc; } catch (_) {}
+  try { if (dom.confirmDialogOk) dom.confirmDialogOk.textContent = confirmText; } catch (_) {}
+  try { if (dom.confirmDialogCancel) dom.confirmDialogCancel.textContent = cancelText; } catch (_) {}
+  try {
+    if (dom.confirmDialogOk && dom.confirmDialogOk.classList) {
+      dom.confirmDialogOk.classList.toggle("danger", danger);
+      dom.confirmDialogOk.classList.toggle("primary", !danger);
+    }
+  } catch (_) {}
+
+  return await new Promise((resolve) => {
+    const onClose = () => {
+      try { dlg.removeEventListener("close", onClose); } catch (_) {}
+      const v = String(dlg.returnValue || "");
+      resolve(v === "confirm");
+    };
+    try { dlg.addEventListener("close", onClose, { once: true }); } catch (_) {}
+    try { dlg.showModal(); } catch (_) { resolve(false); return; }
+    try {
+      // 默认聚焦“取消”，避免误触连点造成不可逆操作。
+      if (dom.confirmDialogCancel && typeof dom.confirmDialogCancel.focus === "function") dom.confirmDialogCancel.focus();
+    } catch (_) {}
+  });
 }
 
 function showHttpFields(dom, show) {

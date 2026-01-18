@@ -157,13 +157,14 @@
 						          提示：皮肤/提示音/自动翻译为即时生效；其余参数需点“保存”后生效。
 					        </div>
 					      </div>
-	<div class="btns">
-					        <button class="primary" id="saveBtn" type="button">保存</button>
-					      </div>
-				      <details id="debugDetails" style="margin-top:8px;">
-				        <summary class="meta">调试信息（配置加载/缓存排查）</summary>
-				        <pre id="debugText" class="meta" style="white-space:pre-wrap; user-select:text;"></pre>
-				      </details>
+		<div class="btns">
+						        <button class="primary" id="saveBtn" type="button">保存</button>
+						      </div>
+						      <div id="configErrorText" class="meta form-error" style="margin-top:6px;"></div>
+					      <details id="debugDetails" style="margin-top:8px;">
+					        <summary class="meta">调试信息（配置加载/缓存排查）</summary>
+					        <pre id="debugText" class="meta" style="white-space:pre-wrap; user-select:text;"></pre>
+					      </details>
 				    </div>
 				    <div id="translateDrawerOverlay" class="drawer-overlay hidden"></div>
 				    <div id="translateDrawer" class="drawer hidden" role="dialog" aria-modal="true" aria-label="翻译设置">
@@ -285,10 +286,19 @@
 					        <div class="btns" style="margin-top:10px;">
 					          <button class="primary" id="saveTranslateBtn" type="button">保存</button>
 					        </div>
-					        <div class="meta" style="margin-top:6px;">
-					        </div>
+					        <div id="translateErrorText" class="meta form-error" style="margin-top:6px;"></div>
 					      </div>
 					    </div>
+						    <dialog id="confirmDialog" class="confirm-dialog" role="alertdialog" aria-labelledby="confirmDialogTitle" aria-describedby="confirmDialogDesc">
+						      <form method="dialog" class="confirm-dialog-form">
+						        <div class="confirm-dialog-title" id="confirmDialogTitle">确认操作</div>
+						        <div class="confirm-dialog-desc meta" id="confirmDialogDesc"></div>
+						        <div class="btns" style="margin-top:12px; justify-content:flex-end;">
+						          <button id="confirmDialogCancel" value="cancel" type="submit" autofocus>取消</button>
+						          <button id="confirmDialogOk" value="confirm" type="submit" class="danger">确认</button>
+						        </div>
+						      </form>
+						    </dialog>
 						    <div class="float-nav" aria-label="scroll">
 						      <button id="scrollTopBtn" type="button" aria-label="回到页面顶部"><svg class="ico" aria-hidden="true"><use href="#i-arrow-up"></use></svg></button>
 						      <button id="scrollBottomBtn" type="button" aria-label="回到页面底部"><svg class="ico" aria-hidden="true"><use href="#i-arrow-down"></use></svg></button>
