@@ -171,7 +171,7 @@
 		        padding: 6px 10px;
 		        text-align: left;
 		        position: relative;
-		        overflow: hidden;
+		        overflow: visible;
 		        box-shadow: none;
 		      }
 		      body[data-bm-skin="dark"] .bookmark { background: rgba(15,23,42,.62); border-color: rgba(148,163,184,.22); }
@@ -231,9 +231,9 @@
 		        border-color: rgba(148, 163, 184, .35);
 		        box-shadow: none;
 		      }
-		      #bookmarks .bm-rail .bookmark.bm-s { width: 84px; }
-		      #bookmarks .bm-rail .bookmark.bm-m { width: 144px; }
-		      #bookmarks .bm-rail .bookmark.bm-l { width: 200px; }
+		      #bookmarks .bm-rail .bookmark.bm-s { width: 120px; }
+		      #bookmarks .bm-rail .bookmark.bm-m { width: 180px; }
+		      #bookmarks .bm-rail .bookmark.bm-l { width: 240px; }
 		      body[data-bm-skin="dark"] #bookmarks .bm-rail .bookmark { background: rgba(15,23,42,.58); border-color: rgba(148,163,184,.20); }
 		      #bookmarks .bm-rail .bookmark:hover { background: var(--c-soft-2); border-color: var(--c-border); }
 		      #bookmarks .bm-rail .bookmark.active {
@@ -244,7 +244,7 @@
 		      body[data-bm-skin="dark"] #bookmarks .bm-rail .bookmark.active { background: rgba(15,23,42,.82); }
 		      #bookmarks .bm-rail .bookmark .bm-dot { width: 4px; height: 18px; border-radius: 999px; }
 			      #bookmarks .bm-rail .bookmark .bm-label { font-size: clamp(12px, calc(var(--ui-font-size, 14px) - 1px), 18px); }
-		      #bookmarks .bm-rail .bookmark .bm-tip { display: none; }
+		      /* 标签 hover 提示用“就地 toast”，避免被横向滚动容器裁切（见 tabs.js）。 */
 		      #bookmarks .bm-rail .bookmark .bm-close {
 		        width: 22px;
 		        height: 22px;
@@ -379,6 +379,33 @@
 	        box-shadow: 0 10px 24px rgba(0,0,0,.14);
 	      }
 	      .tab-dot { width: 10px; height: 10px; border-radius: 999px; display:inline-block; flex: 0 0 auto; }
+	      .tab[data-hint] { position: relative; }
+	      .tab[data-hint]::after {
+	        content: attr(data-hint);
+	        position: absolute;
+	        left: 12px;
+	        top: calc(100% + 6px);
+	        padding: 6px 10px;
+	        border-radius: 999px;
+	        border: 1px solid rgba(148,163,184,.35);
+	        background: rgba(255,255,255,.96);
+	        color: var(--c-text);
+	        font-size: clamp(11px, calc(var(--ui-font-size, 14px) - 2px), 16px);
+	        white-space: nowrap;
+	        box-shadow: var(--shadow-sm);
+	        opacity: 0;
+	        pointer-events: none;
+	        transform: translateY(-2px);
+	        transition: opacity .12s ease, transform .12s ease;
+	        z-index: calc(var(--z-bookmark-drawer) + 2);
+	      }
+	      body[data-bm-skin="dark"] .tab[data-hint]::after {
+	        background: rgba(15,23,42,.92);
+	        color: rgba(226,232,240,.98);
+	        border-color: rgba(148,163,184,.22);
+	      }
+	      .tab[data-hint]:hover::after,
+	      .tab[data-hint]:focus-visible::after { opacity: 1; transform: translateY(0); }
 		      .top-title { font-size: calc(var(--ui-font-size, 14px) + 4px); font-weight: 800; }
 			      .rightbar {
 			        position: fixed;

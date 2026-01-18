@@ -80,6 +80,8 @@ function _pickFallbackKey(state, excludeKey = "") {
   return "all";
 }
 
+let _lastHoverTipMs = 0;
+
 export function clearTabs(dom) {
   const host = dom.bookmarks;
   if (!host) return;
@@ -233,6 +235,19 @@ function _wireBookmarkInteractions(btn) {
   btn.addEventListener("pointerup", clearPress);
   btn.addEventListener("pointercancel", clearPress);
   btn.addEventListener("pointerleave", clearPress);
+
+  // Hover hint (avoid native tooltip; use lightweight toast near the tab).
+  btn.addEventListener("mouseenter", () => {
+    try {
+      if (btn.classList && btn.classList.contains("editing")) return;
+      const k = String(btn.dataset && btn.dataset.key ? btn.dataset.key : "").trim();
+      if (!k || k === "all") return;
+      const now = Date.now();
+      if (now - _lastHoverTipMs < 2400) return;
+      _lastHoverTipMs = now;
+      _toastFromEl(btn, "左键长按：重命名~ (´▽｀)", { durationMs: 1400 });
+    } catch (_) {}
+  });
 
   btn.addEventListener("click", async (e) => {
     try {
@@ -444,7 +459,7 @@ export function renderTabs(dom, state, onSelectKey) {
       } catch (_) {}
       const parts = _ensureBookmarkStructure(btn);
       if (parts) {
-        try { parts.tipSpan.textContent = label; } catch (_) {}
+        try { parts.tipSpan.textContent = "左键长按：重命名~ (´▽｀)"; } catch (_) {}
         try { parts.labelSpan.textContent = label; } catch (_) {}
         try { parts.closeSpan.removeAttribute("title"); } catch (_) {}
       }

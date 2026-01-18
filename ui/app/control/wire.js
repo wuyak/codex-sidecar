@@ -505,6 +505,7 @@ export function wireControlEvents(dom, state, helpers) {
 	          + (it.closed ? " tab-closed" : "")
 	          + (isHiddenList ? " tab-hidden" : "");
 	        row.dataset.key = String(it.key || "");
+	        row.dataset.hint = isHiddenList ? "点击：恢复到标签栏" : "左键长按：删除该会话";
 	        if (isHiddenList) row.dataset.hidden = "1";
 	        row.setAttribute("role", "button");
 	        row.tabIndex = 0;

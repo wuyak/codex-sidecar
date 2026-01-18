@@ -204,7 +204,8 @@ class FollowPicker:
         re_pat = self._codex_process_re
         if re_pat is None:
             return []
-        out: List[int] = []
+        strong: List[int] = []
+        weak: List[int] = []
         my_pid = None
         try:
             my_pid = int(os.getpid())
@@ -220,23 +221,26 @@ class FollowPicker:
             try:
                 exe0 = _proc_read_exe_basename(pid)
                 if exe0 and re_pat.search(exe0):
-                    out.append(int(pid))
+                    strong.append(int(pid))
                     continue
             except Exception:
                 pass
             try:
                 a0 = _proc_read_argv0_basename(pid)
                 if a0 and re_pat.search(a0):
-                    out.append(int(pid))
+                    strong.append(int(pid))
                     continue
             except Exception:
                 pass
             try:
                 cmd = _proc_read_cmdline(pid)
                 if cmd and re_pat.search(cmd):
-                    out.append(int(pid))
+                    # NOTE: cmdline 匹配容易误命中（例如 sidecar 自己的路径/参数含 “codex”）。
+                    # 仅在找不到任何“强匹配（exe/argv0）”时才会回退使用 cmdline 匹配。
+                    weak.append(int(pid))
             except Exception:
                 continue
+        out = strong if strong else weak
         return out[:64]
 
     def _collect_process_tree(self, roots: Sequence[int]) -> List[int]:
