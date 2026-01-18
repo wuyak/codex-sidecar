@@ -1,7 +1,7 @@
 import { colorForKey, keyOf, rolloutStampFromFile, shortId } from "../utils.js";
 import { getCustomLabel, setCustomLabel } from "./labels.js";
-import { loadHiddenThreads, saveHiddenThreads, saveShowHiddenFlag } from "./hidden.js";
-import { getUnreadCount, getUnreadTotal } from "../unread.js";
+import { loadHiddenThreads, saveHiddenThreads } from "./hidden.js";
+import { getUnreadCount } from "../unread.js";
 import { notifyCorner } from "../utils/notify.js";
 
 function _parseStamp(stamp) {
@@ -24,6 +24,28 @@ function threadLabels(t) {
   const full = (stampFull && idPart) ? `${stampFull} · ${idPart}` : (stampFull || idPart || "unknown");
   const label = (stampShort && idPart) ? `${stampShort} · ${idPart}` : (idPart || stampShort || stampFull || "unknown");
   return { label, full };
+}
+
+function _pickFallbackKey(state, excludeKey = "") {
+  const ex = String(excludeKey || "");
+  const hidden = (state && state.hiddenThreads && typeof state.hiddenThreads.has === "function")
+    ? state.hiddenThreads
+    : loadHiddenThreads();
+  const arr = Array.from((state && state.threadIndex && typeof state.threadIndex.values === "function") ? state.threadIndex.values() : []);
+  arr.sort((a, b) => {
+    const sa = Number(a && a.last_seq) || 0;
+    const sb = Number(b && b.last_seq) || 0;
+    if (sa !== sb) return sb - sa;
+    return String(b && b.last_ts ? b.last_ts : "").localeCompare(String(a && a.last_ts ? a.last_ts : ""));
+  });
+  for (const t of arr) {
+    const k = String((t && t.key) ? t.key : "");
+    if (!k) continue;
+    if (k === ex) continue;
+    if (hidden && typeof hidden.has === "function" && hidden.has(k)) continue;
+    return k;
+  }
+  return "all";
 }
 
 export function clearTabs(dom) {
@@ -296,7 +318,6 @@ export function renderTabs(dom, state, onSelectKey) {
   const hidden = (state && state.hiddenThreads && typeof state.hiddenThreads.has === "function")
     ? state.hiddenThreads
     : loadHiddenThreads();
-  const showHidden = !!(state && state.showHiddenThreads);
   const closed = (state && state.closedThreads && typeof state.closedThreads.has === "function")
     ? state.closedThreads
     : new Map();
@@ -308,24 +329,6 @@ export function renderTabs(dom, state, onSelectKey) {
     return state.hiddenThreads;
   };
 
-  const _toggleShowHidden = async () => {
-    const next = !showHidden;
-    try { state.showHiddenThreads = next; } catch (_) {}
-    saveShowHiddenFlag(next);
-    try {
-      notifyCorner(
-        "bm_ctx",
-        "会话列表",
-        next ? "已显示已移除会话（右键会话可恢复）" : "已隐藏已移除会话",
-        { ttlMs: 1600, level: "info" },
-      );
-    } catch (_) {}
-    const curKey = String(state.currentKey || "all");
-    const hiddenCur = !!(curKey && curKey !== "all" && _ensureHiddenSet().has(curKey));
-    if (!next && hiddenCur) await onSelectKey("all");
-    else renderTabs(dom, state, onSelectKey);
-  };
-
   const _hideKey = async (key, labelForToast = "") => {
     const k = String(key || "").trim();
     if (!k || k === "all") return;
@@ -334,7 +337,7 @@ export function renderTabs(dom, state, onSelectKey) {
     s.add(k);
     saveHiddenThreads(s);
     try { notifyCorner("bm_ctx", "会话列表", `已从列表移除：${labelForToast || shortId(k)}`, { ttlMs: 1600, level: "success" }); } catch (_) {}
-    if (!state.showHiddenThreads && String(state.currentKey || "all") === k) await onSelectKey("all");
+    if (String(state.currentKey || "all") === k) await onSelectKey(_pickFallbackKey(state, k));
     else renderTabs(dom, state, onSelectKey);
   };
 
@@ -354,7 +357,7 @@ export function renderTabs(dom, state, onSelectKey) {
         { ttlMs: 1600, level: was ? "info" : "success" },
       );
     } catch (_) {}
-    if (!was && !state.showHiddenThreads && String(state.currentKey || "all") === k) await onSelectKey("all");
+    if (!was && String(state.currentKey || "all") === k) await onSelectKey(_pickFallbackKey(state, k));
     else renderTabs(dom, state, onSelectKey);
   };
 
@@ -375,43 +378,14 @@ export function renderTabs(dom, state, onSelectKey) {
       at_ts: String((t && t.last_ts) ? t.last_ts : ""),
     });
     try { notifyCorner("bm_close", "会话标签", `已关闭标签：${labelForToast || shortId(k)}`, { ttlMs: 1400, level: "info" }); } catch (_) {}
-    if (String(state.currentKey || "all") === k) await onSelectKey("all");
+    if (String(state.currentKey || "all") === k) await onSelectKey(_pickFallbackKey(state, k));
     else renderTabs(dom, state, onSelectKey);
   };
 
   const renderList = (container, existing, opts) => {
-    const includeAll = !!(opts && opts.includeAll);
     const mode = String(opts && opts.mode ? opts.mode : "");
 
     const currentKey = String(state.currentKey || "all");
-
-    const _appendAll = () => {
-      const totalUnread = getUnreadTotal(state);
-      const allBtn = _getOrCreateBookmark(container, existing, "all", () => document.createElement("button"));
-      allBtn.className = "bookmark" + (currentKey === "all" ? " active" : "") + (totalUnread > 0 ? " has-unread" : "");
-      allBtn.dataset.mode = mode;
-      allBtn.style.setProperty("--bm-accent", "var(--c-muted)");
-      allBtn.style.setProperty("--bm-border", "rgba(148,163,184,.55)");
-      const partsAll = _ensureBookmarkStructure(allBtn);
-      if (partsAll) {
-        try { partsAll.tipSpan.textContent = "全部"; } catch (_) {}
-        try { partsAll.labelSpan.textContent = "全部"; } catch (_) {}
-        try { partsAll.closeSpan.title = ""; } catch (_) {}
-      }
-      try { allBtn.setAttribute("aria-label", "全部会话"); } catch (_) {}
-      allBtn.__bmOnSelect = onSelectKey;
-      allBtn.__bmOnContext = async (k) => { if (k === "all") await _toggleShowHidden(); };
-      allBtn.__bmOnDelete = null;
-      allBtn.__bmOnClose = null;
-      allBtn.__bmRender = () => renderTabs(dom, state, onSelectKey);
-      _wireBookmarkInteractions(allBtn);
-      try {
-        if (totalUnread > 0) allBtn.dataset.unread = totalUnread > 99 ? "99+" : String(totalUnread);
-        else { try { delete allBtn.dataset.unread; } catch (_) { allBtn.dataset.unread = ""; } }
-      } catch (_) {}
-      try { allBtn.title = `全部会话\n右键：${showHidden ? "隐藏" : "显示"}已移除会话`; } catch (_) {}
-      return allBtn;
-    };
 
     const _appendThread = (t) => {
       const isHidden = !!(hidden && typeof hidden.has === "function" && hidden.has(t.key));
@@ -460,14 +434,11 @@ export function renderTabs(dom, state, onSelectKey) {
     };
 
     const out = document.createDocumentFragment();
-    if (includeAll) out.appendChild(_appendAll());
-
-    // Full list: honor showHidden flag
     const list = items.filter((t) => {
       const isHidden = !!(hidden && typeof hidden.has === "function" && hidden.has(t.key));
       const isClosed = !!(closed && typeof closed.has === "function" && closed.has(t.key));
       if (isClosed && currentKey !== t.key) return false;
-      return !isHidden || showHidden;
+      return !isHidden;
     });
 
     for (const t of list) out.appendChild(_appendThread(t));
@@ -483,7 +454,7 @@ export function renderTabs(dom, state, onSelectKey) {
     }
   } catch (_) {}
 
-  const railFrag = renderList(rail, existingRail, { includeAll: true, mode: "rail" });
+  const railFrag = renderList(rail, existingRail, { mode: "rail" });
 
   try { if (rail) rail.replaceChildren(railFrag); } catch (_) { try { while (rail && rail.firstChild) rail.removeChild(rail.firstChild); rail && rail.appendChild(railFrag); } catch (_) {} }
 }

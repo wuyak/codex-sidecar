@@ -11,10 +11,10 @@ export function getDom() {
     bookmarkDrawer: byId("bookmarkDrawer"),
     bookmarkDrawerCloseBtn: byId("bookmarkDrawerCloseBtn"),
     bookmarkSearch: byId("bookmarkSearch"),
-    bookmarkShowHidden: byId("bookmarkShowHidden"),
-    bookmarkPinOnSelect: byId("bookmarkPinOnSelect"),
-    bookmarkExportBtn: byId("bookmarkExportBtn"),
     bookmarkList: byId("bookmarkList"),
+    bookmarkHiddenDetails: byId("bookmarkHiddenDetails"),
+    bookmarkHiddenCount: byId("bookmarkHiddenCount"),
+    bookmarkHiddenList: byId("bookmarkHiddenList"),
 
     cfgHome: byId("cfgHome"),
     watchHome: byId("watchHome"),

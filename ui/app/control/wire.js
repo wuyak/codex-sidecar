@@ -9,10 +9,10 @@ import { flashToastAt } from "../utils/toast.js";
 import { buildThinkingMetaRight } from "../thinking/meta.js";
 import { maybePlayNotifySound, preloadNotifySound } from "../sound.js";
 import { colorForKey, rolloutStampFromFile, shortId } from "../utils.js";
-import { exportCurrentThreadMarkdown } from "../export.js";
+import { exportThreadMarkdown } from "../export.js";
 import { getCustomLabel, setCustomLabel } from "../sidebar/labels.js";
-import { saveHiddenThreads, saveShowHiddenFlag } from "../sidebar/hidden.js";
-import { getUnreadCount, getUnreadTotal } from "../unread.js";
+import { saveHiddenThreads } from "../sidebar/hidden.js";
+import { getUnreadCount } from "../unread.js";
 
 export function wireControlEvents(dom, state, helpers) {
   const h = (helpers && typeof helpers === "object") ? helpers : {};
@@ -241,55 +241,54 @@ export function wireControlEvents(dom, state, helpers) {
     return custom || _threadDefaultLabel(t);
   };
 
-  const _getPinOnSelect = () => {
-    try {
-      const raw = localStorage.getItem("codex_sidecar_pin_on_select");
-      return raw !== "0";
-    } catch (_) {
-      return true;
+  let _bookmarkDrawerEditingKey = "";
+  const _isBookmarkDrawerEditing = () => !!_bookmarkDrawerEditingKey;
+  const _ensureHiddenSet = () => {
+    if (!state.hiddenThreads || typeof state.hiddenThreads.add !== "function") state.hiddenThreads = new Set();
+    return state.hiddenThreads;
+  };
+  const _sortThreads = (arr) => {
+    arr.sort((a, b) => {
+      const sa = Number(a && a.last_seq) || 0;
+      const sb = Number(b && b.last_seq) || 0;
+      if (sa !== sb) return sb - sa;
+      return String(b && b.last_ts ? b.last_ts : "").localeCompare(String(a && a.last_ts ? a.last_ts : ""));
+    });
+  };
+
+  const _pickFallbackKey = (excludeKey = "") => {
+    const ex = String(excludeKey || "");
+    const hidden = _ensureHiddenSet();
+    const arr = Array.from(state.threadIndex.values());
+    _sortThreads(arr);
+    for (const t of arr) {
+      const k = String((t && t.key) ? t.key : "");
+      if (!k) continue;
+      if (k === ex) continue;
+      if (hidden && typeof hidden.has === "function" && hidden.has(k)) continue;
+      return k;
     }
-  };
-
-  const _setPinOnSelect = (on) => {
-    try { localStorage.setItem("codex_sidecar_pin_on_select", on ? "1" : "0"); } catch (_) {}
-  };
-
-  const _syncBookmarkDrawerControls = () => {
-    try {
-      if (dom.bookmarkShowHidden) dom.bookmarkShowHidden.value = state.showHiddenThreads ? "1" : "0";
-      if (dom.bookmarkPinOnSelect) dom.bookmarkPinOnSelect.value = _getPinOnSelect() ? "1" : "0";
-    } catch (_) {}
+    return "all";
   };
 
   const _renderBookmarkDrawerList = () => {
     const host = dom.bookmarkList;
-    if (!host) return;
+    const hiddenHost = dom.bookmarkHiddenList;
+    if (!host || !hiddenHost) return;
     // 仅在抽屉打开时渲染，避免 SSE 高频刷新带来额外负担。
     if (!_isBookmarkDrawerOpen()) return;
+    // 正在重命名时不重绘，避免输入焦点丢失。
+    if (_isBookmarkDrawerEditing()) return;
 
     const q = String(dom.bookmarkSearch && dom.bookmarkSearch.value ? dom.bookmarkSearch.value : "").trim().toLowerCase();
     const items = [];
-
-    try {
-      const totalUnread = getUnreadTotal(state);
-      items.push({
-        key: "all",
-        label: "全部",
-        unread: totalUnread,
-        hidden: false,
-        active: String(state.currentKey || "all") === "all",
-        color: { fg: "#111827" },
-      });
-    } catch (_) {}
+    const hiddenItems = [];
 
     try {
       const arr = Array.from(state.threadIndex.values());
-      arr.sort((a, b) => {
-        const sa = Number(a && a.last_seq) || 0;
-        const sb = Number(b && b.last_seq) || 0;
-        if (sa !== sb) return sb - sa;
-        return String(b && b.last_ts ? b.last_ts : "").localeCompare(String(a && a.last_ts ? a.last_ts : ""));
-      });
+      _sortThreads(arr);
+      const hidden = _ensureHiddenSet();
+      const closed = (state && state.closedThreads && typeof state.closedThreads.has === "function") ? state.closedThreads : new Map();
 
       for (const t of arr) {
         const key = String((t && t.key) ? t.key : "");
@@ -299,49 +298,70 @@ export function wireControlEvents(dom, state, helpers) {
         const tid = String((t && t.thread_id) ? t.thread_id : "");
         const hay = `${label}\n${key}\n${file}\n${tid}`.toLowerCase();
         if (q && !hay.includes(q)) continue;
-        const isHidden = !!(state.hiddenThreads && typeof state.hiddenThreads.has === "function" && state.hiddenThreads.has(key));
+        const isHidden = !!(hidden && typeof hidden.has === "function" && hidden.has(key));
         const unread = getUnreadCount(state, key);
         const clr = colorForKey(key);
-        items.push({
+        const entry = {
           key,
           label,
           unread,
           hidden: isHidden,
+          closed: !!(closed && typeof closed.has === "function" && closed.has(key)),
           active: String(state.currentKey || "all") === key,
           color: clr,
-        });
+        };
+        if (isHidden) hiddenItems.push(entry);
+        else items.push(entry);
       }
     } catch (_) {}
 
-    try { host.replaceChildren(); } catch (_) { while (host.firstChild) host.removeChild(host.firstChild); }
+    const _renderList = (target, rows, opts = {}) => {
+      const isHiddenList = !!opts.hiddenList;
+      try { target.replaceChildren(); } catch (_) { while (target.firstChild) target.removeChild(target.firstChild); }
+      const frag = document.createDocumentFragment();
 
-    const frag = document.createDocumentFragment();
-    for (const it of items) {
-      const row = document.createElement("div");
-      row.className = "tab"
-        + (it.active ? " active" : "")
-        + (it.unread > 0 ? " has-unread" : "")
-        + (it.hidden ? " tab-hidden" : "");
-      row.dataset.key = String(it.key || "");
-      if (it.unread > 0) row.dataset.unread = it.unread > 99 ? "99+" : String(it.unread);
-      row.setAttribute("role", "button");
-      row.tabIndex = 0;
+      if (!rows.length) {
+        const empty = document.createElement("div");
+        empty.className = "meta";
+        empty.style.opacity = "0.7";
+        empty.style.padding = "6px 2px";
+        empty.textContent = isHiddenList ? "暂无已移除会话" : "暂无会话";
+        frag.appendChild(empty);
+        target.appendChild(frag);
+        return;
+      }
 
-      const dot = document.createElement("span");
-      dot.className = "tab-dot";
-      try { dot.style.background = String((it.color && it.color.fg) ? it.color.fg : "#64748b"); } catch (_) {}
+      for (const it of rows) {
+        const row = document.createElement("div");
+        row.className = "tab"
+          + (it.active ? " active" : "")
+          + (it.unread > 0 ? " has-unread" : "")
+          + (it.closed ? " tab-closed" : "")
+          + (isHiddenList ? " tab-hidden" : "");
+        row.dataset.key = String(it.key || "");
+        if (isHiddenList) row.dataset.hidden = "1";
+        if (it.unread > 0) row.dataset.unread = it.unread > 99 ? "99+" : String(it.unread);
+        row.setAttribute("role", "button");
+        row.tabIndex = 0;
 
-      const label = document.createElement("span");
-      label.className = "tab-label";
-      label.textContent = String(it.label || "");
+        const dot = document.createElement("span");
+        dot.className = "tab-dot";
+        try { dot.style.background = String((it.color && it.color.fg) ? it.color.fg : "#64748b"); } catch (_) {}
 
-      const actions = document.createElement("div");
-      actions.style.marginLeft = "auto";
-      actions.style.display = "flex";
-      actions.style.gap = "6px";
-      actions.style.alignItems = "center";
+        const label = document.createElement("span");
+        label.className = "tab-label";
+        label.textContent = String(it.label || "");
 
-      if (it.key !== "all") {
+        const input = document.createElement("input");
+        input.className = "tab-edit";
+        input.type = "text";
+        input.autocomplete = "off";
+        input.spellcheck = false;
+        input.value = String(it.label || "");
+
+        const actions = document.createElement("div");
+        actions.className = "tab-actions";
+
         const renameBtn = document.createElement("button");
         renameBtn.className = "mini-btn";
         renameBtn.type = "button";
@@ -349,29 +369,48 @@ export function wireControlEvents(dom, state, helpers) {
         renameBtn.setAttribute("aria-label", "重命名");
         renameBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="#i-edit"></use></svg>`;
 
-        const hideBtn = document.createElement("button");
-        hideBtn.className = "mini-btn" + (it.hidden ? " active" : "");
-        hideBtn.type = "button";
-        hideBtn.dataset.action = "toggleHidden";
-        hideBtn.setAttribute("aria-label", it.hidden ? "取消隐藏" : "隐藏");
-        hideBtn.textContent = it.hidden ? "显" : "隐";
+        const exportBtn = document.createElement("button");
+        exportBtn.className = "mini-btn";
+        exportBtn.type = "button";
+        exportBtn.dataset.action = "export";
+        exportBtn.setAttribute("aria-label", "导出");
+        exportBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="#i-download"></use></svg>`;
+
+        const toggleBtn = document.createElement("button");
+        toggleBtn.className = "mini-btn" + (isHiddenList ? " active" : "");
+        toggleBtn.type = "button";
+        toggleBtn.dataset.action = isHiddenList ? "restore" : "remove";
+        toggleBtn.setAttribute("aria-label", isHiddenList ? "恢复到标签栏" : "从标签栏移除");
+        toggleBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="${isHiddenList ? "#i-eye" : "#i-eye-off"}"></use></svg>`;
 
         actions.appendChild(renameBtn);
-        actions.appendChild(hideBtn);
+        actions.appendChild(exportBtn);
+        actions.appendChild(toggleBtn);
+
+        row.appendChild(dot);
+        row.appendChild(label);
+        row.appendChild(input);
+        row.appendChild(actions);
+        frag.appendChild(row);
       }
 
-      row.appendChild(dot);
-      row.appendChild(label);
-      row.appendChild(actions);
-      frag.appendChild(row);
-    }
+      target.appendChild(frag);
+    };
 
-    host.appendChild(frag);
+    _renderList(host, items, { hiddenList: false });
+    _renderList(hiddenHost, hiddenItems, { hiddenList: true });
+
+    try {
+      if (dom.bookmarkHiddenCount) dom.bookmarkHiddenCount.textContent = String(hiddenItems.length);
+      if (dom.bookmarkHiddenDetails) {
+        dom.bookmarkHiddenDetails.style.display = hiddenItems.length ? "" : "none";
+        if (q && hiddenItems.length) dom.bookmarkHiddenDetails.open = true;
+      }
+    } catch (_) {}
   };
 
   const _openBookmarkDrawer = () => {
     openBookmarkDrawer(dom);
-    _syncBookmarkDrawerControls();
     _renderBookmarkDrawerList();
   };
 
@@ -395,91 +434,118 @@ export function wireControlEvents(dom, state, helpers) {
   });
 
   if (dom.bookmarkSearch) dom.bookmarkSearch.addEventListener("input", () => { _renderBookmarkDrawerList(); });
-  if (dom.bookmarkShowHidden) dom.bookmarkShowHidden.addEventListener("change", async () => {
-    const on = String(dom.bookmarkShowHidden.value || "") === "1";
-    try { state.showHiddenThreads = on; } catch (_) {}
-    saveShowHiddenFlag(on);
-    let jumped = false;
+  const _enterInlineRename = (row, key) => {
+    const k = String(key || "");
+    if (!row || !k) return;
+    if (_bookmarkDrawerEditingKey && _bookmarkDrawerEditingKey !== k) return;
+    const input = row.querySelector ? row.querySelector("input.tab-edit") : null;
+    const labelEl = row.querySelector ? row.querySelector(".tab-label") : null;
+    if (!input || !labelEl) return;
+    _bookmarkDrawerEditingKey = k;
+    try { row.classList.add("editing"); } catch (_) {}
+
+    let done = false;
+    const finish = (commit) => {
+      if (done) return;
+      done = true;
+      const t = state.threadIndex.get(k) || { key: k, thread_id: "", file: "" };
+      const def = _threadDefaultLabel(t);
+      const raw = String(input.value || "");
+      const v = raw.trim();
+      if (commit) setCustomLabel(k, v);
+      const nextLabel = getCustomLabel(k) || def;
+      try { labelEl.textContent = nextLabel; } catch (_) {}
+      try { input.value = nextLabel; } catch (_) {}
+      try { row.classList.remove("editing"); } catch (_) {}
+      _bookmarkDrawerEditingKey = "";
+      try { renderTabs(); } catch (_) {}
+      if (commit) _toastFromEl(input, v ? "已重命名" : "已恢复默认名");
+    };
+
+    input.onkeydown = (e) => {
+      const kk = String(e && e.key ? e.key : "");
+      if (kk === "Enter") { try { e.preventDefault(); e.stopPropagation(); } catch (_) {} finish(true); }
+      if (kk === "Escape") { try { e.preventDefault(); e.stopPropagation(); } catch (_) {} finish(false); }
+    };
+    input.onblur = () => finish(true);
+
     try {
-      const curKey = String(state.currentKey || "all");
-      const hiddenCur = !!(!on && curKey && curKey !== "all" && state.hiddenThreads && typeof state.hiddenThreads.has === "function" && state.hiddenThreads.has(curKey));
-      if (hiddenCur) { jumped = true; await onSelectKey("all"); }
+      const cur = getCustomLabel(k) || _threadDefaultLabel(state.threadIndex.get(k) || {});
+      input.value = cur;
+      setTimeout(() => { try { input.focus(); input.select(); } catch (_) {} }, 0);
     } catch (_) {}
-    if (!jumped) renderTabs();
-    _renderBookmarkDrawerList();
-    _toastFromEl(dom.bookmarkShowHidden, on ? "已显示隐藏会话" : "已隐藏隐藏会话");
-  });
-  if (dom.bookmarkPinOnSelect) dom.bookmarkPinOnSelect.addEventListener("change", () => {
-    const on = String(dom.bookmarkPinOnSelect.value || "") !== "0";
-    _setPinOnSelect(on);
-    _toastFromEl(dom.bookmarkPinOnSelect, on ? "选中即锁定：已开启" : "选中即锁定：已关闭");
-  });
+  };
 
-  if (dom.bookmarkExportBtn) dom.bookmarkExportBtn.addEventListener("click", async () => {
-    const key = String(state.currentKey || "all");
-    if (!key || key === "all") { _toastFromEl(dom.bookmarkExportBtn, "请先选择具体会话"); return; }
-    _toastFromEl(dom.bookmarkExportBtn, "正在导出…");
-    const mode = (String(state.viewMode || "").toLowerCase() === "quick") ? "quick" : "full";
-    const r = await exportCurrentThreadMarkdown(state, { mode });
-    _toastFromEl(dom.bookmarkExportBtn, r && r.ok ? "已导出（下载）" : "导出失败");
-  });
+  const _handleBookmarkListClick = async (e) => {
+    const btn = e && e.target && e.target.closest ? e.target.closest("button[data-action]") : null;
+    const row = e && e.target && e.target.closest ? e.target.closest(".tab[data-key]") : null;
+    const key = row && row.dataset ? String(row.dataset.key || "") : "";
+    if (!row || !key) return;
+    const isHiddenRow = !!(row.dataset && row.dataset.hidden === "1");
+    if (row.classList && row.classList.contains("editing")) return;
 
-  if (dom.bookmarkList) dom.bookmarkList.addEventListener("click", async (e) => {
-    try {
-      const btn = e && e.target && e.target.closest ? e.target.closest("button[data-action]") : null;
-      const row = e && e.target && e.target.closest ? e.target.closest(".tab[data-key]") : null;
-      const key = row && row.dataset ? String(row.dataset.key || "") : "";
-      if (!key) return;
-
-      if (btn && btn.dataset) {
-        const action = String(btn.dataset.action || "");
-        try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
-        if (action === "rename") {
-          const t = state.threadIndex.get(key) || { key, thread_id: "", file: "" };
-          const cur = getCustomLabel(key) || _threadDefaultLabel(t);
-          const raw = prompt("重命名会话书签：", cur);
-          if (raw == null) return;
-          const next = String(raw || "").trim();
-          setCustomLabel(key, next);
-          renderTabs();
-          _renderBookmarkDrawerList();
-          _toastFromEl(btn, next ? "已重命名" : "已恢复默认名");
-          return;
-        }
-        if (action === "toggleHidden") {
-          if (!state.hiddenThreads || typeof state.hiddenThreads.add !== "function") state.hiddenThreads = new Set();
-          const was = state.hiddenThreads.has(key);
-          if (was) state.hiddenThreads.delete(key);
-          else state.hiddenThreads.add(key);
-          saveHiddenThreads(state.hiddenThreads);
-          renderTabs();
-          _renderBookmarkDrawerList();
-          _toastFromEl(btn, was ? "已取消隐藏" : "已隐藏会话");
-          if (!was && !state.showHiddenThreads && String(state.currentKey || "all") === key) {
-            await onSelectKey("all");
-          }
-          return;
+    if (btn && btn.dataset) {
+      const action = String(btn.dataset.action || "");
+      try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+      if (action === "rename") { _enterInlineRename(row, key); return; }
+      if (action === "export") {
+        _toastFromEl(btn, "正在导出…");
+        const mode = (String(state.viewMode || "").toLowerCase() === "quick") ? "quick" : "full";
+        const r = await exportThreadMarkdown(state, key, { mode });
+        _toastFromEl(btn, r && r.ok ? "已导出（下载）" : "导出失败");
+        return;
+      }
+      if (action === "remove") {
+        const hidden = _ensureHiddenSet();
+        if (!hidden.has(key)) hidden.add(key);
+        saveHiddenThreads(hidden);
+        _toastFromEl(btn, "已从标签栏移除");
+        try { renderTabs(); } catch (_) {}
+        _renderBookmarkDrawerList();
+        if (String(state.currentKey || "all") === key) {
+          await onSelectKey(_pickFallbackKey(key));
         }
         return;
       }
+      if (action === "restore") {
+        const hidden = _ensureHiddenSet();
+        if (hidden.has(key)) hidden.delete(key);
+        saveHiddenThreads(hidden);
+        _toastFromEl(btn, "已恢复到标签栏");
+        try { renderTabs(); } catch (_) {}
+        _renderBookmarkDrawerList();
+        return;
+      }
+      return;
+    }
 
-      // 点击条目：切换会话并关闭抽屉，便于查看内容。
-      await onSelectKey(key);
-      closeBookmarkDrawer(dom);
-    } catch (_) {}
-  });
+    // 点击条目：切换会话（若来自“已移除”，则先恢复）
+    if (isHiddenRow) {
+      const hidden = _ensureHiddenSet();
+      if (hidden.has(key)) hidden.delete(key);
+      saveHiddenThreads(hidden);
+      try { renderTabs(); } catch (_) {}
+      _renderBookmarkDrawerList();
+    }
+    await onSelectKey(key);
+    closeBookmarkDrawer(dom);
+  };
 
-  if (dom.bookmarkList) dom.bookmarkList.addEventListener("keydown", async (e) => {
-    try {
-      if (!e || (e.key !== "Enter" && e.key !== " ")) return;
-      const row = e.target && e.target.closest ? e.target.closest(".tab[data-key]") : null;
-      const key = row && row.dataset ? String(row.dataset.key || "") : "";
-      if (!key) return;
-      try { e.preventDefault(); } catch (_) {}
-      await onSelectKey(key);
-      closeBookmarkDrawer(dom);
-    } catch (_) {}
-  });
+  const _handleBookmarkListKeydown = async (e) => {
+    if (!e) return;
+    const keyName = String(e.key || "");
+    if (keyName !== "Enter" && keyName !== " ") return;
+    const row = e.target && e.target.closest ? e.target.closest(".tab[data-key]") : null;
+    const key = row && row.dataset ? String(row.dataset.key || "") : "";
+    if (!row || !key) return;
+    try { e.preventDefault(); } catch (_) {}
+    await _handleBookmarkListClick({ target: row });
+  };
+
+  if (dom.bookmarkList) dom.bookmarkList.addEventListener("click", async (e) => { try { await _handleBookmarkListClick(e); } catch (_) {} });
+  if (dom.bookmarkHiddenList) dom.bookmarkHiddenList.addEventListener("click", async (e) => { try { await _handleBookmarkListClick(e); } catch (_) {} });
+  if (dom.bookmarkList) dom.bookmarkList.addEventListener("keydown", async (e) => { try { await _handleBookmarkListKeydown(e); } catch (_) {} });
+  if (dom.bookmarkHiddenList) dom.bookmarkHiddenList.addEventListener("keydown", async (e) => { try { await _handleBookmarkListKeydown(e); } catch (_) {} });
 
   if (dom.saveBtn) dom.saveBtn.addEventListener("click", async () => { await saveConfig(dom, state); });
   if (dom.saveTranslateBtn) dom.saveTranslateBtn.addEventListener("click", async () => { await saveTranslateConfig(dom, state); });
