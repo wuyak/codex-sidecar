@@ -46,11 +46,12 @@
 			        --dock-col-gap: 14px;
 			        --content-safe-right: calc(var(--rightbar-w) + 16px);
 
-			        --bm-panel-w: 220px;
-			        --bm-peek-w: 12px;
+			        --bm-panel-w: 200px;
+			        --bm-peek-w: 14px;
 			        --bm-pad: 8px;
 			        --bm-radius: 14px;
 			        --bm-gap-y: 6px;
+			        --bm-collapsed-h: 248px;
 
 		        --bm-bg: rgba(248, 250, 252, .92);
 		        --bm-bg-hover: rgba(255,255,255,.98);
@@ -113,77 +114,57 @@
 			        --bm-bg-hover: rgba(15,23,42,.90);
 			        --bm-shadow: 0 18px 52px rgba(0,0,0,.45);
 			      }
-		      /* 会话书签：右侧中部 rail（1~6）+ 悬停展开全量列表（按草图严格定位） */
+		      /* 会话书签：右侧中部“书签栏”（默认仅露出窄边，悬停/聚焦展开） */
 			      #bookmarks {
 			        position: fixed;
 			        top: 54%;
-			        right: var(--rightbar-right);
+			        right: var(--safe-right);
 			        left: auto;
 			        bottom: auto;
-			        transform: translateY(-50%);
-			        width: var(--rightbar-w);
-			        display: flex;
-			        flex-direction: column;
-			        align-items: center;
-			        gap: var(--bm-gap-y);
+			        transform: translateY(-50%) translateX(calc(var(--bm-panel-w) - var(--bm-peek-w)));
+			        width: var(--bm-panel-w);
+			        display: block;
 			        z-index: var(--z-bookmarks);
 			        overflow: visible;
 			        padding: 0;
 			        background: transparent;
 			        border: none;
 			        box-shadow: none;
+			        transition: transform .14s ease-out;
+			      }
+			      #bookmarks:hover,
+			      #bookmarks:focus-within {
+			        transform: translateY(-50%) translateX(0);
 			      }
 			      #bookmarks .bm-rail {
 			        display: flex;
 			        flex-direction: column;
-			        align-items: center;
+			        align-items: stretch;
 			        gap: var(--bm-gap-y);
-			        padding: 8px 6px;
-			        border-radius: 16px;
+			        width: 100%;
+			        padding: 8px;
+			        border-radius: var(--bm-radius);
 			        border: 1px solid var(--dock-border);
 			        background: var(--dock-bg);
 			        box-shadow: var(--shadow-sm);
+			        max-height: var(--bm-collapsed-h);
+			        overflow: hidden;
 			      }
-			      #bookmarks .bm-pop {
-			        position: absolute;
-			        right: calc(100% + 12px);
-			        top: 50%;
-			        transform: translateY(-50%) translateX(6px);
-			        width: var(--bm-panel-w);
+			      #bookmarks:hover .bm-rail,
+			      #bookmarks:focus-within .bm-rail {
 			        max-height: min(70vh, calc(100vh - 32px - var(--safe-top) - var(--safe-bottom)));
 			        overflow: auto;
-			        padding: var(--bm-pad);
-			        border: 1px solid var(--dock-border);
-			        border-radius: var(--bm-radius);
-			        background: var(--dock-bg);
 			        box-shadow: var(--shadow-md);
-			        opacity: 0;
-			        pointer-events: none;
-			        transition: opacity .12s ease, transform .12s ease;
 			      }
-			      #bookmarks .bm-pop::after {
-			        content: "";
-			        position: absolute;
-			        right: -6px;
-			        top: 50%;
-			        width: 12px;
-			        height: 12px;
-			        transform: translateY(-50%) rotate(45deg);
-			        border-right: 1px solid var(--dock-border);
-			        border-bottom: 1px solid var(--dock-border);
-			        background: var(--dock-bg);
-			        border-radius: 3px;
+			      #bookmarks .bm-rail::-webkit-scrollbar { width: 10px; }
+			      #bookmarks .bm-rail::-webkit-scrollbar-thumb {
+			        background: rgba(148,163,184,.35);
+			        border-radius: 999px;
+			        border: 3px solid transparent;
+			        background-clip: padding-box;
 			      }
-			      #bookmarks:hover .bm-pop,
-			      #bookmarks:focus-within .bm-pop {
-			        opacity: 1;
-			        pointer-events: auto;
-			        transform: translateY(-50%) translateX(0);
-			      }
-			      #bookmarks .bm-pop-head { display:flex; align-items:baseline; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
-			      #bookmarks .bm-pop-title { font-weight: 900; font-size: 12px; color: var(--c-text); }
-			      #bookmarks .bm-pop-hint { color: var(--c-muted); font-size: 11px; opacity: .78; }
-			      #bookmarks .bm-pop-list { display:flex; flex-direction: column; gap: var(--bm-gap-y); }
+			      body[data-bm-skin="dark"] #bookmarks .bm-rail::-webkit-scrollbar-thumb { background: rgba(148,163,184,.22); }
+			      #bookmarks .bm-rail { scrollbar-width: thin; scrollbar-color: rgba(148,163,184,.35) transparent; }
 
 		      .bookmark {
 		        width: 100%;
@@ -245,84 +226,36 @@
 		      .bookmark.editing .bm-label { display:none; }
 		      .bookmark.editing .bm-edit { display:block; }
 
-		      /* rail（圆形快捷书签） */
-		      #bookmarks .bm-rail .bookmark {
-		        width: calc(var(--rightbar-w) - 12px);
-		        height: 34px;
-		        min-height: 34px;
-		        padding: 0;
+		      /* bookmarks：行样式（展开后像“书签列表”，收起时仅露出右侧窄边） */
+		      #bookmarks .bookmark {
+		        background: transparent;
+		        border-color: transparent;
+		        box-shadow: none;
 		        border-radius: 12px;
-		        justify-content: center;
-		        gap: 0;
-		        overflow: visible;
-		        background: transparent;
-		        border-color: transparent;
-		        box-shadow: none;
 		      }
-		      #bookmarks .bm-rail .bookmark:hover { background: var(--c-soft-2); border-color: var(--c-border); }
-		      #bookmarks .bm-rail .bookmark:focus-visible { outline: none; box-shadow: var(--shadow-sm), var(--ring); border-color: rgba(14,165,233,.55); }
-		      #bookmarks .bm-rail .bookmark.active { background: rgba(2,132,199,.10); border-color: rgba(14,165,233,.55); }
-		      #bookmarks .bm-rail .bookmark.tab-hidden { opacity: .60; filter: saturate(.85); }
-		      #bookmarks .bm-rail .bookmark.has-unread::after {
-		        top: -6px;
-		        right: -6px;
-		        transform: none;
-		      }
-		      #bookmarks .bm-rail .bookmark .bm-label,
-		      #bookmarks .bm-rail .bookmark .bm-edit { display: none; }
-		      #bookmarks .bm-rail .bookmark .bm-dot {
-		        width: 14px;
+		      #bookmarks .bookmark:hover { background: var(--c-soft-2); border-color: var(--c-border); }
+		      #bookmarks .bookmark:focus-visible { outline: none; box-shadow: var(--shadow-sm), var(--ring); border-color: rgba(14,165,233,.55); }
+		      #bookmarks .bookmark.active { background: rgba(2,132,199,.10); border-color: rgba(14,165,233,.55); }
+		      #bookmarks .bookmark.tab-hidden { opacity: .60; filter: saturate(.85); }
+		      #bookmarks .bookmark .bm-dot {
+		        width: 4px;
 		        height: 18px;
-		        border-radius: 5px 5px 3px 3px;
-		        clip-path: polygon(0 0, 100% 0, 100% 76%, 50% 100%, 0 76%);
-		      }
-
-		      /* rail 的悬停提示（不占宽度，不做 width 动画） */
-		      #bookmarks .bm-rail .bookmark .bm-tip {
-		        display: block;
-		        position: absolute;
-		        right: calc(100% + 10px);
-		        top: 50%;
-		        transform: translateY(-50%) translateX(4px);
-		        padding: 6px 10px;
 		        border-radius: 999px;
-		        border: 1px solid rgba(148,163,184,.35);
-		        background: rgba(255,255,255,.96);
-		        color: var(--c-text);
-		        font-size: 12px;
-		        white-space: nowrap;
-		        box-shadow: var(--shadow-sm);
-		        opacity: 0;
-		        pointer-events: none;
-		        transition: opacity .12s ease, transform .12s ease;
-		        z-index: calc(var(--z-bookmarks) + 3);
 		      }
-		      body[data-bm-skin="dark"] #bookmarks .bm-rail .bookmark .bm-tip {
-		        background: rgba(15,23,42,.92);
-		        color: rgba(226,232,240,.98);
-		        border-color: rgba(148,163,184,.22);
+		      #bookmarks .bookmark::before {
+		        content: "";
+		        position: absolute;
+		        top: 6px;
+		        bottom: 6px;
+		        right: 4px;
+		        width: 3px;
+		        border-radius: 999px;
+		        background: var(--bm-accent, var(--c-accent));
+		        opacity: .78;
 		      }
-		      #bookmarks .bm-rail .bookmark:hover .bm-tip,
-		      #bookmarks .bm-rail .bookmark:focus-visible .bm-tip {
-		        opacity: 1;
-		        transform: translateY(-50%) translateX(0);
-		      }
-		      /* 弹出列表可见时，rail tooltip 容易叠在列表上 → 直接隐藏（避免“很丑/遮挡”） */
-		      #bookmarks:hover .bm-rail .bookmark .bm-tip,
-		      #bookmarks:focus-within .bm-rail .bookmark .bm-tip { display: none; }
-
-		      /* popover（全量列表） */
-		      #bookmarks .bm-pop .bookmark {
-		        background: transparent;
-		        border-color: transparent;
-		        box-shadow: none;
-		        padding: 6px 8px;
-		        border-radius: 10px;
-		      }
-		      #bookmarks .bm-pop .bookmark:hover { background: var(--c-soft-2); border-color: var(--c-border); }
-		      #bookmarks .bm-pop .bookmark.active { background: rgba(2,132,199,.10); border-color: rgba(14,165,233,.55); }
-		      #bookmarks .bm-pop .bookmark.has-unread::after { top: 50%; right: 8px; transform: translateY(-50%); }
-		      #bookmarks .bm-pop .bookmark .bm-tip { display: none; }
+		      #bookmarks .bookmark.active::before { opacity: 1; }
+		      #bookmarks .bookmark.has-unread::after { right: 2px; }
+		      #bookmarks .bookmark .bm-tip { display: none; }
 
 					      #main { margin: 16px; padding-bottom: 16px; padding-right: var(--content-safe-right); }
 		      .row { border: 1px solid var(--c-border); border-left: 4px solid rgba(148, 163, 184, .55); border-radius: 12px; padding: 12px; margin: 10px 0; background: var(--c-surface); box-shadow: var(--shadow-sm); }
@@ -652,8 +585,6 @@
 	      @media (prefers-reduced-motion: reduce) {
 	        html:focus-within { scroll-behavior: auto; }
 	        #bookmarks { transition: none; }
-	        #bookmarks .bm-pop { transition: none; transform: translateY(-50%) translateX(0); }
-	        #bookmarks .bm-rail .bookmark .bm-tip { transition: none; transform: translateY(-50%) translateX(0); }
 	        .status-hover { transition: none; transform: none; }
 	        .corner-toast { animation: none; }
 	      }

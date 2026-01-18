@@ -142,8 +142,8 @@ function _wireBookmarkInteractions(btn) {
     startX = Number(e && e.clientX) || 0;
     startY = Number(e && e.clientY) || 0;
     startAt = Date.now();
-    const mode = String(btn.dataset && btn.dataset.mode ? btn.dataset.mode : "");
-    const allowLongPressEdit = mode !== "rail";
+    const k = String(btn.dataset && btn.dataset.key ? btn.dataset.key : "").trim();
+    const allowLongPressEdit = !!k && k !== "all";
     if (allowLongPressEdit) {
       pressT = setTimeout(() => {
         if (!startAt) return;
@@ -234,10 +234,8 @@ export function renderTabs(dom, state, onSelectKey) {
     if (editingBtn) return;
   } catch (_) {}
 
-  // Ensure rail + popover containers exist (host stays fixed at right).
+  // Ensure rail container exists (host stays fixed at right).
   let rail = null;
-  let pop = null;
-  let popList = null;
   try {
     host.classList.add("bm-host");
     rail = host.querySelector ? host.querySelector(".bm-rail") : null;
@@ -246,21 +244,10 @@ export function renderTabs(dom, state, onSelectKey) {
       rail.className = "bm-rail";
       host.appendChild(rail);
     }
-    pop = host.querySelector ? host.querySelector(".bm-pop") : null;
-    if (!pop) {
-      pop = document.createElement("div");
-      pop.className = "bm-pop";
-      pop.setAttribute("role", "dialog");
-      pop.setAttribute("aria-label", "会话列表");
-      host.appendChild(pop);
-    }
-    popList = pop.querySelector ? pop.querySelector(".bm-pop-list") : null;
-    if (!popList) {
-      while (pop.firstChild) pop.removeChild(pop.firstChild);
-      const list = document.createElement("div");
-      list.className = "bm-pop-list";
-      pop.appendChild(list);
-      popList = list;
+    // Back-compat cleanup: older versions had a separate popover list. If present, remove it.
+    const pop = host.querySelector ? host.querySelector(".bm-pop") : null;
+    if (pop && pop.parentNode === host) {
+      try { host.removeChild(pop); } catch (_) {}
     }
   } catch (_) {}
 
@@ -336,7 +323,6 @@ export function renderTabs(dom, state, onSelectKey) {
   const renderList = (container, existing, opts) => {
     const includeAll = !!(opts && opts.includeAll);
     const mode = String(opts && opts.mode ? opts.mode : "");
-    const limit = Number.isFinite(Number(opts && opts.limit)) ? Number(opts.limit) : 0;
 
     const currentKey = String(state.currentKey || "all");
 
@@ -413,38 +399,13 @@ export function renderTabs(dom, state, onSelectKey) {
     const out = document.createDocumentFragment();
     if (includeAll) out.appendChild(_appendAll());
 
-    let list = items;
-    if (limit > 0) {
-      const picked = [];
-      const seen = new Set();
-      for (const t of items) {
-        if (picked.length >= limit) break;
-        const isHidden = !!(hidden && typeof hidden.has === "function" && hidden.has(t.key));
-        if (isHidden) continue;
-        picked.push(t);
-        seen.add(t.key);
-      }
-      const ck = String(state.currentKey || "");
-      if (ck && ck !== "all" && !seen.has(ck)) {
-        const cur = state.threadIndex.get(ck);
-        if (cur) {
-          picked.unshift(cur);
-          while (picked.length > limit) picked.pop();
-        }
-      }
-      list = picked;
-    } else {
-      // full list: honor showHidden flag
-      list = items.filter((t) => {
-        const isHidden = !!(hidden && typeof hidden.has === "function" && hidden.has(t.key));
-        return !isHidden || showHidden;
-      });
-    }
+    // Full list: honor showHidden flag
+    const list = items.filter((t) => {
+      const isHidden = !!(hidden && typeof hidden.has === "function" && hidden.has(t.key));
+      return !isHidden || showHidden;
+    });
 
-    // Rail should never become "invisible" (e.g. user hides the last visible session and auto-switches to "all").
-    // If there's nothing to show, keep a single "all" handle so hover can still reveal the full list.
-    if (!includeAll && mode === "rail" && (!list || list.length === 0)) out.appendChild(_appendAll());
-    else for (const t of list) out.appendChild(_appendThread(t));
+    for (const t of list) out.appendChild(_appendThread(t));
     return out;
   };
 
@@ -457,18 +418,7 @@ export function renderTabs(dom, state, onSelectKey) {
     }
   } catch (_) {}
 
-  const existingPop = new Map();
-  try {
-    const btns = popList && popList.querySelectorAll ? popList.querySelectorAll("button.bookmark") : [];
-    for (const b of btns) {
-      const k = b && b.dataset ? String(b.dataset.key || "") : "";
-      if (k) existingPop.set(k, b);
-    }
-  } catch (_) {}
-
-  const railFrag = renderList(rail, existingRail, { includeAll: true, mode: "rail", limit: 5 });
-  const popFrag = renderList(popList, existingPop, { includeAll: true, mode: "list", limit: 0 });
+  const railFrag = renderList(rail, existingRail, { includeAll: true, mode: "rail" });
 
   try { if (rail) rail.replaceChildren(railFrag); } catch (_) { try { while (rail && rail.firstChild) rail.removeChild(rail.firstChild); rail && rail.appendChild(railFrag); } catch (_) {} }
-  try { if (popList) popList.replaceChildren(popFrag); } catch (_) { try { while (popList && popList.firstChild) popList.removeChild(popList.firstChild); popList && popList.appendChild(popFrag); } catch (_) {} }
 }
