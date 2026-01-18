@@ -1,6 +1,13 @@
 import { getCustomLabel } from "./sidebar/labels.js";
 import { keyOf, shortId } from "./utils.js";
 
+function _extractUuid(s) {
+  const raw = String(s || "");
+  if (!raw) return "";
+  const m = raw.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/);
+  return m ? String(m[0] || "") : "";
+}
+
 function _sanitizeFileName(s) {
   const raw = String(s || "").trim();
   if (!raw) return "";
@@ -21,6 +28,40 @@ function _sanitizeFileName(s) {
       .trim()
       .slice(0, 80);
   }
+}
+
+function _shortIdForFile(s) {
+  const raw = String(s || "").trim();
+  if (!raw) return "";
+  if (raw.length <= 10) return raw;
+  return raw.slice(0, 6) + "-" + raw.slice(-4);
+}
+
+function _pickCustomLabel(key, threadId, filePath) {
+  const k = String(key || "").trim();
+  const tid = String(threadId || "").trim();
+  const f = String(filePath || "").trim();
+
+  let v = "";
+  try { v = String(getCustomLabel(k) || "").trim(); } catch (_) { v = ""; }
+  if (v) return v;
+
+  if (tid && tid !== k) {
+    try { v = String(getCustomLabel(tid) || "").trim(); } catch (_) { v = ""; }
+    if (v) return v;
+  }
+  if (f && f !== k) {
+    try { v = String(getCustomLabel(f) || "").trim(); } catch (_) { v = ""; }
+    if (v) return v;
+  }
+
+  // Back-compat: some older UIs might have used a file-path key; try parse uuid from it.
+  const fromFile = _extractUuid(f || k);
+  if (fromFile && fromFile !== k && fromFile !== tid) {
+    try { v = String(getCustomLabel(fromFile) || "").trim(); } catch (_) { v = ""; }
+    if (v) return v;
+  }
+  return "";
 }
 
 function _kindLabel(kind) {
@@ -98,6 +139,61 @@ function _safeCodeFence(text, lang = "text") {
   return `${fence}${info ? info : ""}\n${src}\n${fence}`;
 }
 
+async function _ensureReasoningTranslated({ messages, threadId, maxN = 6, waitMs = 4500 }) {
+  const arr = Array.isArray(messages) ? messages : [];
+  const needs = arr
+    .filter((m) => {
+      const kind = String(m && m.kind ? m.kind : "");
+      if (kind !== "reasoning_summary") return false;
+      const id = String(m && m.id ? m.id : "").trim();
+      if (!id) return false;
+      const zh = String(m && m.zh ? m.zh : "").trim();
+      return !zh;
+    })
+    .slice(0, Math.max(0, Number(maxN) || 0));
+
+  if (!needs.length) return { ok: true, queued: 0, filled: 0, waited_ms: 0 };
+
+  let queued = 0;
+  for (const m of needs) {
+    const id = String(m && m.id ? m.id : "").trim();
+    if (!id) continue;
+    try {
+      const r = await fetch("/api/control/retranslate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      }).then((x) => x.json()).catch(() => null);
+      if (r && r.ok) queued += 1;
+    } catch (_) {}
+  }
+
+  // Best-effort wait for updates to land (avoid blocking too long).
+  const start = Date.now();
+  let filled = 0;
+  while ((Date.now() - start) < Math.max(0, Number(waitMs) || 0)) {
+    try {
+      const url = threadId
+        ? `/api/messages?thread_id=${encodeURIComponent(threadId)}&t=${Date.now()}`
+        : `/api/messages?t=${Date.now()}`;
+      const r = await fetch(url, { cache: "no-store" }).then((x) => x.json()).catch(() => null);
+      const ms = Array.isArray(r && r.messages) ? r.messages : [];
+      const byId = new Map(ms.map((x) => [String(x && x.id ? x.id : ""), x]));
+      filled = 0;
+      for (const m of needs) {
+        const id = String(m && m.id ? m.id : "").trim();
+        if (!id) continue;
+        const cur = byId.get(id);
+        const zh = String(cur && cur.zh ? cur.zh : "").trim();
+        if (zh) filled += 1;
+      }
+      if (filled >= needs.length) break;
+    } catch (_) {}
+    await new Promise((r) => setTimeout(r, 240));
+  }
+  return { ok: true, queued, filled, waited_ms: Date.now() - start };
+}
+
 function _renderReasoning(m, opts = {}) {
   const en = String((m && m.text) ? m.text : "").trimEnd();
   const zh = String((m && m.zh) ? m.zh : "").trimEnd();
@@ -143,11 +239,33 @@ function _download(name, text) {
 }
 
 export async function exportThreadMarkdown(state, key, opts = {}) {
+  // 兼容：调用方未传 opts 时，使用本地导出偏好（精简/翻译）。
+  // 导出偏好由 UI 写入 localStorage（wire.js），这里做兜底读取，避免“设置不生效”。
+  try {
+    if (opts && (opts.mode == null || opts.reasoningLang == null) && typeof localStorage !== 'undefined') {
+      const _bool = (v, fallback) => {
+        if (v == null) return fallback;
+        const s = String(v).trim().toLowerCase();
+        if (s === '1' || s === 'true' || s === 'yes' || s === 'on') return true;
+        if (s === '0' || s === 'false' || s === 'no' || s === 'off') return false;
+        return fallback;
+      };
+
+      const quickPref = _bool(localStorage.getItem('codex_sidecar_export_quick_v1'), true);
+      const translatePref = _bool(localStorage.getItem('codex_sidecar_export_translate_v1'), true);
+
+      if (opts.mode == null) opts.mode = quickPref ? 'quick' : 'full';
+      if (opts.reasoningLang == null) opts.reasoningLang = translatePref ? 'both' : 'en';
+    }
+  } catch (e) {
+    // ignore
+  }
+
   const k = String(key || "").trim();
   if (!k || k === "all") return { ok: false, error: "select_thread" };
 
   const mode = String(opts.mode || "").trim().toLowerCase() === "full" ? "full" : "quick";
-  const allowKindsQuick = new Set(["user_message", "assistant_message", "reasoning_summary"]);
+  const allowKindsQuick = new Set(["user_message", "assistant_message"]);
   const reasoningLang = String(opts.reasoningLang || "auto").trim().toLowerCase();
 
   let messages = [];
@@ -168,8 +286,27 @@ export async function exportThreadMarkdown(state, key, opts = {}) {
   const selected = threadId ? messages : messages.filter(m => keyOf(m) === k);
   selected.sort((a, b) => (Number(a && a.seq) || 0) - (Number(b && b.seq) || 0));
 
+  // If user asked for translated thinking but we don't have zh yet, try to translate on export.
+  // This makes “翻译”导出选项真正有差异（而不是取决于你之前是否点过某条思考）。
+  let translateStat = null;
+  try {
+    if (reasoningLang !== "en") {
+      translateStat = await _ensureReasoningTranslated({ messages: selected, threadId, maxN: 6, waitMs: 4500 });
+      if (translateStat && translateStat.filled >= 1) {
+        const url = threadId ? `/api/messages?thread_id=${encodeURIComponent(threadId)}&t=${Date.now()}` : `/api/messages?t=${Date.now()}`;
+        const r2 = await fetch(url, { cache: "no-store" }).then(r => r.json()).catch(() => null);
+        const ms2 = Array.isArray(r2 && r2.messages) ? r2.messages : [];
+        messages = ms2;
+        const sel2 = threadId ? messages : messages.filter(m => keyOf(m) === k);
+        sel2.sort((a, b) => (Number(a && a.seq) || 0) - (Number(b && b.seq) || 0));
+        selected.length = 0;
+        for (const x of sel2) selected.push(x);
+      }
+    }
+  } catch (_) {}
+
   const now = new Date();
-  const custom = String(getCustomLabel(k) || "").trim();
+  const custom = _pickCustomLabel(k, threadId, file);
   const fileBase = _baseName(file);
   const title = custom || fileBase || (threadId ? shortId(threadId) : shortId(k)) || "导出";
 
@@ -192,6 +329,11 @@ export async function exportThreadMarkdown(state, key, opts = {}) {
   lines.push(`| 导出时间 | ${_fmtLocal(now)} |`);
   lines.push(`| 导出模式 | ${modeLabel} |`);
   lines.push(`| 思考语言 | ${thinkMode} |`);
+  try {
+    if (translateStat && translateStat.queued) {
+      lines.push(`| 导出翻译 | 已触发 ${translateStat.queued} 条（已就绪 ${translateStat.filled} 条，等待 ${translateStat.waited_ms}ms） |`);
+    }
+  } catch (_) {}
   lines.push("");
   lines.push("---");
   lines.push("");
@@ -221,13 +363,69 @@ export async function exportThreadMarkdown(state, key, opts = {}) {
   }
   lines.push(sections.join("\n\n---\n\n"));
 
-  const labelBase = title ? _sanitizeFileName(title) : "";
-  const idBase = _sanitizeFileName(threadId ? shortId(threadId) : (k.split("/").slice(-1)[0] || k));
+  const labelBase = custom ? _sanitizeFileName(custom) : "";
+  const idForName = threadId ? _shortIdForFile(threadId) : _shortIdForFile(_extractUuid(k) || (k.split("/").slice(-1)[0] || k));
+  const idBase = _sanitizeFileName(idForName);
   const base = labelBase ? `${labelBase}_${idBase || "thread"}` : (idBase || "thread");
   const stamp = new Date().toISOString().replaceAll(/[:.]/g, "-");
   const name = `codex-sidecar_${base}_${stamp}.md`;
-  _download(name, lines.join("\n").trim() + "\n");
-  return { ok: true, mode, count: selected.length };
+  const _cls = (s) => {
+    const t = (s ?? "").trim();
+    if (!t) return "blank";
+    if (t.startsWith("```")) return "fence";
+    if (t.startsWith("#")) return "heading";
+    if (t.startsWith("- ")) return "list";
+    if (t.startsWith(">")) return "quote";
+    if (t.startsWith("|")) return "table";
+    if (t.startsWith("---")) return "hr";
+    return "text";
+  };
+
+  const bodyLines = [];
+  let prevKeptBlank = true; // 直接吞掉开头空行
+  let inFence = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] == null ? "" : String(lines[i]);
+    const kind = _cls(line);
+
+    if (kind === "fence") {
+      bodyLines.push(line);
+      prevKeptBlank = false;
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) {
+      bodyLines.push(line);
+      prevKeptBlank = false;
+      continue;
+    }
+
+    if (kind === "blank") {
+      const prevKind = i > 0 ? _cls(lines[i - 1]) : "start";
+      const nextKind = i + 1 < lines.length ? _cls(lines[i + 1]) : "end";
+
+      // 修复“每行之间插一空行”导致的稀疏：文本-空行-文本 直接收紧。
+      if (prevKind === "text" && nextKind === "text") continue;
+      // 标题之间无需额外空行。
+      if (prevKind === "heading" && nextKind === "heading") continue;
+      // 连续空行只保留 1 个。
+      if (prevKeptBlank) continue;
+
+      bodyLines.push("");
+      prevKeptBlank = true;
+      continue;
+    }
+
+    bodyLines.push(line);
+    prevKeptBlank = false;
+  }
+
+  while (bodyLines.length && !bodyLines[0].trim()) bodyLines.shift();
+  while (bodyLines.length && !bodyLines[bodyLines.length - 1].trim()) bodyLines.pop();
+
+  _download(name, bodyLines.join("\n") + "\n");
+  return { ok: true, mode, count: selected.length, translated: translateStat };
 }
 
 export async function exportCurrentThreadMarkdown(state, opts = {}) {
