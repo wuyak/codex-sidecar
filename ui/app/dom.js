@@ -2,6 +2,8 @@ export function getDom() {
   const byId = (id) => document.getElementById(id);
   return {
     statusText: byId("statusText"),
+    statusMain: byId("statusMain"),
+    statusHover: byId("statusHover"),
     debugText: byId("debugText"),
     bookmarks: byId("bookmarks"),
 
@@ -27,12 +29,15 @@ export function getDom() {
 	    nvidiaBaseUrl: byId("nvidiaBaseUrl"),
 	    nvidiaModel: byId("nvidiaModel"),
 	    nvidiaApiKey: byId("nvidiaApiKey"),
+	    nvidiaApiKeyEyeBtn: byId("nvidiaApiKeyEyeBtn"),
 	    nvidiaMaxTokens: byId("nvidiaMaxTokens"),
 	    nvidiaRpm: byId("nvidiaRpm"),
 	    nvidiaTimeout: byId("nvidiaTimeout"),
 	    openaiBaseUrl: byId("openaiBaseUrl"),
+	    openaiBaseUrlEyeBtn: byId("openaiBaseUrlEyeBtn"),
 	    openaiModel: byId("openaiModel"),
 	    openaiApiKey: byId("openaiApiKey"),
+	    openaiApiKeyEyeBtn: byId("openaiApiKeyEyeBtn"),
     openaiAuthMode: byId("openaiAuthMode"),
     openaiReasoning: byId("openaiReasoning"),
     openaiTimeout: byId("openaiTimeout"),
@@ -42,6 +47,7 @@ export function getDom() {
     httpProfileDelBtn: byId("httpProfileDelBtn"),
     httpUrl: byId("httpUrl"),
     httpToken: byId("httpToken"),
+    httpTokenEyeBtn: byId("httpTokenEyeBtn"),
     httpTimeout: byId("httpTimeout"),
 
     saveBtn: byId("saveBtn"),

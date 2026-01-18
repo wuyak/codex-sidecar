@@ -49,6 +49,16 @@
 	              <path d="M12 20h9"></path>
 	              <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4 11.5-11.5z"></path>
 	            </symbol>
+	            <symbol id="i-eye" viewBox="0 0 24 24">
+	              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8"></path>
+	              <circle cx="12" cy="12" r="3"></circle>
+	            </symbol>
+	            <symbol id="i-eye-off" viewBox="0 0 24 24">
+	              <path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.81 21.81 0 0 1 5.06-6.06"></path>
+	              <path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a21.81 21.81 0 0 1-2.91 4.83"></path>
+	              <path d="M1 1l22 22"></path>
+	              <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"></path>
+	            </symbol>
 	            <symbol id="i-power" viewBox="0 0 24 24">
 	              <path d="M12 2v10"></path>
 	              <path d="M6.6 6.6a7 7 0 1 0 10.8 0"></path>
@@ -66,9 +76,11 @@
 		      <div class="row" id="topbar">
 		        <div>
 		          <div class="top-title">Codex Sidecar · 会话旁路监视</div>
-		          <div class="meta">订阅：<code>/events</code>（SSE） · 数据：<a class="meta-link" href="/api/messages" target="_blank" rel="noopener">/api/messages</a> · 会话：<a class="meta-link" href="/api/threads" target="_blank" rel="noopener">/api/threads</a></div>
 		        </div>
-		        <div class="meta" id="statusText"></div>
+		        <div class="meta status-text" id="statusText" tabindex="0" aria-label="状态">
+		          <span id="statusMain"></span>
+		          <div id="statusHover" class="status-hover" aria-hidden="true"></div>
+		        </div>
 		      </div>
 			      <div id="list"></div>
 			    </div>
@@ -180,7 +192,15 @@
 						              <button id="httpProfileDelBtn" class="mini-btn danger" type="button" aria-label="删除"><svg class="ico" aria-hidden="true"><use href="#i-trash"></use></svg></button>
 					            </div>
 				            <div class="meta">URL</div><div><input id="httpUrl" placeholder="https://api.deeplx.org/{token}/translate 或 http://127.0.0.1:9000/translate" /></div>
-				            <div class="meta">Token</div><div><input id="httpToken" type="password" placeholder="可用于 Authorization 或替换 URL 中的 {token}" /></div>
+				            <div class="meta">Token</div>
+				            <div>
+				              <div class="profile-row">
+				                <input id="httpToken" type="password" autocomplete="off" placeholder="可用于 Authorization 或替换 URL 中的 {token}" style="flex:1;" />
+				                <button id="httpTokenEyeBtn" class="mini-btn" type="button" aria-label="显示 Token">
+				                  <svg class="ico" aria-hidden="true"><use href="#i-eye"></use></svg>
+				                </button>
+				              </div>
+				            </div>
 				            <div class="meta">超时（秒）</div><div><input id="httpTimeout" type="number" min="0.5" step="0.5" /></div>
 				          </div>
 				        </div>
@@ -198,7 +218,20 @@
 						                </select>
 				              </div>
 				            </div>
-				            <div class="meta">API Key</div><div><input id="nvidiaApiKey" type="password" autocomplete="off" placeholder="nvapi-..." /></div>
+				            <div class="meta">API Key</div>
+				            <div>
+				              <div class="profile-row">
+				                <input id="nvidiaApiKey" type="password" autocomplete="off" placeholder="nvapi-..." style="flex:1;" />
+				                <button id="nvidiaApiKeyEyeBtn" class="mini-btn" type="button" aria-label="显示 API Key">
+				                  <svg class="ico" aria-hidden="true"><use href="#i-eye"></use></svg>
+				                </button>
+				              </div>
+				            </div>
+				            <div class="meta"></div>
+				            <div class="meta">
+				              获取链接：<a class="meta-link" href="https://build.nvidia.com/settings/api-keys" target="_blank" rel="noopener">https://build.nvidia.com/settings/api-keys</a>
+				              （注册/登录后创建）
+				            </div>
 				            <div class="meta">Max Tokens</div><div><input id="nvidiaMaxTokens" type="number" min="0" step="1" /></div>
 				            <div class="meta">RPM（节流，0=关闭）</div><div><input id="nvidiaRpm" type="number" min="0" step="1" /></div>
 				            <div class="meta">超时（秒）</div><div><input id="nvidiaTimeout" type="number" min="0.5" step="0.5" /></div>
@@ -206,9 +239,25 @@
 				        </div>
 				        <div id="openaiBlock" class="http-block">
 				          <div class="grid grid-compact">
-				            <div class="meta">Base URL</div><div><input id="openaiBaseUrl" placeholder="https://www.right.codes/codex/v1（或…/responses）" /></div>
+				            <div class="meta">Base URL</div>
+				            <div>
+				              <div class="profile-row">
+				                <input id="openaiBaseUrl" type="password" autocomplete="off" placeholder="https://…（或…/responses）" style="flex:1;" />
+				                <button id="openaiBaseUrlEyeBtn" class="mini-btn" type="button" aria-label="显示 Base URL">
+				                  <svg class="ico" aria-hidden="true"><use href="#i-eye"></use></svg>
+				                </button>
+				              </div>
+				            </div>
 				            <div class="meta">Model</div><div><input id="openaiModel" placeholder="gpt-5.1" /></div>
-				            <div class="meta">API Key</div><div><input id="openaiApiKey" type="password" autocomplete="off" placeholder="sk-..." /></div>
+				            <div class="meta">API Key</div>
+				            <div>
+				              <div class="profile-row">
+				                <input id="openaiApiKey" type="password" autocomplete="off" placeholder="sk-..." style="flex:1;" />
+				                <button id="openaiApiKeyEyeBtn" class="mini-btn" type="button" aria-label="显示 API Key">
+				                  <svg class="ico" aria-hidden="true"><use href="#i-eye"></use></svg>
+				                </button>
+				              </div>
+				            </div>
 				            <div class="meta">鉴权方式</div>
 				            <div>
 					              <select id="openaiAuthMode">

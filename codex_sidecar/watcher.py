@@ -185,7 +185,9 @@ class RolloutWatcher:
         self._follow_mode: str = "legacy"  # legacy|process|fallback|idle
         self._codex_detected: bool = False
         self._codex_pids: List[int] = []
+        self._codex_candidate_pids: List[int] = []
         self._process_file: Optional[Path] = None
+        self._process_files: List[Path] = []
 
         # Follow strategy:
         # - auto: pick follow file via existing logic (latest / process-based)
@@ -273,11 +275,16 @@ class RolloutWatcher:
             "pinned_thread_id": pin_tid,
             "pinned_file": pin_file,
             "watch_max_sessions": str(self._watch_max_sessions),
+            "replay_last_lines": str(self._replay_last_lines),
+            "poll_interval_s": str(self._poll_interval_s),
+            "file_scan_interval_s": str(self._file_scan_interval_s),
             "follow_files": [str(p) for p in (self._follow_files or [])][:12],
             "codex_detected": "1" if self._codex_detected else "0",
             "codex_pids": ",".join(str(x) for x in self._codex_pids[:8]),
+            "codex_candidate_pids": ",".join(str(x) for x in self._codex_candidate_pids[:8]),
             "codex_process_regex": self._follow_picker.codex_process_regex,
             "process_file": str(self._process_file) if self._process_file is not None else "",
+            "process_files": [str(p) for p in (self._process_files or [])][:12],
         }
         try:
             if self._translate is not None:
@@ -423,7 +430,7 @@ class RolloutWatcher:
         # Initial pick
         self._sync_follow_targets(force=True)
         if not self._follow_files and not self._warned_missing:
-            if self._follow_mode == "idle":
+            if self._follow_mode in ("idle", "wait_codex", "wait_rollout"):
                 print("[sidecar] 等待 Codex 进程（尚未开始跟随会话文件）", file=sys.stderr)
             else:
                 print(
@@ -483,6 +490,14 @@ class RolloutWatcher:
         pick = self._follow_picker.pick(selection_mode=sel, pinned_thread_id=pin_tid, pinned_file=pin_file)
         picked = pick.picked
         self._process_file = pick.process_file
+        try:
+            self._process_files = list(pick.process_files or [])
+        except Exception:
+            self._process_files = []
+        try:
+            self._codex_candidate_pids = list(getattr(pick, "candidate_pids", None) or [])
+        except Exception:
+            self._codex_candidate_pids = []
         self._codex_detected = bool(pick.codex_detected)
         self._codex_pids = list(pick.codex_pids or [])
         self._follow_mode = str(pick.follow_mode or "")
@@ -500,8 +515,8 @@ class RolloutWatcher:
             except Exception:
                 pass
 
-        # When we are explicitly in "idle / wait_codex" mode, do not follow any file.
-        if picked is None and self._follow_mode in ("idle", "wait_codex"):
+        # When we are explicitly in "idle / wait_codex / wait_rollout" mode, do not follow any file.
+        if picked is None and self._follow_mode in ("idle", "wait_codex", "wait_rollout"):
             if force or self._follow_files:
                 self._follow_files = []
                 self._current_file = None
@@ -512,22 +527,30 @@ class RolloutWatcher:
                     cur.active = False
             return
 
-        targets: List[Path] = []
-        if picked is not None:
-            targets.append(picked)
-
         n = max(1, int(self._watch_max_sessions or 1))
-        if len(targets) < n:
+
+        targets: List[Path] = []
+        # Process-follow mode: only follow rollout files actually opened by Codex processes.
+        # Do NOT scan sessions/** to "fill to N" (more stable + cheaper).
+        if self._follow_mode == "process":
             try:
-                cands = _latest_rollout_files(self._codex_home, limit=max(n * 3, n))
+                targets = list(self._process_files or [])[:n]
             except Exception:
-                cands = []
-            for p in cands:
-                if len(targets) >= n:
-                    break
-                if p in targets:
-                    continue
-                targets.append(p)
+                targets = []
+        else:
+            if picked is not None:
+                targets.append(picked)
+            if len(targets) < n:
+                try:
+                    cands = _latest_rollout_files(self._codex_home, limit=max(n * 3, n))
+                except Exception:
+                    cands = []
+                for p in cands:
+                    if len(targets) >= n:
+                        break
+                    if p in targets:
+                        continue
+                    targets.append(p)
 
         changed = force or (targets != self._follow_files)
         if not changed:

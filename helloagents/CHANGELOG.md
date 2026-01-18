@@ -156,7 +156,7 @@
 - 优化：tool_output 的“详情”不再重复显示工具/call_id/Exit/耗时等头信息，直接展示终端风格正文；并用唯一 id 保证展开/收起不会误操作到其它块。
 - 优化：会话侧栏默认折叠并压缩宽度；圆点/标签为每个会话分配稳定色彩，提升多会话区分度。
 - 优化：复制按钮缩小并移出代码块顶部避免遮挡；思考分隔线仅在双语同显时出现。
-- 优化：顶栏 `/api/messages` 与 `/api/threads` 改为可点击链接，便于快速自检数据源。
+- 优化：顶栏改为极简状态条：默认仅展示“监听/会话数/翻译/精简/固定/异常”；当前跟随会话列表收纳到悬停卡片；不再在顶栏展示 `/events`、`/api/messages`、`/api/threads` 等调试链接。
 - 重构：UI JavaScript 拆分为 ES Modules（解析/格式化/渲染/控制解耦），服务端支持按需静态加载 `/ui/*` 资源。
 - 优化：配置抽屉更极简（常用项优先；HTTP Profiles 操作改为图标按钮；非 HTTP Provider 时隐藏 HTTP 配置块）。
 - 完善：会话侧栏“圆点模式”使用自定义 tooltip（不依赖浏览器 title），并在圆点上展示消息数徽标提升区分度。
@@ -167,7 +167,7 @@
 - 优化：复制反馈更明显：复制成功会弹出“已复制”提示并自动淡出。
 - 优化：HTTP 翻译返回空译文时自动降级为“显示原文 + 顶部告警提示”，避免中文模式下出现（空）。
 - 新增：右侧工具栏加入“重启 Sidecar”按钮（杀死并重新拉起新进程，用于开发时快速重载代码）。
-- 优化：重启流程基于 `/health` 的 `pid` 判断是否已产生新进程，并在状态栏补充 `sidecar:<pid>` 便于确认。
+- 优化：重启流程基于 `/health` 的 `pid` 判断是否已产生新进程；重启动作会在状态提示中展示 pid 变化便于确认（不再在顶栏长期展示 pid）。
 - 修复：回放/切换文件/重复启动 watcher 时，服务端按消息 id 去重，避免历史消息重复追加。
 - 优化：复制交互统一：各内容块支持长按复制（pointerup 触发更稳定）；tool-card 空白区域也可长按复制；移除每条消息右上角复制按钮以减少遮挡。
 - 修复：tool_call（如 web_search_call）不再默认折叠，直接以 tool-card 代码块展示调用参数，避免“需要再点开一次”。
@@ -222,3 +222,11 @@
 - 新增：`all` 视图下每条消息显示所属会话标识（rollout 时间戳 + thread_id 片段），降低多会话混在一起的“错乱感”。
 - 修复：tool_call 权限升级提示降级为“可能需要终端确认”（不再误报为确定的 tool gate waiting），并在通知摘要中提示“可能是历史残留”。
 - 修复：配置解析更健壮：容忍 `config.json` 中数字字段为非法字符串/空值，避免启动时报 `ValueError`。
+- 安全：`/api/config` 与 `/api/status` 默认脱敏（`openai.base_url/api_key`、`nvidia.api_key`、`http.token`）；UI 可通过“眼睛按钮”按需显示原文。
+- 新增：`/api/control/reveal_secret`（仅返回单个字段），用于 UI 显示/隐藏 API Key/Base URL 时按需取回原值。
+- 诊断增强：`/api/status` 的 watcher 状态增加 `replay_last_lines/poll_interval_s/file_scan_interval_s` 等运行态参数，便于确认“并行会话/回放行数”热更新是否生效。
+- UI：翻译设置为 OpenAI/NVIDIA/HTTP Token 增加“显示/隐藏”按钮；NVIDIA API Key 下方增加获取链接（build.nvidia.com/settings/api-keys）。
+- 维护：新增 `config/sidecar/config.example.json`；调整 `.gitignore` 仅忽略 `config/sidecar/config.json` 与锁文件，允许提交示例配置。
+- 优化：进程定位（`follow_codex_process=1`）下仅跟随 Codex 进程实际打开的 `rollout-*.jsonl`（最多 N 个），不再扫描 `sessions/**` 来“补齐并行会话数”；进程存在但未打开 rollout 时进入 `wait_rollout` 等待。
+- 优化：进程定位的 PID 展示更干净：UI 状态栏 `pid:` 仅显示“确实打开 rollout 文件”的 pid；候选 pid（regex 命中）移到调试信息 `codex_pids_candidate`。
+- 优化：进程匹配更稳：优先按 `/proc/<pid>/exe` basename 与 argv0 匹配 regex，降低“命令行里包含 codex 字样但并非 Codex”造成的误命中。

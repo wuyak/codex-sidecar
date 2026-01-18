@@ -1,10 +1,18 @@
+import os
 import re
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Pattern, Sequence, Set
+from typing import Dict, List, Optional, Pattern, Sequence, Set, Tuple
 
-from .procfs import _proc_iter_fd_targets, _proc_list_pids, _proc_read_cmdline, _proc_read_ppid
+from .procfs import (
+    _proc_iter_fd_targets,
+    _proc_list_pids,
+    _proc_read_argv0_basename,
+    _proc_read_cmdline,
+    _proc_read_exe_basename,
+    _proc_read_ppid,
+)
 from .rollout_paths import (
     _ROLLOUT_RE,
     _find_rollout_file_for_thread,
@@ -19,8 +27,12 @@ class FollowPick:
     thread_id: Optional[str]
     follow_mode: str
     codex_detected: bool
+    # PIDs that actually opened rollout-*.jsonl (a tighter set than "candidates").
     codex_pids: List[int]
     process_file: Optional[Path]
+    process_files: List[Path]
+    # Candidate root PIDs matched by regex (debugging only).
+    candidate_pids: List[int]
 
 
 class FollowPicker:
@@ -80,6 +92,8 @@ class FollowPicker:
                 codex_detected=False,
                 codex_pids=[],
                 process_file=None,
+                process_files=[],
+                candidate_pids=[],
             )
 
         tid = _parse_thread_id_from_filename(cand)
@@ -90,6 +104,8 @@ class FollowPicker:
             codex_detected=False,
             codex_pids=[],
             process_file=None,
+            process_files=[],
+            candidate_pids=[],
         )
 
     def _pick_auto(self) -> FollowPick:
@@ -102,6 +118,8 @@ class FollowPicker:
                 codex_detected=False,
                 codex_pids=[],
                 process_file=None,
+                process_files=[],
+                candidate_pids=[],
             )
 
         if self._codex_process_re is None:
@@ -113,6 +131,8 @@ class FollowPicker:
                     codex_detected=False,
                     codex_pids=[],
                     process_file=None,
+                    process_files=[],
+                    candidate_pids=[],
                 )
             picked = _latest_rollout_file(self._codex_home)
             return FollowPick(
@@ -122,6 +142,8 @@ class FollowPicker:
                 codex_detected=False,
                 codex_pids=[],
                 process_file=None,
+                process_files=[],
+                candidate_pids=[],
             )
 
         pids = self._detect_codex_processes()
@@ -136,6 +158,8 @@ class FollowPicker:
                     codex_detected=False,
                     codex_pids=[],
                     process_file=None,
+                    process_files=[],
+                    candidate_pids=[],
                 )
             picked = _latest_rollout_file(self._codex_home)
             return FollowPick(
@@ -145,29 +169,35 @@ class FollowPicker:
                 codex_detected=False,
                 codex_pids=[],
                 process_file=None,
+                process_files=[],
+                candidate_pids=[],
             )
 
         tree = self._collect_process_tree(pids)
-        opened = self._find_rollout_opened_by_pids(tree)
-        if opened is not None:
+        opened, openers = self._find_rollout_opened_by_pids(tree, limit=12)
+        if opened:
             return FollowPick(
-                picked=opened,
-                thread_id=_parse_thread_id_from_filename(opened),
+                picked=opened[0],
+                thread_id=_parse_thread_id_from_filename(opened[0]),
                 follow_mode="process",
                 codex_detected=True,
-                codex_pids=list(pids),
-                process_file=opened,
+                codex_pids=openers,
+                process_file=opened[0],
+                process_files=opened,
+                candidate_pids=list(pids),
             )
 
-        # Codex is running but we can't find an opened rollout yet; fallback to sessions scan.
-        picked = _latest_rollout_file(self._codex_home)
+        # Codex is running but we can't find an opened rollout yet.
+        # In process-follow mode, prefer waiting rather than scanning sessions aggressively.
         return FollowPick(
-            picked=picked,
-            thread_id=_parse_thread_id_from_filename(picked) if picked is not None else None,
-            follow_mode="wait_rollout" if picked is not None else "wait_rollout",
+            picked=None,
+            thread_id=None,
+            follow_mode="wait_rollout",
             codex_detected=True,
-            codex_pids=list(pids),
+            codex_pids=[],
             process_file=None,
+            process_files=[],
+            candidate_pids=list(pids),
         )
 
     def _detect_codex_processes(self) -> List[int]:
@@ -175,11 +205,32 @@ class FollowPicker:
         if re_pat is None:
             return []
         out: List[int] = []
+        my_pid = None
+        try:
+            my_pid = int(os.getpid())
+        except Exception:
+            my_pid = None
         try:
             pids = _proc_list_pids()
         except Exception:
             return []
         for pid in pids:
+            if my_pid is not None and int(pid) == my_pid:
+                continue
+            try:
+                exe0 = _proc_read_exe_basename(pid)
+                if exe0 and re_pat.search(exe0):
+                    out.append(int(pid))
+                    continue
+            except Exception:
+                pass
+            try:
+                a0 = _proc_read_argv0_basename(pid)
+                if a0 and re_pat.search(a0):
+                    out.append(int(pid))
+                    continue
+            except Exception:
+                pass
             try:
                 cmd = _proc_read_cmdline(pid)
                 if cmd and re_pat.search(cmd):
@@ -223,9 +274,15 @@ class FollowPicker:
                 q.append(child)
         return sorted(want)
 
-    def _find_rollout_opened_by_pids(self, pids: Sequence[int]) -> Optional[Path]:
-        best: Optional[Path] = None
-        best_mtime = -1.0
+    def _find_rollout_opened_by_pids(self, pids: Sequence[int], *, limit: int = 12) -> Tuple[List[Path], List[int]]:
+        found_by_path = {}
+        mtime_by_path = {}
+        openers_by_path: Dict[str, Set[int]] = {}
+        root = None
+        try:
+            root = self._codex_home.resolve()
+        except Exception:
+            root = self._codex_home
         for pid in pids:
             try:
                 it = _proc_iter_fd_targets(int(pid))
@@ -240,11 +297,41 @@ class FollowPicker:
                         continue
                     if not cand.exists() or not cand.is_file():
                         continue
-                    mt = cand.stat().st_mtime
-                    if mt > best_mtime:
-                        best = cand
-                        best_mtime = mt
+                    # Keep it inside CODEX_HOME as much as possible (avoid false positives).
+                    try:
+                        cand_r = cand.resolve()
+                    except Exception:
+                        cand_r = cand
+                    try:
+                        if root is not None:
+                            cand_r.relative_to(root)
+                    except Exception:
+                        continue
+                    key = str(cand_r)
+                    if key not in found_by_path:
+                        found_by_path[key] = cand_r
+                        try:
+                            mtime_by_path[key] = cand_r.stat().st_mtime
+                        except Exception:
+                            mtime_by_path[key] = 0.0
+                    openers_by_path.setdefault(key, set()).add(int(pid))
                 except Exception:
                     continue
-        return best
-
+        try:
+            keys = sorted(found_by_path.keys(), key=lambda k: float(mtime_by_path.get(k, 0.0)), reverse=True)
+        except Exception:
+            keys = list(found_by_path.keys())
+        lim = max(1, int(limit or 1))
+        keys = keys[:lim]
+        files = [found_by_path[k] for k in keys if k in found_by_path]
+        openers: Set[int] = set()
+        for k in keys:
+            try:
+                openers.update(openers_by_path.get(k, set()))
+            except Exception:
+                continue
+        try:
+            openers_list = sorted(openers)
+        except Exception:
+            openers_list = list(openers)
+        return files, openers_list

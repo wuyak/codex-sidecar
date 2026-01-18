@@ -1,4 +1,4 @@
-import { fmtErr } from "../utils.js";
+import { fmtErr, rolloutStampFromFile, shortId } from "../utils.js";
 import { api } from "./api.js";
 import { applyProfileToInputs, normalizeHttpProfiles, refreshHttpProfileSelect } from "./http_profiles.js";
 import { setDebug, setStatus, showProviderBlocks } from "./ui.js";
@@ -26,6 +26,8 @@ export async function loadControl(dom, state) {
   const ts = Date.now();
   const debugLines = [];
   setDebug(dom, "");
+
+  const _esc = (s) => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
   // 1) Translators（容错：接口失败时仍展示默认三项，避免“下拉为空”）
   let translators = [
@@ -68,7 +70,7 @@ export async function loadControl(dom, state) {
 
   // 3) Apply config to UI（尽量继续，不让某个字段报错导致整体“全无”）
   try {
-    if (dom.cfgHome) dom.cfgHome.value = _prettyPath(cfg.config_home || "");
+    if (dom.cfgHome) dom.cfgHome.value = String(cfg.config_home_display || "").trim() || _prettyPath(cfg.config_home || "");
     if (dom.watchHome) dom.watchHome.value = _prettyPath(cfg.watch_codex_home || "");
     if (dom.autoStart) dom.autoStart.value = cfg.auto_start ? "1" : "0";
     if (dom.translateMode) dom.translateMode.value = (cfg.translate_mode === "manual") ? "manual" : "auto";
@@ -117,6 +119,23 @@ export async function loadControl(dom, state) {
       if (dom.nvidiaMaxTokens) dom.nvidiaMaxTokens.value = nh.max_tokens ?? 8192;
     } catch (_) {}
     showProviderBlocks(dom, (dom.translatorSel && dom.translatorSel.value) ? dom.translatorSel.value : "");
+    // Secret fields: always reset to "password" after a reload, so saved values don't stay visible.
+    try {
+      const reset = (input, btn, label) => {
+        try { if (input) input.type = "password"; } catch (_) {}
+        try {
+          if (!btn) return;
+          btn.classList.toggle("active", false);
+          btn.setAttribute("aria-label", `显示 ${label}`);
+          const use = btn.querySelector ? btn.querySelector("use") : null;
+          if (use && use.setAttribute) use.setAttribute("href", "#i-eye");
+        } catch (_) {}
+      };
+      reset(dom.openaiBaseUrl, dom.openaiBaseUrlEyeBtn, "Base URL");
+      reset(dom.openaiApiKey, dom.openaiApiKeyEyeBtn, "API Key");
+      reset(dom.nvidiaApiKey, dom.nvidiaApiKeyEyeBtn, "API Key");
+      reset(dom.httpToken, dom.httpTokenEyeBtn, "Token");
+    } catch (_) {}
   } catch (e) {
     debugLines.push(`[error] apply config: ${fmtErr(e)}`);
   }
@@ -146,39 +165,63 @@ export async function loadControl(dom, state) {
   let st = null;
   try {
     st = await fetch(`/api/status?t=${ts}`, { cache: "no-store" }).then(r => r.json());
-    const sidecarPid = (st && (st.pid !== undefined) && (st.pid !== null)) ? String(st.pid) : "";
-    const sidecarSuffix = sidecarPid ? ` | sidecar:${sidecarPid}` : "";
     const w = (st && st.watcher) ? st.watcher : {};
-    const cur = w.current_file || "";
-    const mode = w.follow_mode || "";
-    const detected = (w.codex_detected === "1");
-    const pids = w.codex_pids || "";
-    let detail = "";
-    let followHint = "";
+    const fs = Array.isArray(w.follow_files) ? w.follow_files : [];
+
+    const selMode = (() => {
+      try {
+        const f = (st && typeof st === "object") ? (st.follow || {}) : {};
+        return String((f && f.mode) ? f.mode : "").trim().toLowerCase();
+      } catch (_) {
+        return "";
+      }
+    })();
+
+    const isTranslateAuto = String((state && state.translateMode) ? state.translateMode : "").trim().toLowerCase() !== "manual";
+    const isQuick = String((state && state.viewMode) ? state.viewMode : "").trim().toLowerCase() === "quick";
+    const err = String((st && st.last_error) ? st.last_error : (w && w.last_error) ? w.last_error : "").trim();
+
+    const parts = [];
+    parts.push(st.running ? "监听中" : "未监听");
+    parts.push(`会话:${fs.length}`);
+    parts.push(`翻译:${isTranslateAuto ? "开" : "关"}`);
+    parts.push(`精简:${isQuick ? "开" : "关"}`);
+    if (selMode === "pin") parts.push("固定");
+    if (err) parts.push("异常");
+    setStatus(dom, parts.join(" · "));
+
+    // Hover details: only what users care about (which sessions are followed).
+    let hoverHtml = "";
     try {
-      const f = (st && typeof st === "object") ? (st.follow || {}) : {};
-      const fm = String((f && f.mode) ? f.mode : "").trim().toLowerCase();
-      if (fm === "pin") followHint = " | pin";
-    } catch (_) {}
+      const _rolloutIdPart = (p) => {
+        const base = String(p || "").split("/").slice(-1)[0] || "";
+        const m = base.match(/^rollout-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-(.*)\.jsonl$/);
+        if (m && m[1]) return String(m[1]);
+        return base.replace(/\.jsonl$/i, "");
+      };
+      const items = fs.map((p, idx) => {
+        const stamp = rolloutStampFromFile(p) || "未知时间";
+        const sid = shortId(_rolloutIdPart(p));
+        const title = _prettyPath(p);
+        return `<div class="sh-item" title="${_esc(title)}"><span class="sh-tag">#${idx + 1}</span><span class="sh-stamp">${_esc(stamp)}</span><span class="sh-id"><code>${_esc(sid)}</code></span></div>`;
+      }).join("");
+
+      if (err) {
+        hoverHtml += `<div class="sh-error">异常：<code>${_esc(err)}</code></div>`;
+      }
+      if (fs.length) {
+        hoverHtml += `<div class="sh-sec"><div class="sh-title">当前跟随 <span class="sh-count">${fs.length}</span></div><div class="sh-list sh-list-clean">${items}</div></div>`;
+      } else if (st.running) {
+        hoverHtml += `<div class="sh-empty">暂无会话（等待 Codex 写入 rollout）</div>`;
+      } else {
+        hoverHtml += `<div class="sh-empty">未监听（点击 ▶ 开始监听）</div>`;
+      }
+    } catch (_) { hoverHtml = ""; }
+
     try {
-      const fs = Array.isArray(w.follow_files) ? w.follow_files : [];
-      if (fs.length > 1) followHint = `${followHint} | tail:${fs.length}`;
+      if (dom.statusHover) dom.statusHover.innerHTML = hoverHtml || "";
+      if (dom.statusText) dom.statusText.title = "悬停查看当前跟随会话";
     } catch (_) {}
-    if (mode === "idle") detail = `（等待 Codex 进程${followHint}）`;
-    else if (mode === "process") detail = pids ? `（process | pid:${pids}${followHint}）` : `（process${followHint}）`;
-    else if (mode === "fallback") detail = detected && pids ? `（fallback | pid:${pids}${followHint}）` : `（fallback${followHint}）`;
-    else if (mode) {
-      const mm = String(mode || "");
-      const extra = (followHint && !mm.startsWith("pinned")) ? followHint : "";
-      detail = `(${mm}${extra})`;
-    }
-    else if (followHint) detail = `(auto${followHint})`;
-    if (st.running) {
-      if (cur) setStatus(dom, `运行中：${cur} ${detail}${sidecarSuffix}`.trim());
-      else setStatus(dom, `运行中：${detail}${sidecarSuffix}`.trim());
-    } else {
-      setStatus(dom, `未运行${sidecarSuffix}`.trim());
-    }
     try { if (state) state.running = !!st.running; } catch (_) {}
     try {
       const btn = (dom && dom.watchToggleBtn) ? dom.watchToggleBtn : null;
@@ -199,16 +242,32 @@ export async function loadControl(dom, state) {
   try {
     const provider = String(cfg.translator_provider || "");
     const profNames = (state.httpProfiles || []).map(p => (p && p.name) ? String(p.name) : "").filter(Boolean);
-    const cfgHomePath = String(cfg.config_home || "").replace(/\/+$/, "");
-    const cfgFile = cfgHomePath ? `${cfgHomePath}/config.json` : "";
+    const cfgHomeShown = String(cfg.config_home_display || "").trim() || String(cfg.config_home || "").trim();
+    const cfgFile = String(cfg.config_file_display || "").trim() || (cfgHomeShown ? `${cfgHomeShown.replace(/\/+$/, "")}/config.json` : "");
+    const watchHomeShown = _prettyPath(cfg.watch_codex_home || "");
     debugLines.unshift(
-      `config_home: ${cfg.config_home || ""}`,
-      `watch_codex_home: ${cfg.watch_codex_home || ""}`,
+      `config_home: ${cfgHomeShown}`,
+      `watch_codex_home: ${watchHomeShown}`,
       `config_file: ${cfgFile}`,
       `translator_provider: ${provider}`,
       `http_profiles: ${profNames.length}${profNames.length ? " (" + profNames.join(", ") + ")" : ""}`,
       `http_selected: ${state.httpSelected || ""}`,
     );
+    try {
+      const ws = st && typeof st === "object" ? (st.watcher || {}) : {};
+      const wm = (ws && ws.watch_max_sessions !== undefined) ? ws.watch_max_sessions : "";
+      const rl = (ws && ws.replay_last_lines !== undefined) ? ws.replay_last_lines : "";
+      const pi = (ws && ws.poll_interval_s !== undefined) ? ws.poll_interval_s : "";
+      const si = (ws && ws.file_scan_interval_s !== undefined) ? ws.file_scan_interval_s : "";
+      if (wm || rl || pi || si) {
+        debugLines.splice(3, 0, `watch_runtime: max_sessions=${wm} replay_last_lines=${rl} poll_s=${pi} scan_s=${si}`);
+      }
+      const openPids = String((ws && ws.codex_pids) ? ws.codex_pids : "");
+      const candPids = String((ws && ws.codex_candidate_pids) ? ws.codex_candidate_pids : "");
+      if (openPids || candPids) {
+        debugLines.push(`codex_pids_open: ${openPids}`, `codex_pids_candidate: ${candPids}`);
+      }
+    } catch (_) {}
     if (provider.toLowerCase() === "openai") {
       const tc = cfg.translator_config || {};
       const tcObj = (tc && typeof tc === "object") ? tc : {};

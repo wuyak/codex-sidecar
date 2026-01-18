@@ -4,6 +4,22 @@ from typing import Iterable, List, Optional, Set
 
 _PROC_ROOT = Path("/proc")
 
+def _proc_read_exe(pid: int) -> str:
+    """
+    Read the process executable path via /proc/<pid>/exe symlink.
+    """
+    try:
+        return os.readlink(str(_PROC_ROOT / str(pid) / "exe"))
+    except Exception:
+        return ""
+
+def _proc_read_exe_basename(pid: int) -> str:
+    try:
+        p = _proc_read_exe(pid)
+        return Path(p).name if p else ""
+    except Exception:
+        return ""
+
 def _proc_list_pids() -> List[int]:
     try:
         names = os.listdir(str(_PROC_ROOT))
@@ -31,6 +47,36 @@ def _proc_read_cmdline(pid: int, max_bytes: int = 64 * 1024) -> str:
     parts = [p for p in raw.split(b"\x00") if p]
     try:
         return " ".join(p.decode("utf-8", errors="replace") for p in parts)
+    except Exception:
+        return ""
+
+def _proc_read_argv0(pid: int, max_bytes: int = 64 * 1024) -> str:
+    """
+    Read argv[0] (first element) from /proc/<pid>/cmdline.
+    """
+    try:
+        raw = (_PROC_ROOT / str(pid) / "cmdline").read_bytes()
+    except Exception:
+        return ""
+    if not raw:
+        return ""
+    if len(raw) > max_bytes:
+        raw = raw[:max_bytes]
+    try:
+        first = raw.split(b"\x00", 1)[0]
+    except Exception:
+        first = raw
+    if not first:
+        return ""
+    try:
+        return first.decode("utf-8", errors="replace")
+    except Exception:
+        return ""
+
+def _proc_read_argv0_basename(pid: int) -> str:
+    try:
+        a0 = _proc_read_argv0(pid)
+        return Path(a0).name if a0 else ""
     except Exception:
         return ""
 

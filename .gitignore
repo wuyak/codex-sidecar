@@ -33,7 +33,10 @@ npm-debug.log*
 .codex-home/
 .codex-thinking-sidecar/
 .npm-cache/
-config/sidecar/
+config/sidecar/config.json
+config/sidecar/*.lock
+config/sidecar/*.tmp
+config/sidecar/*.bak-*
 
 # Repo archive (old/)
 old/.npm-cache/

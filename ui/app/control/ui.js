@@ -1,5 +1,8 @@
 export function setStatus(dom, s) {
-  try { if (dom.statusText) dom.statusText.textContent = s || ""; } catch (_) {}
+  try {
+    if (dom.statusMain) dom.statusMain.textContent = s || "";
+    else if (dom.statusText) dom.statusText.textContent = s || "";
+  } catch (_) {}
 }
 
 export function setDebug(dom, s) {

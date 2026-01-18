@@ -11,10 +11,37 @@ from urllib.parse import parse_qs, urlparse
 
 from .state import SidecarState
 from .ui_assets import load_ui_text, resolve_ui_path, ui_content_type, ui_dir
+from ..security import redact_sidecar_config
 
 
 def _json_bytes(obj: dict) -> bytes:
     return json.dumps(obj, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+
+def _project_rel_path(p: str) -> str:
+    """
+    Best-effort: display a project-relative path (avoid leaking /home/<user>/... in UI).
+    """
+    s = str(p or "").strip()
+    if not s:
+        return ""
+    try:
+        cand = Path(s).expanduser()
+        cwd = Path.cwd()
+        try:
+            cand_r = cand.resolve()
+        except Exception:
+            cand_r = cand
+        try:
+            cwd_r = cwd.resolve()
+        except Exception:
+            cwd_r = cwd
+        try:
+            rel = cand_r.relative_to(cwd_r)
+            return str(rel) if str(rel) != "." else "."
+        except Exception:
+            return s
+    except Exception:
+        return s
 
 
 class SidecarHandler(BaseHTTPRequestHandler):
@@ -81,7 +108,17 @@ class SidecarHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/config":
-            cfg = self._controller.get_config()
+            raw_cfg = self._controller.get_config()
+            cfg = redact_sidecar_config(raw_cfg) if isinstance(raw_cfg, dict) else raw_cfg
+            # Display-only helpers (do not persist).
+            try:
+                if isinstance(cfg, dict):
+                    cfg_home = str(cfg.get("config_home") or "")
+                    cfg["config_home_display"] = _project_rel_path(cfg_home)
+                    if cfg.get("config_home_display"):
+                        cfg["config_file_display"] = str(Path(str(cfg["config_home_display"])) / "config.json")
+            except Exception:
+                pass
             payload = {"ok": True, "config": cfg}
             if isinstance(cfg, dict):
                 payload.update(cfg)
@@ -89,7 +126,19 @@ class SidecarHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/status":
-            self._send_json(HTTPStatus.OK, self._controller.status())
+            st = self._controller.status()
+            try:
+                if isinstance(st, dict) and isinstance(st.get("config"), dict):
+                    st["config"] = redact_sidecar_config(st["config"])
+                    cfg_home = str(st["config"].get("config_home") or "")
+                    st["config"]["config_home_display"] = _project_rel_path(cfg_home)
+                    if st["config"].get("config_home_display"):
+                        st["config"]["config_file_display"] = str(
+                            Path(str(st["config"]["config_home_display"])) / "config.json"
+                        )
+            except Exception:
+                pass
+            self._send_json(HTTPStatus.OK, st)
             return
 
         if path == "/api/translators":
@@ -238,9 +287,18 @@ class SidecarHandler(BaseHTTPRequestHandler):
             except ValueError as e:
                 self._send_json(HTTPStatus.CONFLICT, {"ok": False, "error": str(e)})
                 return
-            payload = {"ok": True, "config": cfg}
-            if isinstance(cfg, dict):
-                payload.update(cfg)
+            safe_cfg = redact_sidecar_config(cfg) if isinstance(cfg, dict) else cfg
+            try:
+                if isinstance(safe_cfg, dict):
+                    cfg_home = str(safe_cfg.get("config_home") or "")
+                    safe_cfg["config_home_display"] = _project_rel_path(cfg_home)
+                    if safe_cfg.get("config_home_display"):
+                        safe_cfg["config_file_display"] = str(Path(str(safe_cfg["config_home_display"])) / "config.json")
+            except Exception:
+                pass
+            payload = {"ok": True, "config": safe_cfg}
+            if isinstance(safe_cfg, dict):
+                payload.update(safe_cfg)
             self._send_json(HTTPStatus.OK, payload)
             return
 
@@ -269,6 +327,22 @@ class SidecarHandler(BaseHTTPRequestHandler):
         if self.path == "/api/control/translate_probe":
             # No payload needed; probes current translator config.
             self._send_json(HTTPStatus.OK, self._controller.translate_probe())
+            return
+
+        if self.path == "/api/control/reveal_secret":
+            length = int(self.headers.get("Content-Length") or "0")
+            raw = self.rfile.read(length) if length > 0 else b"{}"
+            try:
+                obj = json.loads(raw.decode("utf-8", errors="replace"))
+            except Exception:
+                obj = {}
+            if not isinstance(obj, dict):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "invalid_payload"})
+                return
+            provider = str(obj.get("provider") or obj.get("p") or "")
+            field = str(obj.get("field") or obj.get("k") or "")
+            profile = str(obj.get("profile") or obj.get("profile_name") or "")
+            self._send_json(HTTPStatus.OK, self._controller.reveal_secret(provider, field, profile=profile))
             return
 
         if self.path == "/api/control/follow":

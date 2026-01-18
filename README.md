@@ -67,5 +67,7 @@
 - `ui/`：默认 UI（静态源码，服务端以 `/ui/*` 提供）
 - `scripts/`：启动脚本实现（`run.sh` / `ui.sh`）
 - `config/sidecar/`：本地配置落点（默认；已加入 `.gitignore`）
+  - 实际配置：`config/sidecar/config.json`（本机使用，已加入 `.gitignore`）
+  - 示例配置：`config/sidecar/config.example.json`（可提交/发布，无敏信息）
 - `old/`：归档（历史草稿/快照/旧 tools 结构）
 - `helloagents/`: 知识库（CHANGELOG / wiki / history）
