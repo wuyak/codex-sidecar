@@ -2,7 +2,20 @@ import { colorForKey, keyOf, rolloutStampFromFile, shortId } from "../utils.js";
 import { getCustomLabel, setCustomLabel } from "./labels.js";
 import { loadHiddenThreads, saveHiddenThreads } from "./hidden.js";
 import { getUnreadCount } from "../unread.js";
-import { notifyCorner } from "../utils/notify.js";
+import { flashToastAt } from "../utils/toast.js";
+
+function _toastFromEl(el, text, opts = {}) {
+  const msg = String(text || "").trim();
+  if (!msg) return;
+  const durationMs = Number.isFinite(Number(opts.durationMs)) ? Number(opts.durationMs) : 1300;
+  try {
+    const node = el && el.getBoundingClientRect ? el : null;
+    const r = node ? node.getBoundingClientRect() : null;
+    const x = r ? (r.left + r.width / 2) : (window.innerWidth / 2);
+    const y = r ? (r.top + r.height / 2) : (window.innerHeight - 80);
+    flashToastAt(x, y, msg, { isLight: true, durationMs });
+  } catch (_) {}
+}
 
 function _parseStamp(stamp) {
   const s = String(stamp || "").trim();
@@ -228,7 +241,7 @@ function _wireBookmarkInteractions(btn) {
         const onClose = btn.__bmOnClose;
         if (typeof onClose === "function") {
           try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
-          await onClose();
+          await onClose(t);
         }
         return;
       }
@@ -246,7 +259,7 @@ function _wireBookmarkInteractions(btn) {
     const onCtx = btn.__bmOnContext;
     if (typeof onCtx !== "function" || !k) return;
     try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
-    try { await onCtx(k); } catch (_) {}
+    try { await onCtx(k, btn); } catch (_) {}
   });
 
   btn.addEventListener("keydown", (e) => {
@@ -261,7 +274,7 @@ function _wireBookmarkInteractions(btn) {
       const onDelete = btn.__bmOnDelete;
       if (typeof onDelete !== "function") return;
       try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
-      try { onDelete(); } catch (_) {}
+      try { onDelete(btn); } catch (_) {}
     }
   });
 
@@ -346,7 +359,7 @@ export function renderTabs(dom, state, onSelectKey) {
     const TIP_KEY = "codex_sidecar_tabs_rename_tip_v1";
     if (items.length > 0 && localStorage.getItem(TIP_KEY) !== "1") {
       localStorage.setItem(TIP_KEY, "1");
-      notifyCorner("bm_tip", "会话标签", "提示：左键长按标签可重命名哦~ (´▽｀)", { ttlMs: 2200, level: "info" });
+      _toastFromEl(rail || host, "提示：左键长按标签可重命名哦~ (´▽｀)", { durationMs: 2200 });
     }
   } catch (_) {}
   const fragRail = document.createDocumentFragment();
@@ -357,19 +370,19 @@ export function renderTabs(dom, state, onSelectKey) {
     return state.hiddenThreads;
   };
 
-  const _hideKey = async (key, labelForToast = "") => {
+  const _hideKey = async (key, labelForToast = "", sourceEl = null) => {
     const k = String(key || "").trim();
     if (!k || k === "all") return;
     const s = _ensureHiddenSet();
     if (s.has(k)) return;
     s.add(k);
     saveHiddenThreads(s);
-    try { notifyCorner("bm_ctx", "会话列表", `已从列表移除：${labelForToast || shortId(k)}`, { ttlMs: 1600, level: "success" }); } catch (_) {}
+    _toastFromEl(sourceEl || host, `已从列表移除：${labelForToast || shortId(k)}`, { durationMs: 1600 });
     if (String(state.currentKey || "all") === k) await onSelectKey(_pickFallbackKey(state, k));
     else renderTabs(dom, state, onSelectKey);
   };
 
-  const _toggleHiddenKey = async (key, labelForToast = "") => {
+  const _toggleHiddenKey = async (key, labelForToast = "", sourceEl = null) => {
     const k = String(key || "").trim();
     if (!k || k === "all") return;
     const s = _ensureHiddenSet();
@@ -377,14 +390,11 @@ export function renderTabs(dom, state, onSelectKey) {
     if (was) s.delete(k);
     else s.add(k);
     saveHiddenThreads(s);
-    try {
-      notifyCorner(
-        "bm_ctx",
-        "会话列表",
-        was ? `已恢复：${labelForToast || shortId(k)}` : `已从列表移除：${labelForToast || shortId(k)}`,
-        { ttlMs: 1600, level: was ? "info" : "success" },
-      );
-    } catch (_) {}
+    _toastFromEl(
+      sourceEl || host,
+      was ? `已恢复：${labelForToast || shortId(k)}` : `已从列表移除：${labelForToast || shortId(k)}`,
+      { durationMs: 1600 },
+    );
     if (!was && String(state.currentKey || "all") === k) await onSelectKey(_pickFallbackKey(state, k));
     else renderTabs(dom, state, onSelectKey);
   };
@@ -394,7 +404,7 @@ export function renderTabs(dom, state, onSelectKey) {
     return state.closedThreads;
   };
 
-  const _closeKey = async (key, labelForToast = "") => {
+  const _closeKey = async (key, labelForToast = "", sourceEl = null) => {
     const k = String(key || "").trim();
     if (!k || k === "all") return;
     const t = state.threadIndex.get(k) || { last_seq: 0 };
@@ -405,7 +415,7 @@ export function renderTabs(dom, state, onSelectKey) {
       at_count: Number(t && t.count) || 0,
       at_ts: String((t && t.last_ts) ? t.last_ts : ""),
     });
-    try { notifyCorner("bm_close", "会话标签", `已关闭监听：${labelForToast || shortId(k)}`, { ttlMs: 1400, level: "info" }); } catch (_) {}
+    _toastFromEl(sourceEl || host, "已关闭监听", { durationMs: 1200 });
     if (String(state.currentKey || "all") === k) await onSelectKey(_pickFallbackKey(state, k));
     else renderTabs(dom, state, onSelectKey);
   };
@@ -449,9 +459,9 @@ export function renderTabs(dom, state, onSelectKey) {
       } catch (_) {}
       try { btn.removeAttribute("title"); } catch (_) {}
       btn.__bmOnSelect = onSelectKey;
-      btn.__bmOnContext = async (k) => { await _toggleHiddenKey(k, label); };
-      btn.__bmOnDelete = async () => { await _hideKey(t.key, label); };
-      btn.__bmOnClose = async () => { await _closeKey(t.key, label); };
+      btn.__bmOnContext = async (k, el) => { await _toggleHiddenKey(k, label, el || btn); };
+      btn.__bmOnDelete = async (el) => { await _hideKey(t.key, label, el || btn); };
+      btn.__bmOnClose = async (el) => { await _closeKey(t.key, label, el || btn); };
       btn.__bmRender = () => renderTabs(dom, state, onSelectKey);
       _wireBookmarkInteractions(btn);
       return btn;
