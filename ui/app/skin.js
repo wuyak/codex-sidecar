@@ -3,10 +3,12 @@ const _SKIN_LABEL = {
   default: "默认",
   paper: "纸感",
   grid: "网格",
+  sand: "暖沙",
   soft: "柔和",
   contrast: "对比",
   flat: "扁平",
   dark: "深色",
+  aurora: "极光",
   night: "夜幕",
 };
 
@@ -14,8 +16,10 @@ function _sanitize(v) {
   const s = String(v || "").trim().toLowerCase();
   if (s === "paper") return "paper";
   if (s === "grid") return "grid";
+  if (s === "sand") return "sand";
   if (s === "flat") return "flat";
   if (s === "dark") return "dark";
+  if (s === "aurora") return "aurora";
   if (s === "night") return "night";
   if (s === "soft") return "soft";
   if (s === "contrast") return "contrast";

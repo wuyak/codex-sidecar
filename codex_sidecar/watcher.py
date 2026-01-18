@@ -542,7 +542,11 @@ class RolloutWatcher:
                 targets.append(picked)
             if len(targets) < n:
                 try:
-                    cands = _latest_rollout_files(self._codex_home, limit=max(n * 3, n))
+                    # 进程跟随模式下，只跟随“进程正在写入的 rollout 文件”，不再扫描 sessions 补齐 N 个会话。
+                    # 否则重启/空窗期会误跟到历史会话（例如旧的 how 会话）。
+                    cands = []
+                    if self._follow_mode != "process":
+                        cands = _latest_rollout_files(self._codex_home, limit=max(n * 3, n))
                 except Exception:
                     cands = []
                 for p in cands:

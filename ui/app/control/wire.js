@@ -884,7 +884,12 @@ export function wireControlEvents(dom, state, helpers) {
   if (dom.bookmarkHiddenList) dom.bookmarkHiddenList.addEventListener("keydown", async (e) => { try { await _handleBookmarkListKeydown(e); } catch (_) {} });
 
   if (dom.openTranslateFromSettingsBtn) dom.openTranslateFromSettingsBtn.addEventListener("click", () => { openTranslatorSettings(dom); });
-  if (dom.saveBtn) dom.saveBtn.addEventListener("click", async () => { await saveConfig(dom, state); });
+  if (dom.saveBtn) dom.saveBtn.addEventListener("click", async () => {
+    // 允许用户直接点“保存”而不先 blur 输入框：这里强制校验并落盘 UI 字体/按钮大小。
+    try { _applyUiFontInput(false); } catch (_) {}
+    try { _applyUiBtnInput(false); } catch (_) {}
+    await saveConfig(dom, state);
+  });
   if (dom.saveTranslateBtn) dom.saveTranslateBtn.addEventListener("click", async () => { await saveTranslateConfig(dom, state); });
   if (dom.watchToggleBtn) dom.watchToggleBtn.addEventListener("click", async () => {
     const btn = dom.watchToggleBtn;

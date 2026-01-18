@@ -114,6 +114,7 @@ function _ensureBookmarkStructure(btn) {
   dot.className = "bm-dot";
   const l = document.createElement("span");
   l.className = "bm-label";
+  l.title = "左键长按可重命名哦~（｀・ω・´）";
   const i = document.createElement("input");
   i.className = "bm-edit";
   i.type = "text";
@@ -122,6 +123,7 @@ function _ensureBookmarkStructure(btn) {
   i.placeholder = "重命名…";
   const c = document.createElement("span");
   c.className = "bm-close";
+  c.title = "左键长按可关闭监听哦~（｀・ω・´）";
   c.textContent = "×";
   try { c.setAttribute("aria-hidden", "true"); } catch (_) {}
   btn.appendChild(tip);
