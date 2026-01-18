@@ -156,7 +156,7 @@ function showOpenAIFields(dom, show) {
 }
 
 function showNvidiaFields(dom, show) {
-  const els = [dom.nvidiaBaseUrl, dom.nvidiaModel, dom.nvidiaApiKey, dom.nvidiaMaxTokens, dom.nvidiaRpm, dom.nvidiaTimeout];
+  const els = [dom.nvidiaBaseUrl, dom.nvidiaModel, dom.nvidiaApiKey, dom.nvidiaRpm, dom.nvidiaTimeout];
   for (const el of els) {
     if (!el) continue;
     el.disabled = !show;
@@ -195,9 +195,6 @@ function ensureNvidiaDefaults(dom) {
     if (dom.nvidiaRpm && (dom.nvidiaRpm.value === "" || dom.nvidiaRpm.value == null)) {
       dom.nvidiaRpm.value = 0;
     }
-	    if (dom.nvidiaMaxTokens && (dom.nvidiaMaxTokens.value === "" || dom.nvidiaMaxTokens.value == null)) {
-	      dom.nvidiaMaxTokens.value = 8192;
-	    }
     if (dom.nvidiaTimeout && (dom.nvidiaTimeout.value === "" || dom.nvidiaTimeout.value == null)) {
       dom.nvidiaTimeout.value = 60;
     }

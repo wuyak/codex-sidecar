@@ -135,7 +135,7 @@ export async function loadControl(dom, state) {
       if (dom.nvidiaApiKey) dom.nvidiaApiKey.value = nh.api_key || "";
       if (dom.nvidiaTimeout) dom.nvidiaTimeout.value = nh.timeout_s ?? 60;
       if (dom.nvidiaRpm) dom.nvidiaRpm.value = nh.rpm ?? 0;
-      if (dom.nvidiaMaxTokens) dom.nvidiaMaxTokens.value = nh.max_tokens ?? 8192;
+      if (dom.nvidiaMaxTokensText) dom.nvidiaMaxTokensText.textContent = "8192";
     } catch (_) {}
     showProviderBlocks(dom, (dom.translatorSel && dom.translatorSel.value) ? dom.translatorSel.value : "");
     // Secret fields: always reset to "password" after a reload, so saved values don't stay visible.

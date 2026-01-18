@@ -41,7 +41,7 @@ export function getDom() {
 	    nvidiaModel: byId("nvidiaModel"),
 	    nvidiaApiKey: byId("nvidiaApiKey"),
 	    nvidiaApiKeyEyeBtn: byId("nvidiaApiKeyEyeBtn"),
-	    nvidiaMaxTokens: byId("nvidiaMaxTokens"),
+	    nvidiaMaxTokensText: byId("nvidiaMaxTokensText"),
 	    nvidiaRpm: byId("nvidiaRpm"),
 	    nvidiaTimeout: byId("nvidiaTimeout"),
 	    openaiBaseUrl: byId("openaiBaseUrl"),
@@ -62,6 +62,7 @@ export function getDom() {
 	    httpTimeout: byId("httpTimeout"),
 
 	    saveBtn: byId("saveBtn"),
+	    openTranslateFromSettingsBtn: byId("openTranslateFromSettingsBtn"),
 	    configErrorText: byId("configErrorText"),
 
 	    clearBtn: byId("clearBtn"),

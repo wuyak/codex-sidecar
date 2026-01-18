@@ -87,7 +87,7 @@ function _buildTranslatorPatch(dom, state) {
     const base = (dom.nvidiaBaseUrl && dom.nvidiaBaseUrl.value) ? dom.nvidiaBaseUrl.value.trim() : "";
     const model = (dom.nvidiaModel && dom.nvidiaModel.value) ? dom.nvidiaModel.value.trim() : "";
     const apiKey = (dom.nvidiaApiKey && dom.nvidiaApiKey.value) ? dom.nvidiaApiKey.value.trim() : "";
-    const maxTokens = Number((dom.nvidiaMaxTokens && dom.nvidiaMaxTokens.value) ? dom.nvidiaMaxTokens.value : 8192);
+    const maxTokens = 8192;
     const rpm = Number((dom.nvidiaRpm && dom.nvidiaRpm.value) ? dom.nvidiaRpm.value : 0);
     const timeout = Number((dom.nvidiaTimeout && dom.nvidiaTimeout.value) ? dom.nvidiaTimeout.value : 60);
     if (!base) return { ok: false, error: "missing_nvidia_base_url" };

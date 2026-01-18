@@ -171,7 +171,7 @@
 				        </div>
 
 				        <details class="drawer-details">
-				          <summary class="meta">高级选项</summary>
+				          <summary class="drawer-subtitle">高级选项</summary>
 				          <div class="grid grid-compact">
 					            <div class="meta">进程定位</div><div><select id="followProc"><option value="0">否</option><option value="1">是</option></select></div>
 				            <div class="meta">仅在有进程时跟随</div><div><select id="onlyWhenProc"><option value="1">是</option><option value="0">否</option></select></div>
@@ -193,6 +193,7 @@
 					        </div>
 					      </div>
 		<div class="btns">
+						        <button id="openTranslateFromSettingsBtn" type="button">翻译设置</button>
 						        <button class="primary" id="saveBtn" type="button">保存</button>
 						      </div>
 						      <div id="configErrorText" class="meta form-error" style="margin-top:6px;"></div>
@@ -265,11 +266,11 @@
 				            </div>
 				            <div class="meta"></div>
 				            <div class="meta">
-				              获取链接：<a class="meta-link" href="https://build.nvidia.com/settings/api-keys" target="_blank" rel="noopener">https://build.nvidia.com/settings/api-keys</a>
-				              （注册/登录后创建）
+				              API Key 获取方式：<br>
+				              <a class="meta-link" href="https://build.nvidia.com/settings/api-keys" target="_blank" rel="noopener">https://build.nvidia.com/settings/api-keys</a>
 				            </div>
-				            <div class="meta">Max Tokens</div><div><input id="nvidiaMaxTokens" type="number" min="0" step="1" /></div>
-				            <div class="meta">RPM（节流，0=关闭）</div><div><input id="nvidiaRpm" type="number" min="0" step="1" /></div>
+				            <div class="meta">Max Tokens（固定）</div><div class="meta" id="nvidiaMaxTokensText">8192</div>
+				            <div class="meta">RPM（0 为关闭）</div><div><input id="nvidiaRpm" type="number" min="0" step="1" /></div>
 				            <div class="meta">超时（秒）</div><div><input id="nvidiaTimeout" type="number" min="0.5" step="0.5" /></div>
 				          </div>
 				        </div>

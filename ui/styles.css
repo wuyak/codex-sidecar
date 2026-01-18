@@ -134,11 +134,11 @@
 			        width: auto;
 			        max-width: 100%;
 			        margin-left: auto;
-			        padding: var(--tabs-pad);
+			        padding: 0;
 			        border-radius: var(--tabs-radius);
-			        border: 1px solid var(--dock-border);
-			        background: var(--dock-bg);
-			        box-shadow: var(--shadow-sm);
+			        border: none;
+			        background: transparent;
+			        box-shadow: none;
 			        overflow-x: auto;
 			        overflow-y: hidden;
 			        scrollbar-width: thin;
@@ -218,9 +218,9 @@
 
 		      /* 标签按钮（tabs） */
 		      #bookmarks .bm-rail .bookmark {
-		        flex: 1 1 var(--tabs-min-w);
-		        min-width: var(--tabs-min-w);
-		        max-width: var(--tabs-max-w);
+		        flex: 0 0 auto;
+		        min-width: 0;
+		        max-width: min(var(--tabs-max-w), calc(100vw - 120px));
 		        height: calc(var(--tabs-bar-h) - 2px);
 		        min-height: calc(var(--tabs-bar-h) - 2px);
 		        padding: 0 8px;
@@ -229,6 +229,9 @@
 		        border-color: rgba(148, 163, 184, .35);
 		        box-shadow: none;
 		      }
+		      #bookmarks .bm-rail .bookmark.bm-s { width: 84px; }
+		      #bookmarks .bm-rail .bookmark.bm-m { width: 144px; }
+		      #bookmarks .bm-rail .bookmark.bm-l { width: 200px; }
 		      body[data-bm-skin="dark"] #bookmarks .bm-rail .bookmark { background: rgba(15,23,42,.58); border-color: rgba(148,163,184,.20); }
 		      #bookmarks .bm-rail .bookmark:hover { background: var(--c-soft-2); border-color: var(--c-border); }
 		      #bookmarks .bm-rail .bookmark.active {
@@ -507,14 +510,22 @@
 			      #bookmarkDrawer {
 			        z-index: var(--z-bookmark-drawer);
 			        top: auto;
-			        right: auto;
-			        left: calc(16px + var(--safe-left));
+			        left: auto;
+			        right: calc(var(--rightbar-right) + var(--rightbar-w) + 12px);
 			        bottom: calc(16px + var(--safe-bottom) + var(--tabs-bar-h) + 10px);
 			        width: min(380px, calc(100vw - 32px - var(--safe-left) - var(--safe-right)));
 			        max-height: min(70vh, calc(100vh - 32px - var(--safe-top) - var(--safe-bottom) - var(--tabs-bar-h) - 16px));
 			        overflow-x: hidden;
 			        overflow-y: auto;
 			      }
+			      #translateDrawer {
+			        width: min(520px, calc(100vw - 32px - var(--safe-left) - var(--safe-right)));
+			        overflow-x: hidden;
+			        overflow-y: auto;
+			      }
+			      #translateDrawer .drawer-sec { overflow-x: hidden; }
+			      #translateDrawer .profile-row { min-width: 0; flex-wrap: wrap; }
+			      #translateDrawer .profile-row > * { min-width: 0; }
 			      .drawer-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
 			      .drawer-head .title { font-weight: 700; }
 				      .drawer-close { border:none; background: transparent; color: var(--c-text); border-radius: 10px; width: 34px; height: 34px; padding: 0; font-size: 18px; line-height: 1; cursor:pointer; box-shadow: none; }
@@ -524,6 +535,7 @@
 				      .drawer-sec { margin-top: 10px; border: none; border-radius: 0; background: transparent; padding: 0; }
       .drawer-details { margin-top: 10px; }
       .drawer-details > summary { cursor:pointer; font-weight: 700; color: var(--c-muted); list-style: none; }
+      .drawer-details > summary.drawer-subtitle { font-weight: 900; color: var(--c-text); font-size: 13px; }
       .drawer-details > summary::-webkit-details-marker { display: none; }
       .drawer-details[open] > summary { color: var(--c-text); }
       .drawer-details .grid { margin-top: 8px; }
