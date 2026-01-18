@@ -281,6 +281,18 @@ export function wireControlEvents(dom, state, helpers) {
     if (!silent) _toastFromEl(el, `字体大小：${v}px`);
   };
 
+  const _applyUiFontDraft = () => {
+    const el = dom && dom.uiFontSize ? dom.uiFontSize : null;
+    if (!el) return;
+    const s = String(el.value ?? "").trim();
+    if (!s) { _setInvalid(el, false); return; }
+    if (!/^\d+$/.test(s)) { _setInvalid(el, true); return; }
+    const n = Number.parseInt(s, 10);
+    if (!Number.isFinite(n) || n < 12 || n > 24) { _setInvalid(el, true); return; }
+    _setInvalid(el, false);
+    _applyUiFontSize(n);
+  };
+
   const _applyUiBtnInput = (silent = false) => {
     const el = dom && dom.uiBtnSize ? dom.uiBtnSize : null;
     if (!el) return;
@@ -298,13 +310,27 @@ export function wireControlEvents(dom, state, helpers) {
     if (!silent) _toastFromEl(el, `按钮大小：${v}px`);
   };
 
+  const _applyUiBtnDraft = () => {
+    const el = dom && dom.uiBtnSize ? dom.uiBtnSize : null;
+    if (!el) return;
+    const s = String(el.value ?? "").trim();
+    if (!s) { _setInvalid(el, false); return; }
+    if (!/^\d+$/.test(s)) { _setInvalid(el, true); return; }
+    const n = Number.parseInt(s, 10);
+    if (!Number.isFinite(n) || n < 32 || n > 72) { _setInvalid(el, true); return; }
+    _setInvalid(el, false);
+    _applyUiButtonSize(n);
+  };
+
   if (dom.uiFontSize) {
+    dom.uiFontSize.addEventListener("input", () => _applyUiFontDraft());
     dom.uiFontSize.addEventListener("change", () => _applyUiFontInput(false));
     dom.uiFontSize.addEventListener("keydown", (e) => {
       if (e && String(e.key || "") === "Enter") { try { e.preventDefault(); } catch (_) {} try { dom.uiFontSize.blur(); } catch (_) {} }
     });
   }
   if (dom.uiBtnSize) {
+    dom.uiBtnSize.addEventListener("input", () => _applyUiBtnDraft());
     dom.uiBtnSize.addEventListener("change", () => _applyUiBtnInput(false));
     dom.uiBtnSize.addEventListener("keydown", (e) => {
       if (e && String(e.key || "") === "Enter") { try { e.preventDefault(); } catch (_) {} try { dom.uiBtnSize.blur(); } catch (_) {} }
@@ -586,7 +612,7 @@ export function wireControlEvents(dom, state, helpers) {
 	        toggleBtn.type = "button";
 	        toggleBtn.dataset.action = isHiddenList ? "listenOn" : "listenOff";
 	        toggleBtn.setAttribute("aria-label", isHiddenList ? "开启监听" : "关闭监听");
-	        toggleBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="${isHiddenList ? "#i-eye-closed" : "#i-eye"}"></use></svg>`;
+	        toggleBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="${isHiddenList ? "#i-eye" : "#i-eye-closed"}"></use></svg>`;
 
 	        actions.appendChild(renameBtn);
 	        actions.appendChild(exportBtn);
@@ -759,7 +785,7 @@ export function wireControlEvents(dom, state, helpers) {
         _toastFromEl(btn, "正在导出…");
         const p = _getExportPrefs();
         const mode = p.quick ? "quick" : "full";
-        const reasoningLang = p.translate ? "both" : "en";
+        const reasoningLang = p.translate ? "toggle" : "en";
         const r = await exportThreadMarkdown(state, key, { mode, reasoningLang });
 	        _toastFromEl(btn, r && r.ok ? "已导出（下载）" : "导出失败");
 	        return;
@@ -768,7 +794,7 @@ export function wireControlEvents(dom, state, helpers) {
 	        const hidden = _ensureHiddenSet();
 	        if (!hidden.has(key)) hidden.add(key);
 	        saveHiddenThreads(hidden);
-	        _toastFromEl(btn, "监听：已关闭");
+	        _toastFromEl(btn, "监听：已关闭（已隐藏）");
 	        try { renderTabs(); } catch (_) {}
 	        _renderBookmarkDrawerList();
 	        if (String(state.currentKey || "all") === key) {
@@ -780,7 +806,7 @@ export function wireControlEvents(dom, state, helpers) {
 	        const hidden = _ensureHiddenSet();
 	        if (hidden.has(key)) hidden.delete(key);
 	        saveHiddenThreads(hidden);
-	        _toastFromEl(btn, "监听：已开启");
+	        _toastFromEl(btn, "监听：已开启（已恢复）");
 	        try { renderTabs(); } catch (_) {}
 	        _renderBookmarkDrawerList();
 	        return;

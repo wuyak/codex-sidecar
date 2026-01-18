@@ -67,12 +67,35 @@ function _balanceFences(md) {
   const src = String(md ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").trimEnd();
   if (!src) return "";
   const lines = src.split("\n");
-  let fenceToggles = 0;
+  let open = "";
   for (const ln of lines) {
-    if (/^\s*```/.test(String(ln ?? "").trimEnd())) fenceToggles += 1;
+    const t = String(ln ?? "").trimEnd();
+    const m = t.match(/^\s*(```+|~~~+)/);
+    if (!m) continue;
+    const fence = String(m[1] || "");
+    if (!fence) continue;
+    if (!open) {
+      open = fence;
+      continue;
+    }
+    // Only close when the fence char matches; other fences inside code blocks are just text.
+    if (open[0] === fence[0] && fence.length >= open.length) open = "";
   }
-  if (fenceToggles % 2 === 1) return `${src}\n\`\`\``;
+  if (open) return `${src}\n${open}`;
   return src;
+}
+
+function _safeCodeFence(text, lang = "text") {
+  const src = String(text ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").trimEnd();
+  if (!src) return "";
+  let maxRun = 3;
+  try {
+    const runs = src.match(/`{3,}/g) || [];
+    for (const r of runs) maxRun = Math.max(maxRun, String(r || "").length);
+  } catch (_) {}
+  const fence = "`".repeat(Math.max(4, maxRun + 1));
+  const info = String(lang || "").trim();
+  return `${fence}${info ? info : ""}\n${src}\n${fence}`;
 }
 
 function _renderReasoning(m, opts = {}) {
@@ -85,6 +108,20 @@ function _renderReasoning(m, opts = {}) {
   if (mode === "zh") return _balanceFences(hasZh ? zh : en);
   if (mode === "both" && hasZh && en) {
     return _balanceFences([`### 中文`, "", zh, "", `### English`, "", en].join("\n").trimEnd());
+  }
+  if (mode === "toggle" && hasZh) {
+    const parts = [];
+    if (zh) parts.push(zh.trimEnd());
+    if (en) {
+      parts.push("");
+      parts.push("<details>");
+      parts.push("<summary>English</summary>");
+      parts.push("");
+      parts.push(en.trimEnd());
+      parts.push("");
+      parts.push("</details>");
+    }
+    return _balanceFences(parts.join("\n").trimEnd());
   }
   // auto: prefer zh when available, otherwise keep original.
   return _balanceFences(hasZh ? zh : en);
@@ -138,16 +175,18 @@ export async function exportThreadMarkdown(state, key, opts = {}) {
 
   const lines = [];
   lines.push(`# ${title}`);
-  if (fileBase) lines.push(`> 原始文件：${fileBase}`);
+  if (fileBase) lines.push(`> 源文件：${fileBase}`);
   const modeLabel = mode === "quick" ? "精简" : "全量";
   const thinkLabel = (reasoningLang === "en")
     ? "思考：原文"
-    : (reasoningLang === "zh")
+    : (reasoningLang === "zh" || reasoningLang === "toggle")
       ? "思考：译文"
       : (reasoningLang === "both")
         ? "思考：双语"
         : "思考：自动";
-  lines.push(`> 导出时间：${_fmtLocal(now)} · ${modeLabel} · ${thinkLabel}`);
+  lines.push(`> 导出时间：${_fmtLocal(now)} · 模式：${modeLabel} · ${thinkLabel}`);
+  lines.push("");
+  lines.push("---");
   lines.push("");
 
   const sections = [];
@@ -159,9 +198,18 @@ export async function exportThreadMarkdown(state, key, opts = {}) {
     const kindName = _kindLabel(kind);
     const tsLocal = _fmtMaybeLocal(m && m.ts ? m.ts : "");
     const head = `## ${idx}. ${kindName}${tsLocal ? ` · ${tsLocal}` : ""}`;
-    const text = (kind === "reasoning_summary")
-      ? _renderReasoning(m, { lang: reasoningLang })
-      : _balanceFences(String((m && m.text) ? m.text : "").trimEnd());
+
+    let text = "";
+    if (kind === "reasoning_summary") {
+      text = _renderReasoning(m, { lang: reasoningLang });
+    } else {
+      const raw = String((m && m.text) ? m.text : "").trimEnd();
+      if (mode === "full" && (kind === "tool_call" || kind === "tool_output")) {
+        text = _safeCodeFence(raw, "text");
+      } else {
+        text = _balanceFences(raw);
+      }
+    }
     sections.push([head, "", text || ""].join("\n").trimEnd());
   }
   lines.push(sections.join("\n\n---\n\n"));

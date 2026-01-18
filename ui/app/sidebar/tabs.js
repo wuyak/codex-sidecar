@@ -415,7 +415,7 @@ export function renderTabs(dom, state, onSelectKey) {
       at_count: Number(t && t.count) || 0,
       at_ts: String((t && t.last_ts) ? t.last_ts : ""),
     });
-    _toastFromEl(sourceEl || host, "已关闭监听", { durationMs: 1200 });
+    _toastFromEl(sourceEl || host, "已临时关闭（有新输出会自动回来）", { durationMs: 1600 });
     if (String(state.currentKey || "all") === k) await onSelectKey(_pickFallbackKey(state, k));
     else renderTabs(dom, state, onSelectKey);
   };

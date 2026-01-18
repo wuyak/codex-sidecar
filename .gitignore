@@ -20,6 +20,8 @@ venv/
 # Logs / temp
 *.log
 *.tmp
+.env
+.env.*
 
 # Build / dist
 dist/

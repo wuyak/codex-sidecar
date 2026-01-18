@@ -31,6 +31,30 @@
 ./run.sh
 ```
 
+## 分享/发布（GitHub 安全）
+
+### 配置与敏感信息
+
+- 本机配置默认落在 `config/sidecar/config.json`（已加入 `.gitignore`，不会提交到 GitHub）。
+- 可发布/可提交的示例配置：`config/sidecar/config.example.json`（无敏信息）。
+- UI 会对敏感字段做脱敏展示（例如 OpenAI `base_url/api_key`、HTTP Profile `token`、NVIDIA `api_key`），避免误拷贝泄漏。
+
+### 打包发给别人（不改代码、开箱即用）
+
+前提：对方有 Python 3（无需额外依赖）。
+
+- 方式 A：直接打包当前 Git 版本（推荐）
+  - `git archive --format=zip --output codex_sidecar.zip HEAD`
+  - 对方解压后运行：`./ui.sh`
+
+- 方式 B：只发一条命令（对方自行 clone）
+  - `git clone <your_repo_url>`
+  - `./ui.sh`
+
+### 做成 exe（可行但需要额外工具）
+
+可以用 PyInstaller 为每个系统单独打包（Windows/macOS/Linux 各自构建一次）。注意本项目会读取本机 `CODEX_HOME/sessions/**`，因此“开箱即用”仍依赖目标机器上安装/运行 Codex，并能访问对应的 sessions 目录。
+
 ## 版本
 本项目不维护单独的版本号，直接以 Git 提交为准（例如：`git rev-parse --short HEAD`）。
 

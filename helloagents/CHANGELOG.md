@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+- UI：导出 Markdown 更贴近 UI：思考区默认译文，英文收纳为 `<details>`；全量导出时对 tool_* 自动使用动态围栏，避免渲染被整段代码块吞噬。
+- UI：字体/按钮大小改为输入时实时预览，并让 tooltip/pill 等关键字号随全局字号缩放，避免“设置不生效”的错觉。
+- UI：底部会话标签栏预留留白进一步收紧；滚动条默认隐藏，仅在 hover 时出现，减少“底框/杂讯感”。
+- 文档：README 补充 GitHub 安全发布与打包建议；`.gitignore` 增加 `.env` 兜底忽略。
 - 重构：仓库目录扁平化：后端迁移到 `codex_sidecar/`，默认 UI 迁移到 `ui/`（`/ui`）；旧 UI/实验 UI 已归档到 `old/`（不再提供 `/ui-legacy`、`/ui-v2` 路由）；启动脚本收敛到 `scripts/`（根目录 `run.sh`/`ui.sh` 保持兼容转发）；默认配置目录改为 `config/sidecar/`。
 - 整理：新增 `old/` 归档目录，将 `ui_v2*`、`ui_legacy_*` 快照与本地缓存（`.npm-cache`、`.codex-home`）移入归档，减少仓库噪音（不影响当前默认 `/ui`）。
 - UI: 移除翻译配置的“从备份恢复”能力及相关接口，避免误操作造成困扰。
