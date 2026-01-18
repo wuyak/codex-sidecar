@@ -24,6 +24,7 @@ export function wireControlEvents(dom, state, helpers) {
   const _LS_UI_BTN = "codex_sidecar_ui_btn_size";
   const _LS_EXPORT_QUICK = "codex_sidecar_export_quick_v1";
   const _LS_EXPORT_TRANSLATE = "codex_sidecar_export_translate_v1";
+  const _LS_TABS_COLLAPSED = "codex_sidecar_tabs_collapsed_v1";
 
   const _applyUiFontSize = (px) => {
     const n = Number(px);
@@ -252,6 +253,21 @@ export function wireControlEvents(dom, state, helpers) {
     }
   };
 
+  const _applyTabsCollapsedLocal = (collapsed, sourceEl = null, silent = true) => {
+    const on = !!collapsed;
+    try {
+      if (on) document.body.dataset.tabsCollapsed = "1";
+      else delete document.body.dataset.tabsCollapsed;
+    } catch (_) {}
+    try {
+      const hint = on ? "（长按展开标签页）" : "（长按收起标签页）";
+      const btn = dom && dom.bookmarkDrawerToggleBtn ? dom.bookmarkDrawerToggleBtn : null;
+      if (btn && btn.setAttribute) btn.setAttribute("aria-label", `会话列表${hint}`);
+    } catch (_) {}
+    if (!silent) _toastFromEl(sourceEl || (dom && dom.bookmarkDrawerToggleBtn), on ? "标签页：已收起" : "标签页：已展开");
+    return on;
+  };
+
   const _parseIntStrict = (raw) => {
     const s = String(raw ?? "").trim();
     if (!s) return null;
@@ -355,6 +371,9 @@ export function wireControlEvents(dom, state, helpers) {
   };
 
   _syncExportPrefsUI(true);
+
+  // 标签栏收起状态（由会话菜单长按切换）
+  _applyTabsCollapsedLocal(_readSavedBool(_LS_TABS_COLLAPSED, false), null, true);
 
   if (dom.exportQuick) dom.exportQuick.addEventListener("change", () => {
     const v = !!dom.exportQuick.checked;
@@ -724,12 +743,75 @@ export function wireControlEvents(dom, state, helpers) {
     _renderBookmarkDrawerList();
   };
 
-  if (dom.bookmarkDrawerToggleBtn) dom.bookmarkDrawerToggleBtn.addEventListener("click", () => {
-    try {
-      if (_isBookmarkDrawerOpen()) closeBookmarkDrawer(dom);
-      else _openBookmarkDrawer();
-    } catch (_) { _openBookmarkDrawer(); }
-  });
+  if (dom.bookmarkDrawerToggleBtn) {
+    const btn = dom.bookmarkDrawerToggleBtn;
+    let pressT = 0;
+    let pressed = false;
+    let moved = false;
+    let longFired = false;
+    let startX = 0;
+    let startY = 0;
+    const LONG_MS = 520;
+    const MOVE_PX = 8;
+
+    const clearPress = () => {
+      pressed = false;
+      moved = false;
+      if (pressT) { try { clearTimeout(pressT); } catch (_) {} }
+      pressT = 0;
+    };
+
+    const toggleTabsCollapsed = () => {
+      const cur = _readSavedBool(_LS_TABS_COLLAPSED, false);
+      const next = !cur;
+      try { localStorage.setItem(_LS_TABS_COLLAPSED, next ? "1" : "0"); } catch (_) {}
+      _applyTabsCollapsedLocal(next, btn, false);
+    };
+
+    const onDown = (e) => {
+      try {
+        if (e && typeof e.button === "number" && e.button !== 0) return;
+      } catch (_) {}
+      pressed = true;
+      moved = false;
+      longFired = false;
+      startX = Number(e && e.clientX) || 0;
+      startY = Number(e && e.clientY) || 0;
+      if (pressT) { try { clearTimeout(pressT); } catch (_) {} }
+      pressT = window.setTimeout(() => {
+        if (!pressed || moved) return;
+        longFired = true;
+        toggleTabsCollapsed();
+      }, LONG_MS);
+    };
+
+    const onMove = (e) => {
+      if (!pressed) return;
+      const x = Number(e && e.clientX) || 0;
+      const y = Number(e && e.clientY) || 0;
+      const dx = x - startX;
+      const dy = y - startY;
+      if ((dx * dx + dy * dy) > (MOVE_PX * MOVE_PX)) {
+        moved = true;
+        if (pressT) { try { clearTimeout(pressT); } catch (_) {} }
+        pressT = 0;
+      }
+    };
+
+    btn.addEventListener("pointerdown", onDown);
+    btn.addEventListener("pointermove", onMove);
+    btn.addEventListener("pointerup", clearPress);
+    btn.addEventListener("pointercancel", clearPress);
+    btn.addEventListener("pointerleave", clearPress);
+
+    btn.addEventListener("click", () => {
+      if (longFired) { longFired = false; return; }
+      try {
+        if (_isBookmarkDrawerOpen()) closeBookmarkDrawer(dom);
+        else _openBookmarkDrawer();
+      } catch (_) { _openBookmarkDrawer(); }
+    });
+  }
   if (dom.bookmarkDrawerOverlay) dom.bookmarkDrawerOverlay.addEventListener("click", () => { closeBookmarkDrawer(dom); });
   if (dom.bookmarkDrawerCloseBtn) dom.bookmarkDrawerCloseBtn.addEventListener("click", () => { closeBookmarkDrawer(dom); });
 
