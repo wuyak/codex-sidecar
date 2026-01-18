@@ -273,7 +273,7 @@ export function upsertThread(state, msg) {
   if (seq && (!prev.last_seq || seq > prev.last_seq)) prev.last_seq = seq;
   state.threadIndex.set(key, prev);
   try {
-    // “关闭标签”仅是临时 UI 行为：如果该会话有新输出，自动回到标签栏。
+    // “关闭监听”仅是临时 UI 行为：如果该会话有新输出，自动回到标签栏。
     const closed = (state && state.closedThreads && typeof state.closedThreads.get === "function") ? state.closedThreads : null;
     if (closed && closed.has(key)) {
       const info = closed.get(key) || {};
@@ -384,7 +384,7 @@ export function renderTabs(dom, state, onSelectKey) {
       at_count: Number(t && t.count) || 0,
       at_ts: String((t && t.last_ts) ? t.last_ts : ""),
     });
-    try { notifyCorner("bm_close", "会话标签", `已关闭标签：${labelForToast || shortId(k)}`, { ttlMs: 1400, level: "info" }); } catch (_) {}
+    try { notifyCorner("bm_close", "会话标签", `已关闭监听：${labelForToast || shortId(k)}`, { ttlMs: 1400, level: "info" }); } catch (_) {}
     if (String(state.currentKey || "all") === k) await onSelectKey(_pickFallbackKey(state, k));
     else renderTabs(dom, state, onSelectKey);
   };
@@ -415,7 +415,7 @@ export function renderTabs(dom, state, onSelectKey) {
       if (parts) {
         try { parts.tipSpan.textContent = label; } catch (_) {}
         try { parts.labelSpan.textContent = label; } catch (_) {}
-        try { parts.closeSpan.title = "关闭标签（该会话有新输出时会自动回到列表）"; } catch (_) {}
+        try { parts.closeSpan.title = "关闭监听（有新输出会自动回来）"; } catch (_) {}
       }
       try {
         btn.dataset.label = label;
