@@ -257,17 +257,6 @@ export function renderTabs(dom, state, onSelectKey) {
     popList = pop.querySelector ? pop.querySelector(".bm-pop-list") : null;
     if (!popList) {
       while (pop.firstChild) pop.removeChild(pop.firstChild);
-      const head = document.createElement("div");
-      head.className = "bm-pop-head";
-      const title = document.createElement("div");
-      title.className = "bm-pop-title";
-      title.textContent = "会话";
-      const hint = document.createElement("div");
-      hint.className = "bm-pop-hint meta";
-      hint.textContent = "右键移除/恢复 · 长按重命名";
-      head.appendChild(title);
-      head.appendChild(hint);
-      pop.appendChild(head);
       const list = document.createElement("div");
       list.className = "bm-pop-list";
       pop.appendChild(list);
@@ -356,7 +345,7 @@ export function renderTabs(dom, state, onSelectKey) {
       const allBtn = _getOrCreateBookmark(container, existing, "all", () => document.createElement("button"));
       allBtn.className = "bookmark" + (currentKey === "all" ? " active" : "") + (totalUnread > 0 ? " has-unread" : "");
       allBtn.dataset.mode = mode;
-      allBtn.style.setProperty("--bm-accent", "#111827");
+      allBtn.style.setProperty("--bm-accent", "var(--c-muted)");
       allBtn.style.setProperty("--bm-border", "rgba(148,163,184,.55)");
       const partsAll = _ensureBookmarkStructure(allBtn);
       if (partsAll) {
@@ -477,7 +466,7 @@ export function renderTabs(dom, state, onSelectKey) {
     }
   } catch (_) {}
 
-  const railFrag = renderList(rail, existingRail, { includeAll: false, mode: "rail", limit: 6 });
+  const railFrag = renderList(rail, existingRail, { includeAll: true, mode: "rail", limit: 5 });
   const popFrag = renderList(popList, existingPop, { includeAll: true, mode: "list", limit: 0 });
 
   try { if (rail) rail.replaceChildren(railFrag); } catch (_) { try { while (rail && rail.firstChild) rail.removeChild(rail.firstChild); rail && rail.appendChild(railFrag); } catch (_) {} }
