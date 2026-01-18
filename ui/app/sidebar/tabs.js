@@ -46,6 +46,9 @@ function _pickFallbackKey(state, excludeKey = "") {
   const hidden = (state && state.hiddenThreads && typeof state.hiddenThreads.has === "function")
     ? state.hiddenThreads
     : loadHiddenThreads();
+  const closed = (state && state.closedThreads && typeof state.closedThreads.has === "function")
+    ? state.closedThreads
+    : null;
   const arr = Array.from((state && state.threadIndex && typeof state.threadIndex.values === "function") ? state.threadIndex.values() : []);
   arr.sort((a, b) => {
     const sa = Number(a && a.last_seq) || 0;
@@ -58,6 +61,7 @@ function _pickFallbackKey(state, excludeKey = "") {
     if (!k) continue;
     if (k === ex) continue;
     if (hidden && typeof hidden.has === "function" && hidden.has(k)) continue;
+    if (closed && typeof closed.has === "function" && closed.has(k)) continue;
     return k;
   }
   return "all";
@@ -336,6 +340,15 @@ export function renderTabs(dom, state, onSelectKey) {
   const closed = (state && state.closedThreads && typeof state.closedThreads.has === "function")
     ? state.closedThreads
     : new Map();
+
+  // One-time hint (replaces noisy native tooltips).
+  try {
+    const TIP_KEY = "codex_sidecar_tabs_rename_tip_v1";
+    if (items.length > 0 && localStorage.getItem(TIP_KEY) !== "1") {
+      localStorage.setItem(TIP_KEY, "1");
+      notifyCorner("bm_tip", "会话标签", "提示：左键长按标签可重命名哦~ (´▽｀)", { ttlMs: 2200, level: "info" });
+    }
+  } catch (_) {}
   const fragRail = document.createDocumentFragment();
   const fragPop = document.createDocumentFragment();
 
@@ -423,7 +436,7 @@ export function renderTabs(dom, state, onSelectKey) {
       if (parts) {
         try { parts.tipSpan.textContent = label; } catch (_) {}
         try { parts.labelSpan.textContent = label; } catch (_) {}
-        try { parts.closeSpan.title = "关闭监听（有新输出会自动回来）"; } catch (_) {}
+        try { parts.closeSpan.removeAttribute("title"); } catch (_) {}
       }
       try {
         btn.dataset.label = label;
@@ -434,10 +447,7 @@ export function renderTabs(dom, state, onSelectKey) {
         if (u > 0) btn.dataset.unread = u > 99 ? "99+" : String(u);
         else { try { delete btn.dataset.unread; } catch (_) { btn.dataset.unread = ""; } }
       } catch (_) {}
-      try {
-        const fileBase = _baseName(t.file || "");
-        btn.title = `${label}${fileBase ? `\n${fileBase}` : ""}\n长按：重命名`;
-      } catch (_) {}
+      try { btn.removeAttribute("title"); } catch (_) {}
       btn.__bmOnSelect = onSelectKey;
       btn.__bmOnContext = async (k) => { await _toggleHiddenKey(k, label); };
       btn.__bmOnDelete = async () => { await _hideKey(t.key, label); };

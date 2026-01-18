@@ -348,6 +348,9 @@ export function wireControlEvents(dom, state, helpers) {
   const _pickFallbackKey = (excludeKey = "") => {
     const ex = String(excludeKey || "");
     const hidden = _ensureHiddenSet();
+    const closed = (state && state.closedThreads && typeof state.closedThreads.has === "function")
+      ? state.closedThreads
+      : null;
     const arr = Array.from(state.threadIndex.values());
     _sortThreads(arr);
     for (const t of arr) {
@@ -355,6 +358,7 @@ export function wireControlEvents(dom, state, helpers) {
       if (!k) continue;
       if (k === ex) continue;
       if (hidden && typeof hidden.has === "function" && hidden.has(k)) continue;
+      if (closed && typeof closed.has === "function" && closed.has(k)) continue;
       return k;
     }
     return "all";
@@ -382,6 +386,7 @@ export function wireControlEvents(dom, state, helpers) {
 	      for (const t of arr) {
 	        const key = String((t && t.key) ? t.key : "");
 	        if (!key) continue;
+	        if (closed && typeof closed.has === "function" && closed.has(key)) continue;
 	        const label = _threadLabel(t);
 	        const file = String((t && t.file) ? t.file : "");
         const fileBase = file ? (String(file).split("/").slice(-1)[0] || file) : "";
@@ -398,7 +403,7 @@ export function wireControlEvents(dom, state, helpers) {
           fileBase,
           followed,
 	          hidden: isHidden,
-	          closed: !!(closed && typeof closed.has === "function" && closed.has(key)),
+	          closed: false,
 	          active: String(state.currentKey || "all") === key,
 	          color: clr,
 	        };
@@ -433,12 +438,7 @@ export function wireControlEvents(dom, state, helpers) {
 	        if (isHiddenList) row.dataset.hidden = "1";
 	        row.setAttribute("role", "button");
 	        row.tabIndex = 0;
-          try {
-            const base = String(it.fileBase || "");
-            const followFiles = (state && Array.isArray(state.statusFollowFiles)) ? state.statusFollowFiles : [];
-            const suffix = followFiles.length ? (it.followed ? " · 跟随中" : " · 历史") : "";
-            row.title = `${String(it.label || "")}${base ? `\n${base}${suffix}` : ""}\n长按：重命名`;
-          } catch (_) {}
+          try { row.removeAttribute("title"); } catch (_) {}
 
 	        const dot = document.createElement("span");
 	        dot.className = "tab-dot";
@@ -522,8 +522,27 @@ export function wireControlEvents(dom, state, helpers) {
               moved = false;
               pressT = setTimeout(() => {
                 if (moved) return;
-                try { row.dataset.lp = "1"; } catch (_) {}
-                _enterInlineRename(row, String(it.key || ""));
+                try { row.dataset.lp = String(Date.now()); } catch (_) {}
+                (async () => {
+                  const k = String(it.key || "");
+                  if (!k) return;
+                  const ok = await confirmDialog(dom, {
+                    title: "清除该会话？",
+                    desc: `将从会话列表清除：${String(it.label || "")}\n（不会删除原始会话文件；有新输出会自动回来）`,
+                    confirmText: "清除",
+                    cancelText: "取消",
+                    danger: true,
+                  });
+                  if (!ok) return;
+                  const t0 = state.threadIndex.get(k) || { last_seq: 0 };
+                  const atSeq = Number(t0 && t0.last_seq) || 0;
+                  const m = (state.closedThreads && typeof state.closedThreads.set === "function") ? state.closedThreads : (state.closedThreads = new Map());
+                  m.set(k, { at_seq: atSeq, at_count: Number(t0 && t0.count) || 0, at_ts: String((t0 && t0.last_ts) ? t0.last_ts : "") });
+                  _toastFromEl(row, "已清除（有新输出会自动回来）");
+                  try { renderTabs(); } catch (_) {}
+                  _renderBookmarkDrawerList();
+                  if (String(state.currentKey || "all") === k) await onSelectKey(_pickFallbackKey(k));
+                })().catch(() => {});
               }, 460);
             });
             row.addEventListener("pointermove", (e) => {
@@ -627,6 +646,10 @@ export function wireControlEvents(dom, state, helpers) {
     if (!row || !key) return;
     const isHiddenRow = !!(row.dataset && row.dataset.hidden === "1");
     if (row.classList && row.classList.contains("editing")) return;
+    try {
+      const lp = row.dataset ? Number(row.dataset.lp || 0) : 0;
+      if (lp && (Date.now() - lp) < 900) return;
+    } catch (_) {}
 
 	    if (btn && btn.dataset) {
 	      const action = String(btn.dataset.action || "");
