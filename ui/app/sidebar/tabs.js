@@ -45,9 +45,15 @@ function _ensureBookmarkStructure(btn) {
   if (!btn) return null;
   const labelSpan = btn.querySelector ? btn.querySelector(".bm-label") : null;
   const input = btn.querySelector ? btn.querySelector(".bm-edit") : null;
-  if (labelSpan && input) return { labelSpan, input };
+  const dotSpan = btn.querySelector ? btn.querySelector(".bm-dot") : null;
+  const tipSpan = btn.querySelector ? btn.querySelector(".bm-tip") : null;
+  if (labelSpan && input && dotSpan && tipSpan) return { tipSpan, dotSpan, labelSpan, input };
   // (Re)build inner structure once; updates reuse these nodes.
   while (btn.firstChild) btn.removeChild(btn.firstChild);
+  const tip = document.createElement("span");
+  tip.className = "bm-tip";
+  const dot = document.createElement("span");
+  dot.className = "bm-dot";
   const l = document.createElement("span");
   l.className = "bm-label";
   const i = document.createElement("input");
@@ -56,9 +62,11 @@ function _ensureBookmarkStructure(btn) {
   i.autocomplete = "off";
   i.spellcheck = false;
   i.placeholder = "重命名…";
+  btn.appendChild(tip);
+  btn.appendChild(dot);
   btn.appendChild(l);
   btn.appendChild(i);
-  return { labelSpan: l, input: i };
+  return { tipSpan: tip, dotSpan: dot, labelSpan: l, input: i };
 }
 
 function _wireBookmarkInteractions(btn) {
@@ -134,11 +142,15 @@ function _wireBookmarkInteractions(btn) {
     startX = Number(e && e.clientX) || 0;
     startY = Number(e && e.clientY) || 0;
     startAt = Date.now();
-    pressT = setTimeout(() => {
-      if (!startAt) return;
-      if (moved) return;
-      enterEdit();
-    }, 420);
+    const mode = String(btn.dataset && btn.dataset.mode ? btn.dataset.mode : "");
+    const allowLongPressEdit = mode !== "rail";
+    if (allowLongPressEdit) {
+      pressT = setTimeout(() => {
+        if (!startAt) return;
+        if (moved) return;
+        enterEdit();
+      }, 420);
+    }
   });
 
   btn.addEventListener("pointermove", (e) => {
@@ -222,12 +234,44 @@ export function renderTabs(dom, state, onSelectKey) {
     if (editingBtn) return;
   } catch (_) {}
 
-  const existing = new Map();
+  // Ensure rail + popover containers exist (host stays fixed at right).
+  let rail = null;
+  let pop = null;
+  let popList = null;
   try {
-    const btns = host.querySelectorAll ? host.querySelectorAll("button.bookmark") : [];
-    for (const b of btns) {
-      const k = b && b.dataset ? String(b.dataset.key || "") : "";
-      if (k) existing.set(k, b);
+    host.classList.add("bm-host");
+    rail = host.querySelector ? host.querySelector(".bm-rail") : null;
+    if (!rail) {
+      rail = document.createElement("div");
+      rail.className = "bm-rail";
+      host.appendChild(rail);
+    }
+    pop = host.querySelector ? host.querySelector(".bm-pop") : null;
+    if (!pop) {
+      pop = document.createElement("div");
+      pop.className = "bm-pop";
+      pop.setAttribute("role", "dialog");
+      pop.setAttribute("aria-label", "会话列表");
+      host.appendChild(pop);
+    }
+    popList = pop.querySelector ? pop.querySelector(".bm-pop-list") : null;
+    if (!popList) {
+      while (pop.firstChild) pop.removeChild(pop.firstChild);
+      const head = document.createElement("div");
+      head.className = "bm-pop-head";
+      const title = document.createElement("div");
+      title.className = "bm-pop-title";
+      title.textContent = "会话";
+      const hint = document.createElement("div");
+      hint.className = "bm-pop-hint meta";
+      hint.textContent = "右键移除/恢复 · 长按重命名";
+      head.appendChild(title);
+      head.appendChild(hint);
+      pop.appendChild(head);
+      const list = document.createElement("div");
+      list.className = "bm-pop-list";
+      pop.appendChild(list);
+      popList = list;
     }
   } catch (_) {}
 
@@ -242,7 +286,8 @@ export function renderTabs(dom, state, onSelectKey) {
     ? state.hiddenThreads
     : loadHiddenThreads();
   const showHidden = !!(state && state.showHiddenThreads);
-  const frag = document.createDocumentFragment();
+  const fragRail = document.createDocumentFragment();
+  const fragPop = document.createDocumentFragment();
 
   const _ensureHiddenSet = () => {
     if (!state.hiddenThreads || typeof state.hiddenThreads.add !== "function") state.hiddenThreads = new Set();
@@ -299,72 +344,139 @@ export function renderTabs(dom, state, onSelectKey) {
     else renderTabs(dom, state, onSelectKey);
   };
 
-  const totalUnread = getUnreadTotal(state);
-  const allBtn = _getOrCreateBookmark(host, existing, "all", () => document.createElement("button"));
-  allBtn.className = "bookmark" + (state.currentKey === "all" ? " active" : "") + (totalUnread > 0 ? " has-unread" : "");
-  allBtn.style.setProperty("--bm-accent", "#111827");
-  allBtn.style.setProperty("--bm-border", "rgba(148,163,184,.55)");
-  const partsAll = _ensureBookmarkStructure(allBtn);
-  if (partsAll) {
-    try { partsAll.labelSpan.textContent = "全部"; } catch (_) {}
-  }
-  allBtn.__bmOnSelect = onSelectKey;
-  allBtn.__bmOnContext = async (k) => { if (k === "all") await _toggleShowHidden(); };
-  allBtn.__bmOnDelete = null;
-  allBtn.__bmRender = () => renderTabs(dom, state, onSelectKey);
-  _wireBookmarkInteractions(allBtn);
-  try {
-    if (totalUnread > 0) allBtn.dataset.unread = totalUnread > 99 ? "99+" : String(totalUnread);
-    else { try { delete allBtn.dataset.unread; } catch (_) { allBtn.dataset.unread = ""; } }
-  } catch (_) {}
-  try { allBtn.title = `全部会话\n右键：${showHidden ? "隐藏" : "显示"}已移除会话`; } catch (_) {}
-  frag.appendChild(allBtn);
+  const renderList = (container, existing, opts) => {
+    const includeAll = !!(opts && opts.includeAll);
+    const mode = String(opts && opts.mode ? opts.mode : "");
+    const limit = Number.isFinite(Number(opts && opts.limit)) ? Number(opts.limit) : 0;
 
-  for (const t of items) {
-    const isHidden = !!(hidden && typeof hidden.has === "function" && hidden.has(t.key));
-    if (isHidden && !showHidden) continue;
-    const btn = _getOrCreateBookmark(host, existing, t.key, () => document.createElement("button"));
-    const u = getUnreadCount(state, t.key);
-    btn.className = "bookmark" + (isHidden ? " tab-hidden" : "") + (state.currentKey === t.key ? " active" : "") + (u > 0 ? " has-unread" : "");
-    const clr = colorForKey(t.key || "");
-    const labels = threadLabels(t);
-    const defaultLabel = labels.label;
-    const fullLabel = labels.full;
-    const custom = getCustomLabel(t.key);
-    const label = custom || defaultLabel;
+    const currentKey = String(state.currentKey || "all");
 
-    try {
-      btn.style.setProperty("--bm-accent", clr.fg);
-      btn.style.setProperty("--bm-border", clr.border);
-    } catch (_) {}
-    const parts = _ensureBookmarkStructure(btn);
-    if (parts) {
-      try { parts.labelSpan.textContent = label; } catch (_) {}
+    const _appendAll = () => {
+      const totalUnread = getUnreadTotal(state);
+      const allBtn = _getOrCreateBookmark(container, existing, "all", () => document.createElement("button"));
+      allBtn.className = "bookmark" + (currentKey === "all" ? " active" : "") + (totalUnread > 0 ? " has-unread" : "");
+      allBtn.dataset.mode = mode;
+      allBtn.style.setProperty("--bm-accent", "#111827");
+      allBtn.style.setProperty("--bm-border", "rgba(148,163,184,.55)");
+      const partsAll = _ensureBookmarkStructure(allBtn);
+      if (partsAll) {
+        try { partsAll.tipSpan.textContent = "全部"; } catch (_) {}
+        try { partsAll.labelSpan.textContent = "全部"; } catch (_) {}
+      }
+      try { allBtn.setAttribute("aria-label", "全部会话"); } catch (_) {}
+      allBtn.__bmOnSelect = onSelectKey;
+      allBtn.__bmOnContext = async (k) => { if (k === "all") await _toggleShowHidden(); };
+      allBtn.__bmOnDelete = null;
+      allBtn.__bmRender = () => renderTabs(dom, state, onSelectKey);
+      _wireBookmarkInteractions(allBtn);
+      try {
+        if (totalUnread > 0) allBtn.dataset.unread = totalUnread > 99 ? "99+" : String(totalUnread);
+        else { try { delete allBtn.dataset.unread; } catch (_) { allBtn.dataset.unread = ""; } }
+      } catch (_) {}
+      try { allBtn.title = `全部会话\n右键：${showHidden ? "隐藏" : "显示"}已移除会话`; } catch (_) {}
+      return allBtn;
+    };
+
+    const _appendThread = (t) => {
+      const isHidden = !!(hidden && typeof hidden.has === "function" && hidden.has(t.key));
+      const u = getUnreadCount(state, t.key);
+      const btn = _getOrCreateBookmark(container, existing, t.key, () => document.createElement("button"));
+      btn.className = "bookmark" + (isHidden ? " tab-hidden" : "") + (currentKey === t.key ? " active" : "") + (u > 0 ? " has-unread" : "");
+      btn.dataset.mode = mode;
+      const clr = colorForKey(t.key || "");
+      const labels = threadLabels(t);
+      const defaultLabel = labels.label;
+      const fullLabel = labels.full;
+      const custom = getCustomLabel(t.key);
+      const label = custom || defaultLabel;
+
+      try {
+        btn.style.setProperty("--bm-accent", clr.fg);
+        btn.style.setProperty("--bm-border", clr.border);
+      } catch (_) {}
+      const parts = _ensureBookmarkStructure(btn);
+      if (parts) {
+        try { parts.tipSpan.textContent = label; } catch (_) {}
+        try { parts.labelSpan.textContent = label; } catch (_) {}
+      }
+      try {
+        btn.dataset.label = label;
+        btn.dataset.defaultLabel = defaultLabel;
+      } catch (_) {}
+      try { btn.setAttribute("aria-label", label); } catch (_) {}
+      try {
+        if (u > 0) btn.dataset.unread = u > 99 ? "99+" : String(u);
+        else { try { delete btn.dataset.unread; } catch (_) { btn.dataset.unread = ""; } }
+      } catch (_) {}
+      try {
+        const base = custom ? `${custom}\n${fullLabel}` : fullLabel;
+        const hint = isHidden ? "右键：恢复到列表" : "右键：从列表移除";
+        btn.title = `${base}\n长按：重命名\n${hint}\nDelete：从列表移除`;
+      } catch (_) {}
+      btn.__bmOnSelect = onSelectKey;
+      btn.__bmOnContext = async (k) => { await _toggleHiddenKey(k, label); };
+      btn.__bmOnDelete = async () => { await _hideKey(t.key, label); };
+      btn.__bmRender = () => renderTabs(dom, state, onSelectKey);
+      _wireBookmarkInteractions(btn);
+      return btn;
+    };
+
+    const out = document.createDocumentFragment();
+    if (includeAll) out.appendChild(_appendAll());
+
+    let list = items;
+    if (limit > 0) {
+      const picked = [];
+      const seen = new Set();
+      for (const t of items) {
+        if (picked.length >= limit) break;
+        const isHidden = !!(hidden && typeof hidden.has === "function" && hidden.has(t.key));
+        if (isHidden) continue;
+        picked.push(t);
+        seen.add(t.key);
+      }
+      const ck = String(state.currentKey || "");
+      if (ck && ck !== "all" && !seen.has(ck)) {
+        const cur = state.threadIndex.get(ck);
+        if (cur) {
+          picked.unshift(cur);
+          while (picked.length > limit) picked.pop();
+        }
+      }
+      list = picked;
+    } else {
+      // full list: honor showHidden flag
+      list = items.filter((t) => {
+        const isHidden = !!(hidden && typeof hidden.has === "function" && hidden.has(t.key));
+        return !isHidden || showHidden;
+      });
     }
-    try {
-      if (u > 0) btn.dataset.unread = u > 99 ? "99+" : String(u);
-      else { try { delete btn.dataset.unread; } catch (_) { btn.dataset.unread = ""; } }
-    } catch (_) {}
-    try {
-      btn.dataset.label = label;
-      btn.dataset.defaultLabel = defaultLabel;
-    } catch (_) {}
-    try {
-      const base = custom ? `${custom}\n${fullLabel}` : fullLabel;
-      const hint = isHidden ? "右键：恢复到列表" : "右键：从列表移除";
-      btn.title = `${base}\n长按：重命名\n${hint}\nDelete：从列表移除`;
-    } catch (_) {}
-    btn.__bmOnSelect = onSelectKey;
-    btn.__bmOnContext = async (k) => { await _toggleHiddenKey(k, label); };
-    btn.__bmOnDelete = async () => { await _hideKey(t.key, label); };
-    btn.__bmRender = () => renderTabs(dom, state, onSelectKey);
-    _wireBookmarkInteractions(btn);
-    frag.appendChild(btn);
-  }
 
-  // Replace children by reusing existing nodes (stable event handlers; cheap reorder).
-  try { host.replaceChildren(frag); } catch (_) {
-    clearTabs(dom);
-    host.appendChild(frag);
-  }
+    for (const t of list) out.appendChild(_appendThread(t));
+    return out;
+  };
+
+  const existingRail = new Map();
+  try {
+    const btns = rail && rail.querySelectorAll ? rail.querySelectorAll("button.bookmark") : [];
+    for (const b of btns) {
+      const k = b && b.dataset ? String(b.dataset.key || "") : "";
+      if (k) existingRail.set(k, b);
+    }
+  } catch (_) {}
+
+  const existingPop = new Map();
+  try {
+    const btns = popList && popList.querySelectorAll ? popList.querySelectorAll("button.bookmark") : [];
+    for (const b of btns) {
+      const k = b && b.dataset ? String(b.dataset.key || "") : "";
+      if (k) existingPop.set(k, b);
+    }
+  } catch (_) {}
+
+  const railFrag = renderList(rail, existingRail, { includeAll: false, mode: "rail", limit: 6 });
+  const popFrag = renderList(popList, existingPop, { includeAll: true, mode: "list", limit: 0 });
+
+  try { if (rail) rail.replaceChildren(railFrag); } catch (_) { try { while (rail && rail.firstChild) rail.removeChild(rail.firstChild); rail && rail.appendChild(railFrag); } catch (_) {} }
+  try { if (popList) popList.replaceChildren(popFrag); } catch (_) { try { while (popList && popList.firstChild) popList.removeChild(popList.firstChild); popList && popList.appendChild(popFrag); } catch (_) {} }
 }
