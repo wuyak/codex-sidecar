@@ -347,7 +347,7 @@
 	      body[data-bm-skin="dark"] .badge.kind-tool_call,
 	      body[data-bm-skin="dark"] .badge.kind-tool_output { background: rgba(251,191,36,.14); border-color: rgba(251,191,36,.25); color: #fde68a; }
 		      .tabs { display:flex; flex-direction:column; gap:6px; margin: 10px 0 0; }
-		      .tab { border: 1px solid var(--c-border); background: var(--c-surface); padding: 8px 10px; border-radius: 12px; cursor:pointer; font-size: clamp(12px, calc(var(--ui-font-size, 14px) - 2px), 16px); text-align:left; width: 100%; display:flex; align-items:center; gap:8px; position: relative; overflow: hidden; }
+		      .tab { border: 1px solid var(--c-border); background: var(--c-surface); padding: 8px 10px; border-radius: 12px; cursor:pointer; font-size: clamp(12px, calc(var(--ui-font-size, 14px) - 2px), 16px); text-align:left; width: 100%; display:flex; align-items:center; gap:8px; position: relative; overflow: visible; }
 		      body[data-bm-skin="dark"] .tab { background: rgba(15,23,42,.58); border-color: rgba(148,163,184,.22); }
 		      .tab:hover { background: var(--c-soft-2); }
 		      .tab.active { border-color: rgba(14,165,233,.55); box-shadow: var(--ring); }
@@ -467,7 +467,11 @@
 	      .grid { display:grid; grid-template-columns: 140px 1fr; gap: 6px 10px; align-items:center; margin-top: 10px; }
 	      .grid.grid-compact { grid-template-columns: 110px 1fr; gap: 6px 8px; margin-top: 8px; }
 			      .grid input, .grid select { width: 100%; padding: 6px 8px; border: 1px solid var(--c-border); border-radius: 10px; background: var(--c-surface); color: var(--c-text); }
+	      .grid input[type="checkbox"] { width: auto; padding: 0; border: none; box-shadow: none; accent-color: var(--c-accent); }
 		      .grid.grid-compact input, .grid.grid-compact select { padding: 5px 8px; border-radius: 10px; }
+	      .check-row { display:flex; flex-wrap:wrap; gap: 12px; align-items:center; }
+	      .check { display:inline-flex; align-items:center; gap: 6px; cursor: pointer; user-select: none; font-size: clamp(12px, calc(var(--ui-font-size, 14px) - 2px), 16px); }
+	      .check input[type="checkbox"] { width: 16px; height: 16px; margin: 0; }
 		      .unit-field { display:flex; align-items:center; gap: 8px; }
 		      .unit-field input { flex: 1 1 auto; min-width: 0; }
 		      .unit-field .unit { color: var(--c-muted); font-size: clamp(11px, calc(var(--ui-font-size, 14px) - 2px), 16px); white-space: nowrap; }

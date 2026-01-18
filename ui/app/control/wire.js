@@ -22,6 +22,8 @@ export function wireControlEvents(dom, state, helpers) {
   const MASK = "********";
   const _LS_UI_FONT = "codex_sidecar_ui_font_size";
   const _LS_UI_BTN = "codex_sidecar_ui_btn_size";
+  const _LS_EXPORT_QUICK = "codex_sidecar_export_quick_v1";
+  const _LS_EXPORT_TRANSLATE = "codex_sidecar_export_translate_v1";
 
   const _applyUiFontSize = (px) => {
     const n = Number(px);
@@ -236,6 +238,19 @@ export function wireControlEvents(dom, state, helpers) {
     }
   };
 
+  const _readSavedBool = (lsKey, fallback) => {
+    try {
+      const v = localStorage.getItem(lsKey);
+      if (v == null || v === "") return fallback;
+      const s = String(v).trim().toLowerCase();
+      if (s === "0" || s === "false" || s === "no" || s === "off") return false;
+      if (s === "1" || s === "true" || s === "yes" || s === "on") return true;
+      return fallback;
+    } catch (_) {
+      return fallback;
+    }
+  };
+
   const _parseIntStrict = (raw) => {
     const s = String(raw ?? "").trim();
     if (!s) return null;
@@ -295,6 +310,35 @@ export function wireControlEvents(dom, state, helpers) {
       if (e && String(e.key || "") === "Enter") { try { e.preventDefault(); } catch (_) {} try { dom.uiBtnSize.blur(); } catch (_) {} }
     });
   }
+
+  const _getExportPrefs = () => {
+    const quick = _readSavedBool(_LS_EXPORT_QUICK, true);
+    const translate = _readSavedBool(_LS_EXPORT_TRANSLATE, true);
+    return { quick, translate };
+  };
+
+  const _syncExportPrefsUI = (silent = true) => {
+    const p = _getExportPrefs();
+    try { if (dom.exportQuick) dom.exportQuick.checked = !!p.quick; } catch (_) {}
+    try { if (dom.exportTranslate) dom.exportTranslate.checked = !!p.translate; } catch (_) {}
+    if (!silent) {
+      try { _toastFromEl(dom.exportOptions || dom.exportQuick, `导出：${p.quick ? "精简" : "全量"} · ${p.translate ? "含翻译" : "仅原文"}`, { durationMs: 1400 }); } catch (_) {}
+    }
+    return p;
+  };
+
+  _syncExportPrefsUI(true);
+
+  if (dom.exportQuick) dom.exportQuick.addEventListener("change", () => {
+    const v = !!dom.exportQuick.checked;
+    try { localStorage.setItem(_LS_EXPORT_QUICK, v ? "1" : "0"); } catch (_) {}
+    _syncExportPrefsUI(false);
+  });
+  if (dom.exportTranslate) dom.exportTranslate.addEventListener("change", () => {
+    const v = !!dom.exportTranslate.checked;
+    try { localStorage.setItem(_LS_EXPORT_TRANSLATE, v ? "1" : "0"); } catch (_) {}
+    _syncExportPrefsUI(false);
+  });
 
   if (dom.configToggleBtn) dom.configToggleBtn.addEventListener("click", () => {
     try {
@@ -478,8 +522,64 @@ export function wireControlEvents(dom, state, helpers) {
         exportBtn.className = "mini-btn";
         exportBtn.type = "button";
         exportBtn.dataset.action = "export";
-        exportBtn.setAttribute("aria-label", "导出");
+        exportBtn.setAttribute("aria-label", "导出（长按设置）");
         exportBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="#i-download"></use></svg>`;
+        try {
+          let pressT = 0;
+          let startX = 0;
+          let startY = 0;
+          let moved = false;
+          let pressed = false;
+          let longFired = false;
+          const LONG_MS = 520;
+          const MOVE_PX = 8;
+
+          const clear = () => {
+            pressed = false;
+            if (pressT) { try { clearTimeout(pressT); } catch (_) {} }
+            pressT = 0;
+          };
+
+          exportBtn.addEventListener("pointerdown", (e) => {
+            try { if (e && typeof e.button === "number" && e.button !== 0) return; } catch (_) {}
+            moved = false;
+            pressed = true;
+            longFired = false;
+            startX = Number(e && e.clientX) || 0;
+            startY = Number(e && e.clientY) || 0;
+            if (pressT) { try { clearTimeout(pressT); } catch (_) {} }
+            pressT = window.setTimeout(() => {
+              if (!pressed || moved) return;
+              longFired = true;
+              try { openDrawer(dom); } catch (_) {}
+              try {
+                setTimeout(() => {
+                  try { if (dom.exportOptions && dom.exportOptions.scrollIntoView) dom.exportOptions.scrollIntoView({ block: "center" }); } catch (_) {}
+                }, 0);
+              } catch (_) {}
+            }, LONG_MS);
+          });
+          exportBtn.addEventListener("pointermove", (e) => {
+            if (!pressed) return;
+            const x = Number(e && e.clientX) || 0;
+            const y = Number(e && e.clientY) || 0;
+            const dx = x - startX;
+            const dy = y - startY;
+            if ((dx * dx + dy * dy) > (MOVE_PX * MOVE_PX)) {
+              moved = true;
+              if (pressT) { try { clearTimeout(pressT); } catch (_) {} }
+              pressT = 0;
+            }
+          });
+          exportBtn.addEventListener("pointerup", clear);
+          exportBtn.addEventListener("pointercancel", clear);
+          exportBtn.addEventListener("pointerleave", clear);
+          exportBtn.addEventListener("click", (e) => {
+            if (!longFired) return;
+            longFired = false;
+            try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+          });
+        } catch (_) {}
 
 	        const toggleBtn = document.createElement("button");
 	        toggleBtn.className = "mini-btn";
@@ -657,8 +757,10 @@ export function wireControlEvents(dom, state, helpers) {
 	      if (action === "rename") { _enterInlineRename(row, key); return; }
 	      if (action === "export") {
         _toastFromEl(btn, "正在导出…");
-        const mode = (String(state.viewMode || "").toLowerCase() === "quick") ? "quick" : "full";
-        const r = await exportThreadMarkdown(state, key, { mode });
+        const p = _getExportPrefs();
+        const mode = p.quick ? "quick" : "full";
+        const reasoningLang = p.translate ? "both" : "en";
+        const r = await exportThreadMarkdown(state, key, { mode, reasoningLang });
 	        _toastFromEl(btn, r && r.ok ? "已导出（下载）" : "导出失败");
 	        return;
 	      }

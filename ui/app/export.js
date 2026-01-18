@@ -6,15 +6,17 @@ function _sanitizeFileName(s) {
   if (!raw) return "";
   try {
     return raw
-      // Keep human-readable spaces; strip everything else that's unsafe for filenames.
-      .replaceAll(/[^\p{L}\p{N} ._-]+/gu, " ")
+      // Cross-platform-safe: remove control chars + Windows reserved chars.
+      .replaceAll(/[\u0000-\u001f\u007f]+/g, " ")
+      .replaceAll(/[<>:"/\\|?*]+/g, " ")
       .replaceAll(/\s+/g, " ")
       .trim()
       .slice(0, 80);
   } catch (_) {
-    // Fallback for older engines without Unicode property escapes.
+    // Conservative fallback.
     return raw
-      .replaceAll(/[^a-zA-Z0-9 ._-]+/g, " ")
+      .replaceAll(/[\u0000-\u001f\u007f]+/g, " ")
+      .replaceAll(/[<>:"/\\|?*]+/g, " ")
       .replaceAll(/\s+/g, " ")
       .trim()
       .slice(0, 80);
@@ -24,18 +26,12 @@ function _sanitizeFileName(s) {
 function _kindLabel(kind) {
   const k = String(kind || "");
   if (k === "user_message") return "用户输入";
-  if (k === "assistant_message") return "输出";
+  if (k === "assistant_message") return "回答";
   if (k === "reasoning_summary") return "思考";
   if (k === "tool_gate") return "终端确认";
   if (k === "tool_call") return "工具调用";
   if (k === "tool_output") return "工具输出";
   return k || "unknown";
-}
-
-function _formatHeader(t) {
-  const ts = String((t && t.ts) ? t.ts : "");
-  const kind = _kindLabel(t && t.kind);
-  return `**${kind}${ts ? ` · ${ts}` : ""}**`;
 }
 
 function _fmtLocal(dt) {
@@ -48,6 +44,16 @@ function _fmtLocal(dt) {
   const MM = pad(d.getMinutes());
   const SS = pad(d.getSeconds());
   return `${yyyy}-${mm}-${dd} ${HH}:${MM}:${SS}`;
+}
+
+function _fmtMaybeLocal(ts) {
+  const s = String(ts || "").trim();
+  if (!s) return "";
+  try {
+    const d = new Date(s);
+    if (Number.isFinite(d.getTime())) return _fmtLocal(d);
+  } catch (_) {}
+  return s;
 }
 
 function _baseName(p) {
@@ -133,24 +139,34 @@ export async function exportThreadMarkdown(state, key, opts = {}) {
   const lines = [];
   lines.push(`# ${title}`);
   if (fileBase) lines.push(`> 原始文件：${fileBase}`);
-  lines.push(`> 导出时间：${_fmtLocal(now)}${mode === "quick" ? " · 精简" : ""}`);
-  lines.push("---");
+  const modeLabel = mode === "quick" ? "精简" : "全量";
+  const thinkLabel = (reasoningLang === "en")
+    ? "思考：原文"
+    : (reasoningLang === "zh")
+      ? "思考：译文"
+      : (reasoningLang === "both")
+        ? "思考：双语"
+        : "思考：自动";
+  lines.push(`> 导出时间：${_fmtLocal(now)} · ${modeLabel} · ${thinkLabel}`);
   lines.push("");
 
+  const sections = [];
+  let idx = 0;
   for (const m of selected) {
     const kind = String(m && m.kind ? m.kind : "");
     if (mode === "quick" && !allowKindsQuick.has(kind)) continue;
+    idx += 1;
+    const kindName = _kindLabel(kind);
+    const tsLocal = _fmtMaybeLocal(m && m.ts ? m.ts : "");
+    const head = `## ${idx}. ${kindName}${tsLocal ? ` · ${tsLocal}` : ""}`;
     const text = (kind === "reasoning_summary")
       ? _renderReasoning(m, { lang: reasoningLang })
       : _balanceFences(String((m && m.text) ? m.text : "").trimEnd());
-    const head = _formatHeader(m);
-    if (head) lines.push(head);
-    lines.push("");
-    if (text) lines.push(text);
-    lines.push("");
+    sections.push([head, "", text || ""].join("\n").trimEnd());
   }
+  lines.push(sections.join("\n\n---\n\n"));
 
-  const labelBase = custom ? _sanitizeFileName(custom) : "";
+  const labelBase = title ? _sanitizeFileName(title) : "";
   const idBase = _sanitizeFileName(threadId ? shortId(threadId) : (k.split("/").slice(-1)[0] || k));
   const base = labelBase || idBase || "thread";
   const stamp = new Date().toISOString().replaceAll(/[:.]/g, "-");
