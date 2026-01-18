@@ -34,6 +34,14 @@ def ui_content_type(path: Path) -> str:
         return "application/javascript; charset=utf-8"
     if ext in (".json", ".map"):
         return "application/json; charset=utf-8"
+    if ext == ".woff2":
+        return "font/woff2"
+    if ext == ".woff":
+        return "font/woff"
+    if ext == ".ttf":
+        return "font/ttf"
+    if ext == ".otf":
+        return "font/otf"
     if ext == ".ogg":
         return "audio/ogg"
     if ext == ".mp3":

@@ -221,7 +221,7 @@ class SidecarHandler(BaseHTTPRequestHandler):
                 return
             ct = ui_content_type(cand)
             # Serve binary assets (audio, etc.) as bytes.
-            if (ct.startswith("audio/")) or (cand.suffix.lower() in (".ogg", ".mp3", ".wav")):
+            if (ct.startswith("audio/")) or (cand.suffix.lower() in (".ogg", ".mp3", ".wav", ".woff2", ".woff", ".ttf", ".otf")):
                 data = cand.read_bytes()
                 self.send_response(HTTPStatus.OK)
                 self.send_header("Content-Type", ct)
