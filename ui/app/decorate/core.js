@@ -1,5 +1,6 @@
 import { wireHoldCopy } from "./copy_hold.js";
 import { toggleToolDetailsFromPre, wireToolToggles } from "./tool_toggle.js";
+import { renderMathInMd } from "../math.js";
 
 function decorateToolCards(root) {
   if (!root || !root.querySelectorAll) return;
@@ -68,6 +69,7 @@ function decorateMdBlocks(root) {
   for (const md of blocks) {
     try {
       if (!md || !md.parentElement) continue;
+      try { renderMathInMd(md); } catch (_) {}
       if (md.parentElement.classList && md.parentElement.classList.contains("pre-wrap")) continue;
       const wrap = document.createElement("div");
       wrap.className = "pre-wrap";

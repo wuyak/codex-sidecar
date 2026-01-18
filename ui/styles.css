@@ -566,9 +566,13 @@
 		      .md p { margin: 6px 0; }
 		      .md ul { margin: 6px 0 6px 18px; padding: 0; }
 		      .md ol { margin: 6px 0 6px 20px; padding: 0; }
-		      .md li { margin: 2px 0; }
+			      .md li { margin: 2px 0; }
 			      .md code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; background: var(--c-soft); border: 1px solid var(--c-border); padding: 1px 6px; border-radius: 6px; }
 		      .md pre code { background: transparent; padding: 0; }
+		      /* Math (KaTeX -> MathML) */
+		      .md .katex { display: inline-block; max-width: 100%; overflow-x: auto; overflow-y: hidden; vertical-align: -0.15em; }
+		      .md .katex > math { font-size: 1em; }
+		      .md .katex > math[display="block"] { display: block; margin: 8px auto; }
 		      .md .md-sep { margin: 10px 0; color:#cbd5e1; }
 	        .md-table { margin: 8px 0 0; overflow-x: auto; border: 1px solid var(--c-border); border-radius: 10px; background: var(--c-surface); }
         .md-table table { border-collapse: collapse; width: 100%; min-width: 420px; }
