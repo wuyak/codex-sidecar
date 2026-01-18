@@ -25,17 +25,17 @@ export function wireControlEvents(dom, state, helpers) {
 
   const _applyUiFontSize = (px) => {
     const n = Number(px);
-    const v = Number.isFinite(n) && n >= 12 && n <= 22 ? n : 14;
+    const v = Number.isFinite(n) && n >= 12 && n <= 24 ? n : 14;
     try { document.documentElement.style.setProperty("--ui-font-size", `${v}px`); } catch (_) {}
     return v;
   };
 
   const _applyUiButtonSize = (px) => {
     const n = Number(px);
-    const v = Number.isFinite(n) && n >= 32 && n <= 60 ? n : 38;
+    const v = Number.isFinite(n) && n >= 32 && n <= 72 ? n : 38;
     try { document.documentElement.style.setProperty("--rightbar-w", `${v}px`); } catch (_) {}
     try {
-      const ico = v >= 46 ? 22 : v >= 42 ? 20 : 18;
+      const ico = v >= 56 ? 24 : v >= 48 ? 22 : v >= 42 ? 20 : 18;
       document.documentElement.style.setProperty("--ui-ico-size", `${ico}px`);
     } catch (_) {}
     return v;
@@ -227,17 +227,74 @@ export function wireControlEvents(dom, state, helpers) {
     try { if (v !== "none") maybePlayNotifySound(dom, state); } catch (_) {}
   });
 
-  if (dom.uiFontSize) dom.uiFontSize.addEventListener("change", () => {
-    const v = _applyUiFontSize(dom.uiFontSize.value);
-    try { localStorage.setItem(_LS_UI_FONT, String(v)); } catch (_) {}
-    _toastFromEl(dom.uiFontSize, `字体大小：${v}px`);
-  });
+  const _readSavedInt = (lsKey, fallback) => {
+    try {
+      const v = Number(localStorage.getItem(lsKey) || "");
+      return Number.isFinite(v) ? v : fallback;
+    } catch (_) {
+      return fallback;
+    }
+  };
 
-  if (dom.uiBtnSize) dom.uiBtnSize.addEventListener("change", () => {
-    const v = _applyUiButtonSize(dom.uiBtnSize.value);
+  const _parseIntStrict = (raw) => {
+    const s = String(raw ?? "").trim();
+    if (!s) return null;
+    if (!/^\d+$/.test(s)) return null;
+    const n = Number.parseInt(s, 10);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  const _setInvalid = (el, bad) => {
+    if (!el || !el.classList) return;
+    try { el.classList.toggle("field-invalid", !!bad); } catch (_) {}
+  };
+
+  const _applyUiFontInput = (silent = false) => {
+    const el = dom && dom.uiFontSize ? dom.uiFontSize : null;
+    if (!el) return;
+    const prev = _readSavedInt(_LS_UI_FONT, 14);
+    const n = _parseIntStrict(el.value);
+    if (n == null || n < 12 || n > 24) {
+      _setInvalid(el, true);
+      try { el.value = String(prev); } catch (_) {}
+      if (!silent) _toastFromEl(el, "字体大小需为整数（12-24px）", { durationMs: 1500 });
+      return;
+    }
+    _setInvalid(el, false);
+    const v = _applyUiFontSize(n);
+    try { localStorage.setItem(_LS_UI_FONT, String(v)); } catch (_) {}
+    if (!silent) _toastFromEl(el, `字体大小：${v}px`);
+  };
+
+  const _applyUiBtnInput = (silent = false) => {
+    const el = dom && dom.uiBtnSize ? dom.uiBtnSize : null;
+    if (!el) return;
+    const prev = _readSavedInt(_LS_UI_BTN, 38);
+    const n = _parseIntStrict(el.value);
+    if (n == null || n < 32 || n > 72) {
+      _setInvalid(el, true);
+      try { el.value = String(prev); } catch (_) {}
+      if (!silent) _toastFromEl(el, "按钮大小需为整数（32-72px）", { durationMs: 1500 });
+      return;
+    }
+    _setInvalid(el, false);
+    const v = _applyUiButtonSize(n);
     try { localStorage.setItem(_LS_UI_BTN, String(v)); } catch (_) {}
-    _toastFromEl(dom.uiBtnSize, `按钮大小：${v}px`);
-  });
+    if (!silent) _toastFromEl(el, `按钮大小：${v}px`);
+  };
+
+  if (dom.uiFontSize) {
+    dom.uiFontSize.addEventListener("change", () => _applyUiFontInput(false));
+    dom.uiFontSize.addEventListener("keydown", (e) => {
+      if (e && String(e.key || "") === "Enter") { try { e.preventDefault(); } catch (_) {} try { dom.uiFontSize.blur(); } catch (_) {} }
+    });
+  }
+  if (dom.uiBtnSize) {
+    dom.uiBtnSize.addEventListener("change", () => _applyUiBtnInput(false));
+    dom.uiBtnSize.addEventListener("keydown", (e) => {
+      if (e && String(e.key || "") === "Enter") { try { e.preventDefault(); } catch (_) {} try { dom.uiBtnSize.blur(); } catch (_) {} }
+    });
+  }
 
   if (dom.configToggleBtn) dom.configToggleBtn.addEventListener("click", () => {
     try {
@@ -429,7 +486,7 @@ export function wireControlEvents(dom, state, helpers) {
 	        toggleBtn.type = "button";
 	        toggleBtn.dataset.action = isHiddenList ? "listenOn" : "listenOff";
 	        toggleBtn.setAttribute("aria-label", isHiddenList ? "开启监听" : "关闭监听");
-	        toggleBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="${isHiddenList ? "#i-eye" : "#i-eye-off"}"></use></svg>`;
+	        toggleBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="${isHiddenList ? "#i-eye-closed" : "#i-eye"}"></use></svg>`;
 
 	        actions.appendChild(renameBtn);
 	        actions.appendChild(exportBtn);

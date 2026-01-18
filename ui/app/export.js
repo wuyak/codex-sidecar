@@ -2,12 +2,23 @@ import { getCustomLabel } from "./sidebar/labels.js";
 import { keyOf, shortId } from "./utils.js";
 
 function _sanitizeFileName(s) {
-  return String(s || "")
-    .trim()
-    .replaceAll(/[^\p{L}\p{N}._-]+/gu, "-")
-    .replaceAll(/-+/g, "-")
-    .replaceAll(/^-|-$/g, "")
-    .slice(0, 80);
+  const raw = String(s || "").trim();
+  if (!raw) return "";
+  try {
+    return raw
+      // Keep human-readable spaces; strip everything else that's unsafe for filenames.
+      .replaceAll(/[^\p{L}\p{N} ._-]+/gu, " ")
+      .replaceAll(/\s+/g, " ")
+      .trim()
+      .slice(0, 80);
+  } catch (_) {
+    // Fallback for older engines without Unicode property escapes.
+    return raw
+      .replaceAll(/[^a-zA-Z0-9 ._-]+/g, " ")
+      .replaceAll(/\s+/g, " ")
+      .trim()
+      .slice(0, 80);
+  }
 }
 
 function _kindLabel(kind) {

@@ -27,16 +27,16 @@ function _prettyPath(p) {
 
 function _applyUiFontSize(px) {
   const n = Number(px);
-  const v = Number.isFinite(n) && n >= 12 && n <= 22 ? n : 14;
+  const v = Number.isFinite(n) && n >= 12 && n <= 24 ? n : 14;
   try { document.documentElement.style.setProperty("--ui-font-size", `${v}px`); } catch (_) {}
 }
 
 function _applyUiButtonSize(px) {
   const n = Number(px);
-  const v = Number.isFinite(n) && n >= 32 && n <= 60 ? n : 38;
+  const v = Number.isFinite(n) && n >= 32 && n <= 72 ? n : 38;
   try { document.documentElement.style.setProperty("--rightbar-w", `${v}px`); } catch (_) {}
   try {
-    const ico = v >= 46 ? 22 : v >= 42 ? 20 : 18;
+    const ico = v >= 56 ? 24 : v >= 48 ? 22 : v >= 42 ? 20 : 18;
     document.documentElement.style.setProperty("--ui-ico-size", `${ico}px`);
   } catch (_) {}
 }
