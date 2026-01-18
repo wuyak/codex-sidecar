@@ -46,23 +46,15 @@
 			        --dock-col-gap: 14px;
 			        --content-safe-right: calc(var(--rightbar-w) + 16px);
 
-			        --bm-panel-w: 200px;
-			        --bm-peek-w: 14px;
-			        --bm-pad: 8px;
-			        --bm-radius: 14px;
-			        --bm-gap-y: 6px;
-			        --bm-collapsed-h: 248px;
-			        --rightbar-stack-h: calc(6 * var(--rightbar-w) + 5 * var(--rightbar-gap));
-
-		        --bm-bg: rgba(248, 250, 252, .92);
-		        --bm-bg-hover: rgba(255,255,255,.98);
-		        --bm-shadow: 0 10px 28px rgba(0,0,0,.14);
+			        --tabs-bar-h: 44px;
+			        --tabs-pad: 6px;
+			        --tabs-gap: 6px;
+			        --tabs-radius: 14px;
+			        --tabs-min-w: 124px;
+			        --tabs-max-w: 240px;
 		      }
 
 				      body[data-bm-skin="flat"] {
-			        --bm-bg: rgba(255,255,255,.96);
-			        --bm-bg-hover: rgba(255,255,255,1);
-			        --bm-shadow: 0 12px 30px rgba(0,0,0,.10);
 				        --dock-bg: rgba(255,255,255,.96);
 				        --dock-border: rgba(148,163,184,.22);
 			        --shadow-lg: 0 18px 56px rgba(0,0,0,.12);
@@ -111,53 +103,43 @@
 			        --shadow-md: 0 22px 56px rgba(0,0,0,.38);
 			        --shadow-lg: 0 28px 88px rgba(0,0,0,.44);
 			        --ring: 0 0 0 3px rgba(56,189,248,.18);
-			        --bm-bg: rgba(15,23,42,.72);
-			        --bm-bg-hover: rgba(15,23,42,.90);
-			        --bm-shadow: 0 18px 52px rgba(0,0,0,.45);
 			      }
-		      /* 会话书签：右侧“书签栏”（默认仅露出窄边，悬停/聚焦展开） */
+		      /* 会话标签栏：底部浏览器标签风格（不遮挡右侧按钮） */
 			      #bookmarks {
 			        position: fixed;
-			        top: auto;
-			        right: var(--safe-right);
-			        left: auto;
-			        bottom: calc(16px + var(--safe-bottom) + 96px + var(--rightbar-stack-h) + 16px);
-			        transform: translateX(calc(var(--bm-panel-w) - var(--bm-peek-w)));
-			        width: var(--bm-panel-w);
-			        display: block;
+			        left: calc(16px + var(--safe-left));
+			        right: calc(var(--rightbar-right) + var(--rightbar-w) + 12px);
+			        bottom: calc(16px + var(--safe-bottom));
+			        height: var(--tabs-bar-h);
+			        display: flex;
+			        align-items: center;
+			        gap: 10px;
 			        z-index: var(--z-bookmarks);
 			        overflow: visible;
 			        padding: 0;
 			        background: transparent;
 			        border: none;
 			        box-shadow: none;
-			        transition: transform .14s ease-out;
-			      }
-			      #bookmarks:hover,
-			      #bookmarks:focus-within {
-			        transform: translateX(0);
+			        backdrop-filter: none;
 			      }
 			      #bookmarks .bm-rail {
+			        flex: 1 1 auto;
 			        display: flex;
-			        flex-direction: column;
-			        align-items: stretch;
-			        gap: var(--bm-gap-y);
+			        align-items: center;
+			        gap: var(--tabs-gap);
 			        width: 100%;
-			        padding: 8px;
-			        border-radius: var(--bm-radius);
+			        height: 100%;
+			        padding: var(--tabs-pad);
+			        border-radius: var(--tabs-radius);
 			        border: 1px solid var(--dock-border);
 			        background: var(--dock-bg);
 			        box-shadow: var(--shadow-sm);
-			        max-height: var(--bm-collapsed-h);
-			        overflow: hidden;
+			        overflow-x: auto;
+			        overflow-y: hidden;
+			        scrollbar-width: thin;
+			        scrollbar-color: rgba(148,163,184,.35) transparent;
 			      }
-			      #bookmarks:hover .bm-rail,
-			      #bookmarks:focus-within .bm-rail {
-			        max-height: min(70vh, calc(100vh - 32px - var(--safe-top) - var(--safe-bottom)));
-			        overflow: auto;
-			        box-shadow: var(--shadow-md);
-			      }
-			      #bookmarks .bm-rail::-webkit-scrollbar { width: 10px; }
+			      #bookmarks .bm-rail::-webkit-scrollbar { height: 10px; }
 			      #bookmarks .bm-rail::-webkit-scrollbar-thumb {
 			        background: rgba(148,163,184,.35);
 			        border-radius: 999px;
@@ -165,41 +147,24 @@
 			        background-clip: padding-box;
 			      }
 			      body[data-bm-skin="dark"] #bookmarks .bm-rail::-webkit-scrollbar-thumb { background: rgba(148,163,184,.22); }
-			      #bookmarks .bm-rail { scrollbar-width: thin; scrollbar-color: rgba(148,163,184,.35) transparent; }
-
-			      /* 常显当前会话提示（不需要 hover 才知道“现在在哪个会话”） */
-			      #bookmarks .bookmark .bm-tip {
-			        display: block;
-			        position: absolute;
-			        right: calc(100% + 10px);
-			        top: 50%;
-			        transform: translateY(-50%) translateX(4px);
-			        padding: 6px 10px;
+			      #bookmarks .bm-menu-btn {
+			        width: var(--rightbar-w);
+			        height: var(--rightbar-w);
+			        padding: 0;
 			        border-radius: 999px;
-			        border: 1px solid rgba(148,163,184,.35);
-			        background: rgba(255,255,255,.96);
+			        display:flex;
+			        align-items:center;
+			        justify-content:center;
+			        border: 1px solid var(--c-border);
+			        background: var(--c-surface);
 			        color: var(--c-text);
-			        font-size: 12px;
-			        white-space: nowrap;
+			        cursor:pointer;
 			        box-shadow: var(--shadow-sm);
-			        opacity: 0;
-			        pointer-events: none;
-			        transition: opacity .12s ease, transform .12s ease;
-			        z-index: calc(var(--z-bookmarks) + 3);
 			      }
-			      body[data-bm-skin="dark"] #bookmarks .bookmark .bm-tip {
-			        background: rgba(15,23,42,.92);
-			        color: rgba(226,232,240,.98);
-			        border-color: rgba(148,163,184,.22);
-			      }
-			      #bookmarks .bookmark.active .bm-tip { opacity: 1; transform: translateY(-50%) translateX(0); }
-			      #bookmarks .bookmark:hover .bm-tip,
-			      #bookmarks .bookmark:focus-visible .bm-tip { opacity: 1; transform: translateY(-50%) translateX(0); }
-			      /* 展开列表时 tip 容易遮挡条目：仅保留 active */
-			      #bookmarks:hover .bookmark .bm-tip,
-			      #bookmarks:focus-within .bookmark .bm-tip { opacity: 0; }
-			      #bookmarks:hover .bookmark.active .bm-tip,
-			      #bookmarks:focus-within .bookmark.active .bm-tip { opacity: 1; }
+			      #bookmarks .bm-menu-btn:hover { background: var(--c-soft-2); }
+			      #bookmarks .bm-menu-btn:active { transform: translateY(1px); }
+			      #bookmarks .bm-menu-btn:focus-visible { outline: none; box-shadow: var(--shadow-sm), var(--ring); border-color: rgba(14,165,233,.55); }
+			      #bookmarks .bm-menu-btn.active { background: rgba(2,132,199,.10); border-color: rgba(14,165,233,.55); }
 
 		      .bookmark {
 		        width: 100%;
@@ -261,38 +226,52 @@
 		      .bookmark.editing .bm-label { display:none; }
 		      .bookmark.editing .bm-edit { display:block; }
 
-		      /* bookmarks：行样式（展开后像“书签列表”，收起时仅露出右侧窄边） */
-		      #bookmarks .bookmark {
-		        background: transparent;
-		        border-color: transparent;
+		      /* 标签按钮（tabs） */
+		      #bookmarks .bm-rail .bookmark {
+		        flex: 0 1 var(--tabs-max-w);
+		        min-width: var(--tabs-min-w);
+		        max-width: var(--tabs-max-w);
+		        height: calc(var(--tabs-bar-h) - 2px);
+		        min-height: calc(var(--tabs-bar-h) - 2px);
+		        padding: 0 10px;
+		        border-radius: 14px;
+		        background: rgba(255,255,255,.88);
+		        border-color: rgba(148, 163, 184, .35);
 		        box-shadow: none;
-		        border-radius: 12px;
 		      }
-		      #bookmarks .bookmark:hover { background: var(--c-soft-2); border-color: var(--c-border); }
-		      #bookmarks .bookmark:focus-visible { outline: none; box-shadow: var(--shadow-sm), var(--ring); border-color: rgba(14,165,233,.55); }
-		      #bookmarks .bookmark.active { background: rgba(2,132,199,.10); border-color: rgba(14,165,233,.55); }
-		      #bookmarks .bookmark.tab-hidden { opacity: .60; filter: saturate(.85); }
-		      #bookmarks .bookmark .bm-dot {
-		        width: 4px;
-		        height: 18px;
-		        border-radius: 999px;
+		      body[data-bm-skin="dark"] #bookmarks .bm-rail .bookmark { background: rgba(15,23,42,.58); border-color: rgba(148,163,184,.20); }
+		      #bookmarks .bm-rail .bookmark:hover { background: var(--c-soft-2); border-color: var(--c-border); }
+		      #bookmarks .bm-rail .bookmark.active {
+		        background: var(--c-surface);
+		        border-color: rgba(14,165,233,.55);
+		        box-shadow: var(--shadow-sm);
 		      }
-		      #bookmarks .bookmark::before {
-		        content: "";
-		        position: absolute;
-		        top: 6px;
-		        bottom: 6px;
-		        right: 4px;
-		        width: 3px;
-		        border-radius: 999px;
-		        background: var(--bm-accent, var(--c-accent));
-		        opacity: .78;
+		      body[data-bm-skin="dark"] #bookmarks .bm-rail .bookmark.active { background: rgba(15,23,42,.82); }
+		      #bookmarks .bm-rail .bookmark .bm-dot { width: 4px; height: 18px; border-radius: 999px; }
+		      #bookmarks .bm-rail .bookmark .bm-label { font-size: 12px; }
+		      #bookmarks .bm-rail .bookmark .bm-tip { display: none; }
+		      #bookmarks .bm-rail .bookmark .bm-close {
+		        width: 22px;
+		        height: 22px;
+		        border-radius: 8px;
+		        border: 1px solid transparent;
+		        background: transparent;
+		        color: var(--c-muted);
+		        cursor: pointer;
+		        display:flex;
+		        align-items:center;
+		        justify-content:center;
+		        opacity: 0;
+		        flex: 0 0 auto;
+		        transition: opacity .12s ease;
 		      }
-		      #bookmarks .bookmark.active::before { opacity: 1; }
-		      #bookmarks .bookmark.has-unread::after { right: 2px; }
-		      #bookmarks .bookmark .bm-tip { display: none; }
+		      #bookmarks .bm-rail .bookmark:hover .bm-close,
+		      #bookmarks .bm-rail .bookmark.active .bm-close { opacity: .9; }
+		      #bookmarks .bm-rail .bookmark .bm-close:hover { background: var(--c-soft); border-color: var(--c-border); color: var(--c-text); }
+		      #bookmarks .bm-rail .bookmark.editing .bm-close { display: none; }
+		      #bookmarks .bm-rail .bookmark.has-unread::after { right: 30px; }
 
-					      #main { margin: 16px; padding-bottom: 16px; padding-right: var(--content-safe-right); }
+					      #main { margin: 16px; padding-bottom: calc(16px + var(--safe-bottom) + var(--tabs-bar-h) + 10px); padding-right: var(--content-safe-right); }
 		      .row { border: 1px solid var(--c-border); border-left: 4px solid rgba(148, 163, 184, .55); border-radius: 12px; padding: 12px; margin: 10px 0; background: var(--c-surface); box-shadow: var(--shadow-sm); }
 			      #topbar.row { border: none; border-radius: 0; background: transparent; box-shadow: none; padding: 0; margin: 14px 0 14px; display:flex; align-items:center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 			      #topbar .top-title { font-size: 18px; font-weight: 900; }
@@ -482,7 +461,6 @@
 		      .icon-btn.danger:hover { background: var(--c-danger-bg); }
 	      @media (max-height: 640px) {
 	        .rightbar { top: calc(12px + var(--safe-top)); bottom: auto; }
-	        #bookmarks { top: calc(12px + var(--safe-top) + var(--rightbar-stack-h) + 16px); bottom: auto; }
 	      }
       .grid { display:grid; grid-template-columns: 140px 1fr; gap: 6px 10px; align-items:center; margin-top: 10px; }
       .grid.grid-compact { grid-template-columns: 110px 1fr; gap: 6px 8px; margin-top: 8px; }
