@@ -643,14 +643,22 @@
 	      }
 	      .md blockquote > :first-child { margin-top: 0; }
 	      .md blockquote > :last-child { margin-bottom: 0; }
-	      /* Math (KaTeX) */
-	      .md .katex { max-width: 100%; overflow-x: auto; overflow-y: hidden; }
-	      .md .katex-display {
-	        max-width: 100%;
-	        overflow-x: auto;
-	        overflow-y: hidden;
-	        margin: 10px 0;
-	      }
+		      /* Math (KaTeX) */
+		      .md .katex {
+		        max-width: 100%;
+		        overflow-x: auto;
+		        overflow-y: hidden;
+		        font-size: 1.06em;
+		        -webkit-font-smoothing: antialiased;
+		        -moz-osx-font-smoothing: grayscale;
+		      }
+		      .md .katex-display {
+		        max-width: 100%;
+		        overflow-x: auto;
+		        overflow-y: hidden;
+		        margin: 10px 0;
+		        font-size: 1.08em;
+		      }
 	      .md .md-sep { margin: 10px 0; color:#cbd5e1; }
 	        .md-table { margin: 8px 0 0; overflow-x: auto; border: 1px solid var(--c-border); border-radius: 10px; background: var(--c-surface); }
         .md-table table { border-collapse: collapse; width: 100%; min-width: 420px; }
