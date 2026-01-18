@@ -53,7 +53,31 @@
 
 ### 做成 exe（可行但需要额外工具）
 
-可以用 PyInstaller 为每个系统单独打包（Windows/macOS/Linux 各自构建一次）。注意本项目会读取本机 `CODEX_HOME/sessions/**`，因此“开箱即用”仍依赖目标机器上安装/运行 Codex，并能访问对应的 sessions 目录。
+可以用 PyInstaller 为每个系统单独打包（Windows/macOS/Linux 各自构建一次）。
+
+注意：本项目会读取本机 `CODEX_HOME/sessions/**`，因此“开箱即用”仍依赖目标机器上安装/运行 Codex，并能访问对应的 sessions 目录。
+
+已提供构建脚本（会把 `ui/` 静态资源一并打包到可执行文件中）：
+
+```bash
+./scripts/build_exe.sh
+```
+
+Windows（PowerShell）：
+
+```powershell
+.\scripts\build_exe.ps1
+```
+
+构建产物：
+- Linux/macOS：`dist/codex-sidecar`
+- Windows：`dist/codex-sidecar.exe`
+
+运行示例：
+
+```bash
+./dist/codex-sidecar --ui
+```
 
 ## 版本
 本项目不维护单独的版本号，直接以 Git 提交为准（例如：`git rev-parse --short HEAD`）。
