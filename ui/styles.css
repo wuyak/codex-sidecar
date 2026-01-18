@@ -596,18 +596,62 @@
       pre.code .diff-del { background: rgba(239, 68, 68, .16); }
       pre.code .diff-ellipsis { color:#cbd5e1; background: rgba(59, 130, 246, .12); }
 	      .change-head { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
-	      .md { font-size: 13px; line-height: 1.6; }
-	      .md h1, .md h2, .md h3 { margin: 10px 0 6px; line-height: 1.25; }
-		      .md p { margin: 6px 0; }
-		      .md ul { margin: 6px 0 6px 18px; padding: 0; }
-		      .md ol { margin: 6px 0 6px 20px; padding: 0; }
-			      .md li { margin: 2px 0; }
-			      .md code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; background: var(--c-soft); border: 1px solid var(--c-border); padding: 1px 6px; border-radius: 6px; }
-		      .md pre code { background: transparent; padding: 0; }
-		      /* Math (KaTeX) */
-		      .md .katex { max-width: 100%; overflow-x: auto; overflow-y: hidden; }
-		      .md .katex-display { max-width: 100%; overflow-x: auto; overflow-y: hidden; }
-		      .md .md-sep { margin: 10px 0; color:#cbd5e1; }
+	      /* Markdown typography (Typora-ish) */
+	      .md {
+	        font-size: 14px;
+	        line-height: 1.75;
+	        color: var(--c-text);
+	        text-wrap: pretty;
+	        overflow-wrap: anywhere;
+	      }
+	      .md h1, .md h2, .md h3 {
+	        margin: 12px 0 6px;
+	        line-height: 1.25;
+	        font-weight: 900;
+	        text-wrap: balance;
+	      }
+	      .md h1 { font-size: 18px; margin-top: 14px; }
+	      .md h2 { font-size: 16px; margin-top: 14px; }
+	      .md h3 { font-size: 14px; margin-top: 12px; }
+	      .md p { margin: 8px 0; }
+	      .md p:first-child { margin-top: 0; }
+	      .md p:last-child { margin-bottom: 0; }
+	      .md ul { margin: 8px 0 8px 18px; padding: 0; }
+	      .md ol { margin: 8px 0 8px 20px; padding: 0; }
+	      .md li { margin: 4px 0; }
+	      .md li::marker { color: rgba(71,85,105,.88); }
+	      body[data-bm-skin="dark"] .md li::marker { color: rgba(148,163,184,.92); }
+	      .md strong { font-weight: 900; }
+	      .md a { color: var(--c-accent); text-decoration: underline; text-underline-offset: 2px; text-decoration-thickness: 1px; }
+	      .md a:hover { text-decoration-thickness: 2px; }
+	      .md code {
+	        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+	        font-size: 12px;
+	        background: var(--c-soft);
+	        border: 1px solid var(--c-border);
+	        padding: 1px 6px;
+	        border-radius: 6px;
+	      }
+	      .md pre code { background: transparent; padding: 0; }
+	      .md blockquote {
+	        margin: 10px 0;
+	        padding: 10px 12px;
+	        border-left: 3px solid var(--c-border-strong);
+	        background: var(--c-soft-3);
+	        border-radius: 12px;
+	        color: var(--c-text);
+	      }
+	      .md blockquote > :first-child { margin-top: 0; }
+	      .md blockquote > :last-child { margin-bottom: 0; }
+	      /* Math (KaTeX) */
+	      .md .katex { max-width: 100%; overflow-x: auto; overflow-y: hidden; }
+	      .md .katex-display {
+	        max-width: 100%;
+	        overflow-x: auto;
+	        overflow-y: hidden;
+	        margin: 10px 0;
+	      }
+	      .md .md-sep { margin: 10px 0; color:#cbd5e1; }
 	        .md-table { margin: 8px 0 0; overflow-x: auto; border: 1px solid var(--c-border); border-radius: 10px; background: var(--c-surface); }
         .md-table table { border-collapse: collapse; width: 100%; min-width: 420px; }
 	        .md-table th, .md-table td { border-top: 1px solid var(--c-border); border-left: 1px solid var(--c-border); padding: 6px 8px; vertical-align: top; }
