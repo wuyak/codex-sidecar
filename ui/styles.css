@@ -355,15 +355,18 @@
 	      body[data-bm-skin="dark"] .badge.kind-assistant { background: rgba(34,197,94,.14); border-color: rgba(34,197,94,.25); color: #86efac; }
 	      body[data-bm-skin="dark"] .badge.kind-tool_call,
 	      body[data-bm-skin="dark"] .badge.kind-tool_output { background: rgba(251,191,36,.14); border-color: rgba(251,191,36,.25); color: #fde68a; }
-	      .tabs { display:flex; flex-direction:column; gap:6px; margin: 10px 0 0; }
-	      .tab { border: 1px solid var(--c-border); background: var(--c-surface); padding: 8px 10px; border-radius: 12px; cursor:pointer; font-size: 12px; text-align:left; width: 100%; display:flex; align-items:center; gap:8px; position: relative; }
-	      body[data-bm-skin="dark"] .tab { background: rgba(15,23,42,.58); border-color: rgba(148,163,184,.22); }
-	      .tab:hover { background: var(--c-soft-2); }
-	      .tab.active { border-color: rgba(14,165,233,.55); box-shadow: var(--ring); }
-	      .tab .tab-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-	      .tab .tab-edit { display:none; flex: 1 1 auto; min-width: 0; padding: 6px 8px; border: 1px solid rgba(14,165,233,.55); border-radius: 10px; outline: none; font-size: 12px; background: var(--c-surface); color: var(--c-text); box-shadow: var(--ring); }
-	      .tab.editing .tab-label { display:none; }
-	      .tab.editing .tab-edit { display:block; }
+		      .tabs { display:flex; flex-direction:column; gap:6px; margin: 10px 0 0; }
+		      .tab { border: 1px solid var(--c-border); background: var(--c-surface); padding: 8px 10px; border-radius: 12px; cursor:pointer; font-size: 12px; text-align:left; width: 100%; display:flex; align-items:center; gap:8px; position: relative; overflow: hidden; }
+		      body[data-bm-skin="dark"] .tab { background: rgba(15,23,42,.58); border-color: rgba(148,163,184,.22); }
+		      .tab:hover { background: var(--c-soft-2); }
+		      .tab.active { border-color: rgba(14,165,233,.55); box-shadow: var(--ring); }
+		      .tab-main { flex: 1 1 auto; min-width: 0; overflow: hidden; display:flex; flex-direction:column; gap: 2px; }
+		      .tab .tab-label { display:block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+		      .tab .tab-sub { display:block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--c-muted); opacity: .9; }
+		      body[data-bm-skin="dark"] .tab .tab-sub { color: rgba(148,163,184,.92); }
+		      .tab .tab-edit { display:none; flex: 1 1 auto; min-width: 0; padding: 6px 8px; border: 1px solid rgba(14,165,233,.55); border-radius: 10px; outline: none; font-size: 12px; background: var(--c-surface); color: var(--c-text); box-shadow: var(--ring); }
+		      .tab.editing .tab-label { display:none; }
+		      .tab.editing .tab-edit { display:block; }
 	      .tab-actions { margin-left: auto; display:flex; gap:6px; align-items:center; }
 	      .tab.has-unread::after {
 	        content: attr(data-unread);
@@ -510,15 +513,17 @@
 				      .drawer-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.18); z-index: var(--z-drawer-overlay); }
 				      .drawer { position: fixed; top: calc(16px + var(--safe-top)); right: var(--rightbar-right); bottom: auto; width: 380px; max-width: calc(100vw - 32px - var(--safe-left) - var(--safe-right)); max-height: calc(100vh - 32px - var(--safe-top) - var(--safe-bottom)); background: var(--c-surface); border: none; border-radius: 12px; padding: 10px; overflow: auto; z-index: var(--z-drawer); box-shadow: var(--shadow-md); }
 		      #bookmarkDrawerOverlay { z-index: var(--z-bookmark-drawer-overlay); background: rgba(15,23,42,.08); }
-		      #bookmarkDrawer {
-		        z-index: var(--z-bookmark-drawer);
-		        top: auto;
-		        right: auto;
-		        left: calc(16px + var(--safe-left));
-		        bottom: calc(16px + var(--safe-bottom) + var(--tabs-bar-h) + 10px);
-		        width: min(380px, calc(100vw - 32px - var(--safe-left) - var(--safe-right)));
-		        max-height: min(70vh, calc(100vh - 32px - var(--safe-top) - var(--safe-bottom) - var(--tabs-bar-h) - 16px));
-		      }
+			      #bookmarkDrawer {
+			        z-index: var(--z-bookmark-drawer);
+			        top: auto;
+			        right: auto;
+			        left: calc(16px + var(--safe-left));
+			        bottom: calc(16px + var(--safe-bottom) + var(--tabs-bar-h) + 10px);
+			        width: min(380px, calc(100vw - 32px - var(--safe-left) - var(--safe-right)));
+			        max-height: min(70vh, calc(100vh - 32px - var(--safe-top) - var(--safe-bottom) - var(--tabs-bar-h) - 16px));
+			        overflow-x: hidden;
+			        overflow-y: auto;
+			      }
 			      .drawer-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
 			      .drawer-head .title { font-weight: 700; }
 				      .drawer-close { border:none; background: transparent; color: var(--c-text); border-radius: 10px; width: 34px; height: 34px; padding: 0; font-size: 18px; line-height: 1; cursor:pointer; box-shadow: none; }

@@ -1,5 +1,5 @@
 import { inferToolName, parseToolCallText, statusIcon } from "../../format.js";
-import { escapeHtml, keyOf, safeJsonParse } from "../../utils.js";
+import { escapeHtml, safeJsonParse } from "../../utils.js";
 import { renderMarkdownCached } from "../md_cache.js";
 
 function _extractUpdatePlanFromParallelArgs(argsObj) {
@@ -52,19 +52,8 @@ export function renderToolCall(dom, state, msg, ctx) {
   }
 
   if (planArgs && typeof planArgs === "object") {
-    const threadKey = keyOf(msg || {}) || "";
-    const explainMap = (state && state.planExplainByKey && typeof state.planExplainByKey.get === "function")
-      ? state.planExplainByKey
-      : null;
     const rawExplain = (typeof planArgs.explanation === "string") ? planArgs.explanation : "";
-    let explanation = rawExplain;
-    // Codex CLI 常见：后续 update_plan 只更新状态，不再重复传 explanation。
-    // UI 需要沿用同一会话上一次的说明，避免“说明消失”的体验差异。
-    try {
-      const cleaned = String(rawExplain || "").trim();
-      if (cleaned && explainMap && threadKey) explainMap.set(threadKey, cleaned);
-      if (!cleaned && explainMap && threadKey) explanation = String(explainMap.get(threadKey) || "");
-    } catch (_) {}
+    const explanation = String(rawExplain || "").trim();
     const plan = Array.isArray(planArgs.plan) ? planArgs.plan : [];
     const items = [];
     for (const it of plan) {
@@ -80,7 +69,7 @@ export function renderToolCall(dom, state, msg, ctx) {
       "```text",
       ...lines,
       "```",
-      ...(String(explanation || "").trim() ? ["", "**说明**", String(explanation || "").trim()] : []),
+      ...(explanation ? ["", "**说明**", explanation] : []),
     ].join("\n");
     const extra = (toolName === "parallel") ? `<span class="pill">并行</span>` : "";
     const metaLeftExtra = `<span class="pill">更新计划</span>${extra}<span class="pill">${escapeHtml(String(items.length || 0))} 项</span>`;

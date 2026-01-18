@@ -312,7 +312,6 @@ export function wireControlEvents(dom, state, helpers) {
     // 正在重命名时不重绘，避免输入焦点丢失。
     if (_isBookmarkDrawerEditing()) return;
 
-	    const q = String(dom.bookmarkSearch && dom.bookmarkSearch.value ? dom.bookmarkSearch.value : "").trim().toLowerCase();
 	    const items = [];
 	    const hiddenItems = [];
 
@@ -331,8 +330,6 @@ export function wireControlEvents(dom, state, helpers) {
         const fileBase = file ? (String(file).split("/").slice(-1)[0] || file) : "";
         const followed = !!(file && followFiles && followFiles.includes(file));
 	        const tid = String((t && t.thread_id) ? t.thread_id : "");
-	        const hay = `${label}\n${key}\n${file}\n${tid}`.toLowerCase();
-	        if (q && !hay.includes(q)) continue;
 	        const isHidden = !!(hidden && typeof hidden.has === "function" && hidden.has(key));
 	        const unread = getUnreadCount(state, key);
 	        const clr = colorForKey(key);
@@ -492,14 +489,13 @@ export function wireControlEvents(dom, state, helpers) {
     _renderList(host, items, { hiddenList: false });
     _renderList(hiddenHost, hiddenItems, { hiddenList: true });
 
-    try {
-      if (dom.bookmarkHiddenCount) dom.bookmarkHiddenCount.textContent = String(hiddenItems.length);
-      if (dom.bookmarkHiddenDetails) {
-        dom.bookmarkHiddenDetails.style.display = hiddenItems.length ? "" : "none";
-        if (q && hiddenItems.length) dom.bookmarkHiddenDetails.open = true;
-      }
-    } catch (_) {}
-  };
+	    try {
+	      if (dom.bookmarkHiddenCount) dom.bookmarkHiddenCount.textContent = String(hiddenItems.length);
+	      if (dom.bookmarkHiddenDetails) {
+	        dom.bookmarkHiddenDetails.style.display = hiddenItems.length ? "" : "none";
+	      }
+	    } catch (_) {}
+	  };
 
   const _openBookmarkDrawer = () => {
     openBookmarkDrawer(dom);
@@ -525,7 +521,6 @@ export function wireControlEvents(dom, state, helpers) {
     } catch (_) {}
   });
 
-  if (dom.bookmarkSearch) dom.bookmarkSearch.addEventListener("input", () => { _renderBookmarkDrawerList(); });
   const _enterInlineRename = (row, key) => {
     const k = String(key || "");
     if (!row || !k) return;

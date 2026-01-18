@@ -58,9 +58,6 @@ export function createState() {
     // Markdown 渲染缓存（用于频繁切换/重绘加速）
     mdCache: new Map(), // key -> { text, html }
 
-    // update_plan 的说明文本（同一会话内复用；避免后续 update_plan 省略 explanation 时 UI “丢说明”）
-    planExplainByKey: new Map(), // key -> explanation
-
     // 思考行局部显示模式（mid -> "en"|"zh"），用于单条切换（默认：未译=EN，已译=ZH）。
     thinkModeById: new Map(),
     thinkModeOrder: [], // LRU-ish for pruning
