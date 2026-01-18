@@ -452,7 +452,10 @@ export function renderTabs(dom, state, onSelectKey) {
       });
     }
 
-    for (const t of list) out.appendChild(_appendThread(t));
+    // Rail should never become "invisible" (e.g. user hides the last visible session and auto-switches to "all").
+    // If there's nothing to show, keep a single "all" handle so hover can still reveal the full list.
+    if (!includeAll && mode === "rail" && (!list || list.length === 0)) out.appendChild(_appendAll());
+    else for (const t of list) out.appendChild(_appendThread(t));
     return out;
   };
 

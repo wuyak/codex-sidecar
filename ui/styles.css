@@ -138,6 +138,11 @@
 			        flex-direction: column;
 			        align-items: center;
 			        gap: var(--bm-gap-y);
+			        padding: 8px 6px;
+			        border-radius: 16px;
+			        border: 1px solid var(--dock-border);
+			        background: var(--dock-bg);
+			        box-shadow: var(--shadow-sm);
 			      }
 			      #bookmarks .bm-pop {
 			        position: absolute;
@@ -242,19 +247,19 @@
 
 		      /* rail（圆形快捷书签） */
 		      #bookmarks .bm-rail .bookmark {
-		        width: var(--rightbar-w);
-		        height: var(--rightbar-w);
-		        min-height: var(--rightbar-w);
+		        width: calc(var(--rightbar-w) - 12px);
+		        height: 34px;
+		        min-height: 34px;
 		        padding: 0;
-		        border-radius: 999px;
+		        border-radius: 12px;
 		        justify-content: center;
 		        gap: 0;
 		        overflow: visible;
-		        background: var(--c-surface);
-		        border-color: var(--c-border);
-		        box-shadow: var(--shadow-sm);
+		        background: transparent;
+		        border-color: transparent;
+		        box-shadow: none;
 		      }
-		      #bookmarks .bm-rail .bookmark:hover { background: var(--c-soft-2); }
+		      #bookmarks .bm-rail .bookmark:hover { background: var(--c-soft-2); border-color: var(--c-border); }
 		      #bookmarks .bm-rail .bookmark:focus-visible { outline: none; box-shadow: var(--shadow-sm), var(--ring); border-color: rgba(14,165,233,.55); }
 		      #bookmarks .bm-rail .bookmark.active { background: rgba(2,132,199,.10); border-color: rgba(14,165,233,.55); }
 		      #bookmarks .bm-rail .bookmark.tab-hidden { opacity: .60; filter: saturate(.85); }
@@ -265,7 +270,12 @@
 		      }
 		      #bookmarks .bm-rail .bookmark .bm-label,
 		      #bookmarks .bm-rail .bookmark .bm-edit { display: none; }
-		      #bookmarks .bm-rail .bookmark .bm-dot { width: 12px; height: 12px; }
+		      #bookmarks .bm-rail .bookmark .bm-dot {
+		        width: 14px;
+		        height: 18px;
+		        border-radius: 5px 5px 3px 3px;
+		        clip-path: polygon(0 0, 100% 0, 100% 76%, 50% 100%, 0 76%);
+		      }
 
 		      /* rail 的悬停提示（不占宽度，不做 width 动画） */
 		      #bookmarks .bm-rail .bookmark .bm-tip {
@@ -651,6 +661,8 @@
 	      @media (pointer: coarse) {
 	        :root { --rightbar-w: 44px; --rightbar-gap: 10px; }
 	        .bookmark { min-height: 44px; }
+	        #bookmarks .bm-rail { padding: 10px 8px; border-radius: 18px; }
+	        #bookmarks .bm-rail .bookmark { height: 40px; min-height: 40px; }
 	      }
 	      .profile-row { display:flex; gap: 6px; align-items:center; }
 		      .mini-btn { position: relative; width: 30px; height: 30px; padding: 0; border-radius: 10px; border: 1px solid var(--c-border); background: var(--c-surface); color: var(--c-text); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 14px; line-height: 1; box-shadow: 0 1px 0 rgba(15,23,42,.04); }
