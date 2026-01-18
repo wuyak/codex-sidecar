@@ -55,6 +55,7 @@ export function openBookmarkDrawer(dom) {
   try {
     if (dom.bookmarkDrawerOverlay) dom.bookmarkDrawerOverlay.classList.remove("hidden");
     if (dom.bookmarkDrawer) dom.bookmarkDrawer.classList.remove("hidden");
+    if (dom.bookmarkDrawerToggleBtn && dom.bookmarkDrawerToggleBtn.classList) dom.bookmarkDrawerToggleBtn.classList.add("active");
   } catch (_) {}
 }
 
@@ -85,6 +86,7 @@ export function closeBookmarkDrawer(dom) {
   try {
     if (dom.bookmarkDrawerOverlay) dom.bookmarkDrawerOverlay.classList.add("hidden");
     if (dom.bookmarkDrawer) dom.bookmarkDrawer.classList.add("hidden");
+    if (dom.bookmarkDrawerToggleBtn && dom.bookmarkDrawerToggleBtn.classList) dom.bookmarkDrawerToggleBtn.classList.remove("active");
   } catch (_) {}
 }
 

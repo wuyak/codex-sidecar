@@ -60,6 +60,7 @@ export async function initApp() {
   const onSelectKey = async (key) => {
     // Selecting a session implies "read it": clear unread badge on that bookmark.
     try { if (key && key !== "all") clearUnreadForKey(state, key); } catch (_) {}
+    try { if (key && key !== "all" && state.closedThreads && typeof state.closedThreads.delete === "function") state.closedThreads.delete(key); } catch (_) {}
     state.currentKey = key;
     const { needsRefresh } = activateView(dom, state, key);
     // 快速 UI 反馈：先更新选中态，再异步拉取/重绘消息列表。

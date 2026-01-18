@@ -167,7 +167,7 @@
 			      #bookmarks .bm-menu-btn.active { background: rgba(2,132,199,.10); border-color: rgba(14,165,233,.55); }
 
 		      .bookmark {
-		        width: 100%;
+		        width: auto;
 		        min-height: 34px;
 		        border: 1px solid rgba(148, 163, 184, .35);
 		        background: rgba(255,255,255,.82);
@@ -228,7 +228,7 @@
 
 		      /* 标签按钮（tabs） */
 		      #bookmarks .bm-rail .bookmark {
-		        flex: 0 1 var(--tabs-max-w);
+		        flex: 1 1 var(--tabs-min-w);
 		        min-width: var(--tabs-min-w);
 		        max-width: var(--tabs-max-w);
 		        height: calc(var(--tabs-bar-h) - 2px);
@@ -265,11 +265,13 @@
 		        flex: 0 0 auto;
 		        transition: opacity .12s ease;
 		      }
+		      #bookmarks .bm-rail .bookmark[data-key="all"] .bm-close { display: none; }
 		      #bookmarks .bm-rail .bookmark:hover .bm-close,
 		      #bookmarks .bm-rail .bookmark.active .bm-close { opacity: .9; }
 		      #bookmarks .bm-rail .bookmark .bm-close:hover { background: var(--c-soft); border-color: var(--c-border); color: var(--c-text); }
 		      #bookmarks .bm-rail .bookmark.editing .bm-close { display: none; }
 		      #bookmarks .bm-rail .bookmark.has-unread::after { right: 30px; }
+		      #bookmarks .bm-rail .bookmark[data-key="all"].has-unread::after { right: 8px; }
 
 					      #main { margin: 16px; padding-bottom: calc(16px + var(--safe-bottom) + var(--tabs-bar-h) + 10px); padding-right: var(--content-safe-right); }
 		      .row { border: 1px solid var(--c-border); border-left: 4px solid rgba(148, 163, 184, .55); border-radius: 12px; padding: 12px; margin: 10px 0; background: var(--c-surface); box-shadow: var(--shadow-sm); }

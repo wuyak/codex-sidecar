@@ -47,7 +47,8 @@ function _ensureBookmarkStructure(btn) {
   const input = btn.querySelector ? btn.querySelector(".bm-edit") : null;
   const dotSpan = btn.querySelector ? btn.querySelector(".bm-dot") : null;
   const tipSpan = btn.querySelector ? btn.querySelector(".bm-tip") : null;
-  if (labelSpan && input && dotSpan && tipSpan) return { tipSpan, dotSpan, labelSpan, input };
+  const closeSpan = btn.querySelector ? btn.querySelector(".bm-close") : null;
+  if (labelSpan && input && dotSpan && tipSpan && closeSpan) return { tipSpan, dotSpan, labelSpan, input, closeSpan };
   // (Re)build inner structure once; updates reuse these nodes.
   while (btn.firstChild) btn.removeChild(btn.firstChild);
   const tip = document.createElement("span");
@@ -62,11 +63,16 @@ function _ensureBookmarkStructure(btn) {
   i.autocomplete = "off";
   i.spellcheck = false;
   i.placeholder = "重命名…";
+  const c = document.createElement("span");
+  c.className = "bm-close";
+  c.textContent = "×";
+  try { c.setAttribute("aria-hidden", "true"); } catch (_) {}
   btn.appendChild(tip);
   btn.appendChild(dot);
   btn.appendChild(l);
   btn.appendChild(i);
-  return { tipSpan: tip, dotSpan: dot, labelSpan: l, input: i };
+  btn.appendChild(c);
+  return { tipSpan: tip, dotSpan: dot, labelSpan: l, input: i, closeSpan: c };
 }
 
 function _wireBookmarkInteractions(btn) {
@@ -136,6 +142,10 @@ function _wireBookmarkInteractions(btn) {
     try {
       if (e && typeof e.button === "number" && e.button !== 0) return;
     } catch (_) {}
+    try {
+      const t = e && e.target;
+      if (t && t.closest && t.closest(".bm-close")) { clearPress(); return; }
+    } catch (_) {}
     clearPress();
     moved = false;
     longFired = false;
@@ -171,6 +181,17 @@ function _wireBookmarkInteractions(btn) {
   btn.addEventListener("pointerleave", clearPress);
 
   btn.addEventListener("click", async (e) => {
+    try {
+      const t = e && e.target;
+      if (t && t.closest && t.closest(".bm-close")) {
+        const onClose = btn.__bmOnClose;
+        if (typeof onClose === "function") {
+          try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+          await onClose();
+        }
+        return;
+      }
+    } catch (_) {}
     if (longFired) { longFired = false; try { e.preventDefault(); e.stopPropagation(); } catch (_) {} return; }
     if (btn.classList && btn.classList.contains("editing")) return;
     const k = String(btn.dataset && btn.dataset.key ? btn.dataset.key : "").trim();
@@ -222,6 +243,20 @@ export function upsertThread(state, msg) {
   const seq = Number.isFinite(Number(msg && msg.seq)) ? Number(msg.seq) : 0;
   if (seq && (!prev.last_seq || seq > prev.last_seq)) prev.last_seq = seq;
   state.threadIndex.set(key, prev);
+  try {
+    // “关闭标签”仅是临时 UI 行为：如果该会话有新输出，自动回到标签栏。
+    const closed = (state && state.closedThreads && typeof state.closedThreads.get === "function") ? state.closedThreads : null;
+    if (closed && closed.has(key)) {
+      const info = closed.get(key) || {};
+      const atSeq = Number(info.at_seq) || 0;
+      const atCount = Number(info.at_count) || 0;
+      const atTs = String(info.at_ts || "");
+      const count = Number(prev && prev.count) || 0;
+      const lastTs = String(prev && prev.last_ts ? prev.last_ts : "");
+      const lastSeq = Number(prev && prev.last_seq) || 0;
+      if ((lastSeq && lastSeq > atSeq) || count > atCount || (lastTs && atTs && lastTs > atTs)) closed.delete(key);
+    }
+  } catch (_) {}
 }
 
 export function renderTabs(dom, state, onSelectKey) {
@@ -262,6 +297,9 @@ export function renderTabs(dom, state, onSelectKey) {
     ? state.hiddenThreads
     : loadHiddenThreads();
   const showHidden = !!(state && state.showHiddenThreads);
+  const closed = (state && state.closedThreads && typeof state.closedThreads.has === "function")
+    ? state.closedThreads
+    : new Map();
   const fragRail = document.createDocumentFragment();
   const fragPop = document.createDocumentFragment();
 
@@ -320,6 +358,27 @@ export function renderTabs(dom, state, onSelectKey) {
     else renderTabs(dom, state, onSelectKey);
   };
 
+  const _ensureClosedMap = () => {
+    if (!state.closedThreads || typeof state.closedThreads.set !== "function") state.closedThreads = new Map();
+    return state.closedThreads;
+  };
+
+  const _closeKey = async (key, labelForToast = "") => {
+    const k = String(key || "").trim();
+    if (!k || k === "all") return;
+    const t = state.threadIndex.get(k) || { last_seq: 0 };
+    const atSeq = Number(t && t.last_seq) || 0;
+    const m = _ensureClosedMap();
+    m.set(k, {
+      at_seq: atSeq,
+      at_count: Number(t && t.count) || 0,
+      at_ts: String((t && t.last_ts) ? t.last_ts : ""),
+    });
+    try { notifyCorner("bm_close", "会话标签", `已关闭标签：${labelForToast || shortId(k)}`, { ttlMs: 1400, level: "info" }); } catch (_) {}
+    if (String(state.currentKey || "all") === k) await onSelectKey("all");
+    else renderTabs(dom, state, onSelectKey);
+  };
+
   const renderList = (container, existing, opts) => {
     const includeAll = !!(opts && opts.includeAll);
     const mode = String(opts && opts.mode ? opts.mode : "");
@@ -337,11 +396,13 @@ export function renderTabs(dom, state, onSelectKey) {
       if (partsAll) {
         try { partsAll.tipSpan.textContent = "全部"; } catch (_) {}
         try { partsAll.labelSpan.textContent = "全部"; } catch (_) {}
+        try { partsAll.closeSpan.title = ""; } catch (_) {}
       }
       try { allBtn.setAttribute("aria-label", "全部会话"); } catch (_) {}
       allBtn.__bmOnSelect = onSelectKey;
       allBtn.__bmOnContext = async (k) => { if (k === "all") await _toggleShowHidden(); };
       allBtn.__bmOnDelete = null;
+      allBtn.__bmOnClose = null;
       allBtn.__bmRender = () => renderTabs(dom, state, onSelectKey);
       _wireBookmarkInteractions(allBtn);
       try {
@@ -373,6 +434,7 @@ export function renderTabs(dom, state, onSelectKey) {
       if (parts) {
         try { parts.tipSpan.textContent = label; } catch (_) {}
         try { parts.labelSpan.textContent = label; } catch (_) {}
+        try { parts.closeSpan.title = "关闭标签（该会话有新输出时会自动回到列表）"; } catch (_) {}
       }
       try {
         btn.dataset.label = label;
@@ -386,11 +448,12 @@ export function renderTabs(dom, state, onSelectKey) {
       try {
         const base = custom ? `${custom}\n${fullLabel}` : fullLabel;
         const hint = isHidden ? "右键：恢复到列表" : "右键：从列表移除";
-        btn.title = `${base}\n长按：重命名\n${hint}\nDelete：从列表移除`;
+        btn.title = `${base}\n×：关闭标签（新输出会自动回来）\n长按：重命名\n${hint}\nDelete：从列表移除`;
       } catch (_) {}
       btn.__bmOnSelect = onSelectKey;
       btn.__bmOnContext = async (k) => { await _toggleHiddenKey(k, label); };
       btn.__bmOnDelete = async () => { await _hideKey(t.key, label); };
+      btn.__bmOnClose = async () => { await _closeKey(t.key, label); };
       btn.__bmRender = () => renderTabs(dom, state, onSelectKey);
       _wireBookmarkInteractions(btn);
       return btn;
@@ -402,6 +465,8 @@ export function renderTabs(dom, state, onSelectKey) {
     // Full list: honor showHidden flag
     const list = items.filter((t) => {
       const isHidden = !!(hidden && typeof hidden.has === "function" && hidden.has(t.key));
+      const isClosed = !!(closed && typeof closed.has === "function" && closed.has(t.key));
+      if (isClosed && currentKey !== t.key) return false;
       return !isHidden || showHidden;
     });
 

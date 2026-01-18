@@ -8,7 +8,12 @@
     <link rel="stylesheet" href="/ui/styles.css" />
 		  </head>
 				  <body data-bm-skin="default">
-	          <div id="bookmarks" class="bookmarks" aria-label="会话书签"></div>
+	          <div id="bookmarks" class="bookmarks" aria-label="会话标签栏">
+	            <button id="bookmarkDrawerToggleBtn" class="bm-menu-btn" type="button" aria-label="会话管理">
+	              <svg class="ico" aria-hidden="true"><use href="#i-menu"></use></svg>
+	            </button>
+	            <div class="bm-rail" aria-label="会话标签"></div>
+	          </div>
 		          <svg xmlns="http://www.w3.org/2000/svg" style="position:absolute; width:0; height:0; overflow:hidden" aria-hidden="true" focusable="false">
 		            <symbol id="i-settings" viewBox="0 0 24 24">
 		              <path d="M12 15.5a3.5 3.5 0 1 0 0-7a3.5 3.5 0 0 0 0 7z"></path>
@@ -294,11 +299,29 @@
 					        </div>
 					        <div id="translateErrorText" class="meta form-error" style="margin-top:6px;"></div>
 					      </div>
+						    </div>
+					    <div id="bookmarkDrawerOverlay" class="drawer-overlay hidden"></div>
+					    <div id="bookmarkDrawer" class="drawer hidden" role="dialog" aria-modal="true" aria-label="会话管理">
+					      <div class="drawer-head">
+					        <div class="title">会话管理</div>
+					        <button id="bookmarkDrawerCloseBtn" class="drawer-close" type="button" aria-label="关闭">×</button>
+					      </div>
+					      <div class="drawer-sec">
+					        <div class="grid grid-compact">
+					          <div class="meta">搜索</div><div><input id="bookmarkSearch" placeholder="搜索：名称 / ID / 文件…" /></div>
+					          <div class="meta">显示已移除</div><div><select id="bookmarkShowHidden"><option value="0">否</option><option value="1">是</option></select></div>
+					          <div class="meta">选中即锁定</div><div><select id="bookmarkPinOnSelect"><option value="1">是</option><option value="0">否</option></select></div>
+					        </div>
+					        <div class="btns" style="margin-top:10px;">
+					          <button id="bookmarkExportBtn" type="button">导出当前会话</button>
+					        </div>
+					        <div id="bookmarkList" class="tabs" style="margin-top:10px;"></div>
+					      </div>
 					    </div>
-						    <dialog id="confirmDialog" class="confirm-dialog" role="alertdialog" aria-labelledby="confirmDialogTitle" aria-describedby="confirmDialogDesc">
-						      <form method="dialog" class="confirm-dialog-form">
-						        <div class="confirm-dialog-title" id="confirmDialogTitle">确认操作</div>
-						        <div class="confirm-dialog-desc meta" id="confirmDialogDesc"></div>
+							    <dialog id="confirmDialog" class="confirm-dialog" role="alertdialog" aria-labelledby="confirmDialogTitle" aria-describedby="confirmDialogDesc">
+							      <form method="dialog" class="confirm-dialog-form">
+							        <div class="confirm-dialog-title" id="confirmDialogTitle">确认操作</div>
+							        <div class="confirm-dialog-desc meta" id="confirmDialogDesc"></div>
 						        <div class="btns" style="margin-top:12px; justify-content:flex-end;">
 						          <button id="confirmDialogCancel" value="cancel" type="submit" autofocus>取消</button>
 						          <button id="confirmDialogOk" value="confirm" type="submit" class="danger">确认</button>

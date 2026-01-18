@@ -22,6 +22,8 @@ export function createState() {
     // 会话隐藏（仅本机 localStorage）：用于长时间挂着时清理噪音，不删除真实会话文件
     hiddenThreads: new Set(),
     showHiddenThreads: false,
+    // “关闭标签”（仅当前页面内存）：不在列表显示；但该会话有新输出时会自动回到列表
+    closedThreads: new Map(), // key -> { at_seq, at_ts }
 
     // 翻译模式（来自服务端 config）：auto | manual
     translateMode: "auto",
