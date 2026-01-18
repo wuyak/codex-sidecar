@@ -175,16 +175,23 @@ export async function exportThreadMarkdown(state, key, opts = {}) {
 
   const lines = [];
   lines.push(`# ${title}`);
-  if (fileBase) lines.push(`> 源文件：${fileBase}`);
   const modeLabel = mode === "quick" ? "精简" : "全量";
-  const thinkLabel = (reasoningLang === "en")
-    ? "思考：原文"
+  const thinkMode = (reasoningLang === "en")
+    ? "原文"
     : (reasoningLang === "zh" || reasoningLang === "toggle")
-      ? "思考：译文"
+      ? "译文"
       : (reasoningLang === "both")
-        ? "思考：双语"
-        : "思考：自动";
-  lines.push(`> 导出时间：${_fmtLocal(now)} · 模式：${modeLabel} · ${thinkLabel}`);
+        ? "双语"
+        : "自动";
+  const idShort = threadId ? shortId(threadId) : shortId(k);
+  lines.push("");
+  lines.push(`| 项目 | 值 |`);
+  lines.push(`| --- | --- |`);
+  if (idShort) lines.push(`| Thread | \`${idShort}\` |`);
+  if (fileBase) lines.push(`| 源文件 | \`${fileBase}\` |`);
+  lines.push(`| 导出时间 | ${_fmtLocal(now)} |`);
+  lines.push(`| 导出模式 | ${modeLabel} |`);
+  lines.push(`| 思考语言 | ${thinkMode} |`);
   lines.push("");
   lines.push("---");
   lines.push("");
@@ -216,7 +223,7 @@ export async function exportThreadMarkdown(state, key, opts = {}) {
 
   const labelBase = title ? _sanitizeFileName(title) : "";
   const idBase = _sanitizeFileName(threadId ? shortId(threadId) : (k.split("/").slice(-1)[0] || k));
-  const base = labelBase || idBase || "thread";
+  const base = labelBase ? `${labelBase}_${idBase || "thread"}` : (idBase || "thread");
   const stamp = new Date().toISOString().replaceAll(/[:.]/g, "-");
   const name = `codex-sidecar_${base}_${stamp}.md`;
   _download(name, lines.join("\n").trim() + "\n");

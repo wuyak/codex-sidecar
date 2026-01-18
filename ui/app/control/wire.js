@@ -135,7 +135,8 @@ export function wireControlEvents(dom, state, helpers) {
     try { btn.classList.toggle("active", isShown); } catch (_) {}
     try {
       const use = btn.querySelector ? btn.querySelector("use") : null;
-      if (use && use.setAttribute) use.setAttribute("href", isShown ? "#i-eye-off" : "#i-eye");
+      // 语义：开眼=当前可见；斜杠眼=当前隐藏
+      if (use && use.setAttribute) use.setAttribute("href", isShown ? "#i-eye" : "#i-eye-off");
     } catch (_) {}
     try { btn.setAttribute("aria-label", `${isShown ? "隐藏" : "显示"} ${label}`); } catch (_) {}
   };
@@ -402,6 +403,15 @@ export function wireControlEvents(dom, state, helpers) {
 
   let _bookmarkDrawerEditingKey = "";
   const _isBookmarkDrawerEditing = () => !!_bookmarkDrawerEditingKey;
+  let _bookmarkDrawerTipMs = 0;
+  const _bmTip = (el, text) => {
+    const msg = String(text || "").trim();
+    if (!msg) return;
+    const now = Date.now();
+    if (now - _bookmarkDrawerTipMs < 2200) return;
+    _bookmarkDrawerTipMs = now;
+    _toastFromEl(el, msg, { durationMs: 1400 });
+  };
   const _ensureHiddenSet = () => {
     if (!state.hiddenThreads || typeof state.hiddenThreads.add !== "function") state.hiddenThreads = new Set();
     return state.hiddenThreads;
@@ -544,6 +554,7 @@ export function wireControlEvents(dom, state, helpers) {
         renameBtn.dataset.action = "rename";
         renameBtn.setAttribute("aria-label", "重命名");
         renameBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="#i-edit"></use></svg>`;
+        try { renameBtn.addEventListener("mouseenter", () => _bmTip(renameBtn, "重命名~ (´▽｀)")); } catch (_) {}
 
         const exportBtn = document.createElement("button");
         exportBtn.className = "mini-btn";
@@ -551,6 +562,7 @@ export function wireControlEvents(dom, state, helpers) {
         exportBtn.dataset.action = "export";
         exportBtn.setAttribute("aria-label", "导出（长按设置）");
         exportBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="#i-download"></use></svg>`;
+        try { exportBtn.addEventListener("mouseenter", () => _bmTip(exportBtn, "长按：导出设置~ (￣▽￣)")); } catch (_) {}
         try {
           let pressT = 0;
           let startX = 0;
@@ -608,12 +620,13 @@ export function wireControlEvents(dom, state, helpers) {
           });
         } catch (_) {}
 
-	        const toggleBtn = document.createElement("button");
-	        toggleBtn.className = "mini-btn";
-	        toggleBtn.type = "button";
-	        toggleBtn.dataset.action = isHiddenList ? "listenOn" : "listenOff";
-	        toggleBtn.setAttribute("aria-label", isHiddenList ? "开启监听" : "关闭监听");
-	        toggleBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="${isHiddenList ? "#i-eye" : "#i-eye-closed"}"></use></svg>`;
+        const toggleBtn = document.createElement("button");
+        toggleBtn.className = "mini-btn";
+        toggleBtn.type = "button";
+        toggleBtn.dataset.action = isHiddenList ? "listenOn" : "listenOff";
+        toggleBtn.setAttribute("aria-label", isHiddenList ? "开启监听" : "关闭监听");
+        toggleBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="${isHiddenList ? "#i-eye" : "#i-eye-closed"}"></use></svg>`;
+        try { toggleBtn.addEventListener("mouseenter", () => _bmTip(toggleBtn, isHiddenList ? "开启监听" : "关闭监听")); } catch (_) {}
 
 	        actions.appendChild(renameBtn);
 	        actions.appendChild(exportBtn);
@@ -629,6 +642,12 @@ export function wireControlEvents(dom, state, helpers) {
 	        row.appendChild(main);
 	        row.appendChild(actions);
 	        frag.appendChild(row);
+          try {
+            row.addEventListener("mouseenter", () => {
+              const hint = row && row.dataset ? String(row.dataset.hint || "") : "";
+              if (hint) _bmTip(row, hint);
+            });
+          } catch (_) {}
 
           // Long press to rename (more direct than opening dialogs).
           try {

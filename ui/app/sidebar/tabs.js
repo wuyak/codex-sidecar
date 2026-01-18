@@ -81,6 +81,7 @@ function _pickFallbackKey(state, excludeKey = "") {
 }
 
 let _lastHoverTipMs = 0;
+let _lastCloseTipMs = 0;
 
 export function clearTabs(dom) {
   const host = dom.bookmarks;
@@ -248,6 +249,25 @@ function _wireBookmarkInteractions(btn) {
       _toastFromEl(btn, "左键长按：重命名~ (´▽｀)", { durationMs: 1400 });
     } catch (_) {}
   });
+
+  // Close/Hide hint (the × inside the tab).
+  try {
+    const parts = _ensureBookmarkStructure(btn);
+    const closeSpan = parts ? parts.closeSpan : null;
+    if (closeSpan && !closeSpan.__bmCloseTip) {
+      closeSpan.__bmCloseTip = true;
+      closeSpan.addEventListener("mouseenter", () => {
+        try {
+          const k = String(btn.dataset && btn.dataset.key ? btn.dataset.key : "").trim();
+          if (!k || k === "all") return;
+          const now = Date.now();
+          if (now - _lastCloseTipMs < 2200) return;
+          _lastCloseTipMs = now;
+          _toastFromEl(closeSpan, "点击 ×：关闭监听（有新输出会自动回来）", { durationMs: 1600 });
+        } catch (_) {}
+      });
+    }
+  } catch (_) {}
 
   btn.addEventListener("click", async (e) => {
     try {

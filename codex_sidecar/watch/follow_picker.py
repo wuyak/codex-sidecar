@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Pattern, Sequence, Set, Tuple
 
 from .procfs import (
-    _proc_iter_fd_targets,
+    _proc_iter_fd_targets_with_flags,
     _proc_list_pids,
     _proc_read_argv0_basename,
     _proc_read_cmdline,
@@ -289,10 +289,10 @@ class FollowPicker:
             root = self._codex_home
         for pid in pids:
             try:
-                it = _proc_iter_fd_targets(int(pid))
+                it = _proc_iter_fd_targets_with_flags(int(pid))
             except Exception:
                 continue
-            for target in it:
+            for target, flags in it:
                 try:
                     if not target or "sessions" not in target or "rollout-" not in target or not target.endswith(".jsonl"):
                         continue
@@ -301,6 +301,15 @@ class FollowPicker:
                         continue
                     if not cand.exists() or not cand.is_file():
                         continue
+                    # Prefer rollout files that are actually being written by Codex.
+                    # Some processes may open historical sessions read-only; treat those as non-active.
+                    if isinstance(flags, int) and flags >= 0:
+                        try:
+                            accmode = int(flags) & int(getattr(os, "O_ACCMODE", 3))
+                            if accmode not in (int(getattr(os, "O_WRONLY", 1)), int(getattr(os, "O_RDWR", 2))):
+                                continue
+                        except Exception:
+                            pass
                     # Keep it inside CODEX_HOME as much as possible (avoid false positives).
                     try:
                         cand_r = cand.resolve()

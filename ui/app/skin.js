@@ -1,16 +1,22 @@
 const _LS_SKIN = "codex_sidecar_ui_skin";
 const _SKIN_LABEL = {
   default: "默认",
+  paper: "纸感",
+  grid: "网格",
   soft: "柔和",
   contrast: "对比",
   flat: "扁平",
   dark: "深色",
+  night: "夜幕",
 };
 
 function _sanitize(v) {
   const s = String(v || "").trim().toLowerCase();
+  if (s === "paper") return "paper";
+  if (s === "grid") return "grid";
   if (s === "flat") return "flat";
   if (s === "dark") return "dark";
+  if (s === "night") return "night";
   if (s === "soft") return "soft";
   if (s === "contrast") return "contrast";
   return "default";
