@@ -266,7 +266,7 @@
 		      #bookmarks .bm-rail .bookmark.has-unread::after { right: 30px; }
 		      #bookmarks .bm-rail .bookmark[data-key="all"].has-unread::after { right: 8px; }
 
-					      #main { margin: 16px; padding-bottom: calc(16px + var(--safe-bottom) + var(--tabs-bar-h) + 10px); padding-right: var(--content-safe-right); }
+					      #main { margin: 16px; padding-bottom: calc(16px + var(--safe-bottom) + var(--tabs-bar-h) + 4px); padding-right: var(--content-safe-right); }
 		      .row { border: 1px solid var(--c-border); border-left: 4px solid rgba(148, 163, 184, .55); border-radius: 12px; padding: 12px; margin: 10px 0; background: var(--c-surface); box-shadow: var(--shadow-sm); }
 			      #topbar.row { border: none; border-radius: 0; background: transparent; box-shadow: none; padding: 0; margin: 14px 0 14px; display:flex; align-items:center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 			      #topbar .top-title { font-size: calc(var(--ui-font-size, 14px) + 4px); font-weight: 900; }
