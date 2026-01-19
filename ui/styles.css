@@ -711,7 +711,10 @@
 				      .confirm-dialog-form { padding: 12px 12px 10px; }
 				      .confirm-dialog-title { font-weight: 900; }
 				      .confirm-dialog-desc { margin-top: 8px; }
-				      .tool-card { background: var(--c-soft-2); border: 1px solid var(--c-border); border-radius: 10px; padding: 10px; margin-top: 8px; }
+				      /* Tool blocks: keep the code block as the only "card" (pure dark pre), avoid extra outer frame. */
+				      .tool-card { background: transparent; border: none; border-radius: 0; padding: 0; margin-top: 8px; }
+				      .tool-card pre.code { margin: 0; }
+				      .tool-card .change-head { margin: 0 0 8px; }
 		      .tool-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
 		      .tool-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 		      .tool-toggle { border: 1px solid var(--c-border); background: var(--c-surface); padding: 2px 8px; border-radius: 999px; cursor:pointer; font-size: 12px; color: var(--c-muted); box-shadow: 0 1px 0 rgba(15,23,42,.04); }
