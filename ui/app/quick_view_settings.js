@@ -137,44 +137,42 @@ function _render(dom, state, enabled) {
   const list = dom && dom.quickBlockList ? dom.quickBlockList : null;
   if (!list) return;
 
-  try { list.innerHTML = ""; } catch (_) {}
+  try { list.replaceChildren(); } catch (_) { try { list.innerHTML = ""; } catch (_) {} }
 
   const on = enabled instanceof Set ? enabled : new Set();
   _updateSummary(dom, on);
 
   for (const b of _BLOCKS) {
-    const row = document.createElement("label");
-    row.className = "qk-item";
-    const input = document.createElement("input");
-    input.type = "checkbox";
-    input.className = "qk-check";
-    input.checked = on.has(b.id);
-    input.dataset.qk = b.id;
-    const mark = document.createElement("span");
-    mark.className = "qk-mark";
-    mark.setAttribute("aria-hidden", "true");
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "qk-row";
+    row.dataset.qk = b.id;
+    row.setAttribute("aria-pressed", on.has(b.id) ? "true" : "false");
+    const dot = document.createElement("span");
+    dot.className = "qk-dot";
+    dot.setAttribute("aria-hidden", "true");
     const name = document.createElement("span");
     name.className = "qk-name";
     name.textContent = b.label;
     const meta = document.createElement("span");
     meta.className = "meta qk-kind";
     meta.textContent = b.id;
-    row.appendChild(input);
-    row.appendChild(mark);
+    row.appendChild(dot);
     row.appendChild(name);
     row.appendChild(meta);
     list.appendChild(row);
 
-    input.addEventListener("change", () => {
-      const id = String(input.dataset.qk || "").trim();
+    row.addEventListener("click", () => {
+      const id = String(row.dataset.qk || "").trim();
       if (!id) return;
       _setError(dom, "");
-      if (input.checked) on.add(id);
-      else on.delete(id);
+      if (on.has(id)) on.delete(id);
+      else on.add(id);
       _applyQuickStyle(on);
       try { if (state && state.quickViewBlocks) state.quickViewBlocks = new Set(on); } catch (_) {}
       const ok = _saveEnabled(on);
       if (!ok) _setError(dom, "保存失败：无法写入本机 localStorage");
+      try { row.setAttribute("aria-pressed", on.has(id) ? "true" : "false"); } catch (_) {}
       _updateSummary(dom, on);
     });
   }
