@@ -158,11 +158,6 @@
 						          </div>
 						          <div class="meta">并行会话</div><div><input id="maxSessions" type="number" min="1" step="1" /></div>
 					          <div class="meta">回放行数</div><div><input id="replayLines" type="number" min="0" step="1" /></div>
-						          <div class="meta">导出默认</div>
-						          <div id="exportOptions" class="check-row">
-						            <label class="check"><input id="exportQuick" type="checkbox" checked />精简模式</label>
-						            <label class="check"><input id="exportTranslate" type="checkbox" checked />翻译</label>
-						          </div>
 					        </div>
 				        <div class="meta" style="margin-top:6px;">
 				          提示：选择后会播放预览。
@@ -341,9 +336,20 @@
 						      <div class="drawer-head">
 						        <div class="title">会话管理</div>
 						        <button id="bookmarkDrawerCloseBtn" class="drawer-close" type="button" aria-label="关闭">×</button>
-							      </div>
-							      <div class="drawer-sec">
+						      </div>
+						      <div class="drawer-sec">
 							        <div id="bookmarkList" class="tabs" style="margin-top:10px;"></div>
+							        <details id="exportPrefsDetails" class="drawer-details" style="margin-top:10px;">
+							          <summary class="meta">导出设置 <span id="exportPrefsSummary" class="pill">—</span></summary>
+							          <div class="meta" style="margin-top:8px; line-height:1.6;">
+							            当前会话：<span id="exportPrefsThread" class="pill">—</span><br>
+							            提示：点击导出图标直接导出；长按导出图标打开本设置。
+							          </div>
+							          <div class="check-row" style="margin-top:10px;">
+							            <label class="check"><input id="exportPrefsQuick" type="checkbox" />精简</label>
+							            <label class="check"><input id="exportPrefsTranslate" type="checkbox" />译文</label>
+							          </div>
+							        </details>
 							        <details id="bookmarkHiddenDetails" class="drawer-details" style="margin-top:10px;">
 							          <summary class="meta">已关闭监听 <span id="bookmarkHiddenCount" class="pill">0</span></summary>
 							          <div id="bookmarkHiddenList" class="tabs" style="margin-top:10px;"></div>

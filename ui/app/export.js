@@ -1,5 +1,20 @@
 import { getCustomLabel } from "./sidebar/labels.js";
-import { keyOf, shortId } from "./utils.js";
+import { extractJsonOutputString, keyOf, safeJsonParse, shortId } from "./utils.js";
+import { getExportPrefsForKey } from "./export_prefs.js";
+import {
+  extractExitCode,
+  extractOutputBody,
+  firstMeaningfulLine,
+  formatApplyPatchRun,
+  formatOutputTree,
+  formatShellRun,
+  formatShellRunExpanded,
+  inferToolName,
+  normalizeNonEmptyLines,
+  parseToolCallText,
+  parseToolOutputText,
+  statusIcon,
+} from "./format.js";
 
 function _extractUuid(s) {
   const raw = String(s || "");
@@ -139,6 +154,176 @@ function _safeCodeFence(text, lang = "text") {
   return `${fence}${info ? info : ""}\n${src}\n${fence}`;
 }
 
+const _DEFAULT_QUICK_BLOCKS = new Set(["user_message", "assistant_message", "reasoning_summary", "tool_gate", "update_plan"]);
+
+function _getQuickBlocks(state) {
+  try {
+    const raw = state && state.quickViewBlocks ? state.quickViewBlocks : null;
+    if (raw instanceof Set && raw.size > 0) return new Set(raw);
+    if (Array.isArray(raw) && raw.length > 0) return new Set(raw.map((x) => String(x || "").trim()).filter(Boolean));
+  } catch (_) {}
+  return new Set(_DEFAULT_QUICK_BLOCKS);
+}
+
+function _extractUpdatePlanFromParallelArgs(argsObj) {
+  try {
+    if (!argsObj || typeof argsObj !== "object") return null;
+    const uses = Array.isArray(argsObj.tool_uses) ? argsObj.tool_uses : [];
+    for (const it of uses) {
+      if (!it || typeof it !== "object") continue;
+      const rn = String(it.recipient_name || it.tool || it.name || "").trim();
+      if (!rn) continue;
+      const norm = rn.replace(/^functions\./, "").replace(/^multi_tool_use\./, "");
+      if (norm === "update_plan" || norm.endsWith(".update_plan")) {
+        const p = it.parameters;
+        if (p && typeof p === "object") return p;
+      }
+    }
+  } catch (_) {}
+  return null;
+}
+
+function _classifyToolCallText(text) {
+  const parsed = parseToolCallText(text || "");
+  const argsRaw = String(parsed.argsRaw || "").trimEnd();
+  const argsObj = safeJsonParse(argsRaw);
+  const toolName = inferToolName(parsed.toolName || "", argsRaw, argsObj) || String(parsed.toolName || "");
+  const callId = String(parsed.callId || "").trim();
+
+  let planArgs = null;
+  let isPlanUpdate = false;
+  try {
+    if (toolName === "parallel") {
+      planArgs = _extractUpdatePlanFromParallelArgs(argsObj);
+      isPlanUpdate = !!planArgs || String(argsRaw || "").includes("update_plan");
+    }
+  } catch (_) {}
+  if (toolName === "update_plan") {
+    isPlanUpdate = true;
+    if (argsObj && typeof argsObj === "object") planArgs = argsObj;
+  }
+
+  return { toolName, callId, argsRaw, argsObj, isPlanUpdate, planArgs };
+}
+
+function _renderUpdatePlan(planArgs) {
+  const p = (planArgs && typeof planArgs === "object") ? planArgs : null;
+  if (!p) return "";
+  const rawExplain = (typeof p.explanation === "string") ? p.explanation : "";
+  const explanation = String(rawExplain || "").trim();
+  const plan = Array.isArray(p.plan) ? p.plan : [];
+  const items = [];
+  for (const it of plan) {
+    if (!it || typeof it !== "object") continue;
+    const st = statusIcon(it.status);
+    const step = String(it.step || "").trim();
+    if (!step) continue;
+    items.push(`${st} ${step}`);
+  }
+  const lines = items.length ? items : ["（无变更）"];
+  const parts = [
+    "**更新计划**",
+    "```text",
+    ...lines,
+    "```",
+  ];
+  if (explanation) parts.push("", "**说明**", explanation);
+  return parts.join("\n").trimEnd();
+}
+
+function _extractApplyPatchFromShellCommand(cmdFull) {
+  const lines = String(cmdFull ?? "").split("\n");
+  let start = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const t = String(lines[i] ?? "").trimStart();
+    if (t.startsWith("*** Begin Patch")) { start = i; break; }
+  }
+  if (start < 0) return "";
+  let end = -1;
+  for (let i = lines.length - 1; i >= start; i--) {
+    const t = String(lines[i] ?? "").trimStart();
+    if (t.startsWith("*** End Patch")) { end = i; break; }
+  }
+  if (end < 0) end = lines.length - 1;
+  return lines.slice(start, end + 1).join("\n").trim();
+}
+
+function _details(summary, body) {
+  const s = String(summary || "详情").trim() || "详情";
+  const b = String(body || "").trimEnd();
+  return ["<details>", `<summary>${s}</summary>`, "", b, "", "</details>"].join("\n").trimEnd();
+}
+
+function _isSuppressedToolCallTool(toolName) {
+  const t = String(toolName || "").trim();
+  return t === "shell_command" || t === "apply_patch" || t === "view_image";
+}
+
+function _renderToolCallMd(tc) {
+  if (!tc || typeof tc !== "object") return "";
+  if (tc.isPlanUpdate) return _renderUpdatePlan(tc.planArgs);
+  const tool = String(tc.toolName || "").trim();
+  const pretty = tc.argsObj ? JSON.stringify(tc.argsObj, null, 2) : String(tc.argsRaw || "").trimEnd();
+  const lang = tc.argsObj ? "json" : "text";
+  const head = tool ? `**${tool}**\n\n` : "";
+  return `${head}${_safeCodeFence(pretty || "", lang)}`.trimEnd();
+}
+
+function _renderToolOutputMd(outputRaw, meta) {
+  const raw = String(outputRaw || "");
+  const toolName = String(meta && meta.tool_name ? meta.tool_name : "").trim();
+  const argsObj = meta && meta.args_obj ? meta.args_obj : null;
+  const argsRaw = String(meta && meta.args_raw ? meta.args_raw : "").trimEnd();
+
+  const exitCode = extractExitCode(raw);
+  const outputBody = extractOutputBody(raw);
+
+  if (toolName === "shell_command") {
+    const cmdFull = (argsObj && typeof argsObj === "object") ? String(argsObj.command || "") : "";
+    const runShort = formatShellRun(cmdFull, outputBody, exitCode);
+    const runLong = formatShellRunExpanded(cmdFull, outputBody, exitCode);
+    const patchText = _extractApplyPatchFromShellCommand(cmdFull);
+    const blocks = [];
+    if (runShort) blocks.push(_safeCodeFence(runShort, "text"));
+    const detailParts = [];
+    if (runLong && runLong !== runShort) detailParts.push(_safeCodeFence(runLong, "text"));
+    if (patchText) detailParts.push(_safeCodeFence(patchText, "diff"));
+    if (detailParts.length) blocks.push(_details("详情", detailParts.join("\n\n")));
+    return blocks.join("\n\n").trimEnd();
+  }
+
+  if (toolName === "apply_patch") {
+    const runShort = formatApplyPatchRun(argsRaw, outputBody, 8);
+    const runLong = formatApplyPatchRun(argsRaw, outputBody, 200);
+    const patchText = String(argsRaw || "").trim();
+    const blocks = [];
+    if (runShort) blocks.push(_safeCodeFence(runShort, "text"));
+    const detailParts = [];
+    if (runLong && runLong !== runShort) detailParts.push(_safeCodeFence(runLong, "text"));
+    if (patchText) detailParts.push(_safeCodeFence(patchText, "diff"));
+    if (detailParts.length) blocks.push(_details("详情", detailParts.join("\n\n")));
+    return blocks.join("\n\n").trimEnd();
+  }
+
+  if (toolName === "view_image") {
+    const p = (argsObj && typeof argsObj === "object") ? String(argsObj.path || "") : "";
+    const base = (p.split(/[\\/]/).pop() || "").trim();
+    const first = firstMeaningfulLine(outputBody) || "attached local image";
+    const line = `• ${first}${base ? `: ${base}` : ``}`;
+    return _safeCodeFence(line, "text");
+  }
+
+  const header = `• ${toolName || "tool_output"}`;
+  const jsonOut = extractJsonOutputString(outputBody);
+  const lines = normalizeNonEmptyLines(jsonOut || outputBody);
+  const runShort = formatOutputTree(header, lines, 10);
+  const runLong = formatOutputTree(header, lines, 120);
+  const blocks = [];
+  if (runShort) blocks.push(_safeCodeFence(runShort, "text"));
+  if (runLong && runLong !== runShort) blocks.push(_details("详情", _safeCodeFence(runLong, "text")));
+  return blocks.join("\n\n").trimEnd();
+}
+
 async function _ensureReasoningTranslated({ messages, threadId, maxN = 6, waitMs = 4500 }) {
   const arr = Array.isArray(messages) ? messages : [];
   const needs = arr
@@ -239,34 +424,20 @@ function _download(name, text) {
 }
 
 export async function exportThreadMarkdown(state, key, opts = {}) {
-  // 兼容：调用方未传 opts 时，使用本地导出偏好（精简/翻译）。
-  // 导出偏好由 UI 写入 localStorage（wire.js），这里做兜底读取，避免“设置不生效”。
-  try {
-    if (opts && (opts.mode == null || opts.reasoningLang == null) && typeof localStorage !== 'undefined') {
-      const _bool = (v, fallback) => {
-        if (v == null) return fallback;
-        const s = String(v).trim().toLowerCase();
-        if (s === '1' || s === 'true' || s === 'yes' || s === 'on') return true;
-        if (s === '0' || s === 'false' || s === 'no' || s === 'off') return false;
-        return fallback;
-      };
-
-      const quickPref = _bool(localStorage.getItem('codex_sidecar_export_quick_v1'), true);
-      const translatePref = _bool(localStorage.getItem('codex_sidecar_export_translate_v1'), true);
-
-      if (opts.mode == null) opts.mode = quickPref ? 'quick' : 'full';
-      if (opts.reasoningLang == null) opts.reasoningLang = translatePref ? 'both' : 'en';
-    }
-  } catch (e) {
-    // ignore
-  }
-
   const k = String(key || "").trim();
   if (!k || k === "all") return { ok: false, error: "select_thread" };
+  // 兼容：调用方未传 opts 时，使用会话级导出偏好（精简/译文）。
+  try {
+    if (opts && (opts.mode == null || opts.reasoningLang == null)) {
+      const p = getExportPrefsForKey(k);
+      if (opts.mode == null) opts.mode = p.quick ? "quick" : "full";
+      if (opts.reasoningLang == null) opts.reasoningLang = p.translate ? "zh" : "en";
+    }
+  } catch (_) {}
 
   const mode = String(opts.mode || "").trim().toLowerCase() === "full" ? "full" : "quick";
-  const allowKindsQuick = new Set(["user_message", "assistant_message"]);
   const reasoningLang = String(opts.reasoningLang || "auto").trim().toLowerCase();
+  const quickBlocks = _getQuickBlocks(state);
 
   let messages = [];
   const thread = (state && state.threadIndex && typeof state.threadIndex.get === "function")
@@ -286,11 +457,22 @@ export async function exportThreadMarkdown(state, key, opts = {}) {
   const selected = threadId ? messages : messages.filter(m => keyOf(m) === k);
   selected.sort((a, b) => (Number(a && a.seq) || 0) - (Number(b && b.seq) || 0));
 
+  // Build a minimal call index for tool_output rendering (mirrors UI behavior).
+  const callMeta = new Map(); // call_id -> { tool_name, args_raw, args_obj }
+  for (const m of selected) {
+    const kind = String(m && m.kind ? m.kind : "");
+    if (kind !== "tool_call") continue;
+    const tc = _classifyToolCallText(m && m.text ? m.text : "");
+    if (!tc.callId) continue;
+    callMeta.set(tc.callId, { tool_name: tc.toolName, args_raw: tc.argsRaw, args_obj: tc.argsObj });
+  }
+
   // If user asked for translated thinking but we don't have zh yet, try to translate on export.
   // This makes “翻译”导出选项真正有差异（而不是取决于你之前是否点过某条思考）。
   let translateStat = null;
   try {
-    if (reasoningLang !== "en") {
+    const needThinking = (mode === "full") || (quickBlocks && quickBlocks.has("reasoning_summary"));
+    if (needThinking && reasoningLang !== "en") {
       translateStat = await _ensureReasoningTranslated({ messages: selected, threadId, maxN: 6, waitMs: 4500 });
       if (translateStat && translateStat.filled >= 1) {
         const url = threadId ? `/api/messages?thread_id=${encodeURIComponent(threadId)}&t=${Date.now()}` : `/api/messages?t=${Date.now()}`;
@@ -342,33 +524,72 @@ export async function exportThreadMarkdown(state, key, opts = {}) {
   let idx = 0;
   for (const m of selected) {
     const kind = String(m && m.kind ? m.kind : "");
-    if (mode === "quick" && !allowKindsQuick.has(kind)) continue;
-    idx += 1;
-    const kindName = _kindLabel(kind);
+
+    // Quick-mode filtering mirrors UI quick-view blocks.
+    if (mode === "quick") {
+      if (kind === "user_message" && !quickBlocks.has("user_message")) continue;
+      if (kind === "assistant_message" && !quickBlocks.has("assistant_message")) continue;
+      if (kind === "reasoning_summary" && !quickBlocks.has("reasoning_summary")) continue;
+      if (kind === "tool_gate" && !quickBlocks.has("tool_gate")) continue;
+      if (kind === "tool_call") {
+        const tc0 = _classifyToolCallText(m && m.text ? m.text : "");
+        if (_isSuppressedToolCallTool(tc0.toolName)) continue; // UI never shows these tool_call rows
+        if (tc0.isPlanUpdate) {
+          if (!quickBlocks.has("update_plan")) continue;
+        } else {
+          if (!quickBlocks.has("tool_call")) continue;
+        }
+      }
+      if (kind === "tool_output" && !quickBlocks.has("tool_output")) {
+        // Rare fallback: some environments may lose tool_name but still emit a plan update output.
+        const po0 = parseToolOutputText(m && m.text ? m.text : "");
+        const body0 = extractOutputBody(String(po0.outputRaw || ""));
+        const isPlanUpdated = String(body0 || "").trim() === "Plan updated";
+        if (!(isPlanUpdated && quickBlocks.has("update_plan"))) continue;
+      }
+      // Unknown kinds are hidden in quick mode.
+      if (!["user_message", "assistant_message", "reasoning_summary", "tool_gate", "tool_call", "tool_output"].includes(kind)) continue;
+    }
+
     const tsLocal = _fmtMaybeLocal(m && m.ts ? m.ts : "");
-    const head = `## ${idx}. ${kindName}${tsLocal ? ` · ${tsLocal}` : ""}`;
 
     let text = "";
+    let kindName = _kindLabel(kind);
     if (kind === "reasoning_summary") {
       text = _renderReasoning(m, { lang: reasoningLang });
+    } else if (kind === "tool_call") {
+      const tc = _classifyToolCallText(m && m.text ? m.text : "");
+      if (_isSuppressedToolCallTool(tc.toolName)) continue; // mirror UI: tool_output already carries the useful summary
+      kindName = tc.isPlanUpdate ? "更新计划" : `${_kindLabel(kind)}${tc.toolName ? ` · ${tc.toolName}` : ""}`;
+      text = _renderToolCallMd(tc);
+    } else if (kind === "tool_output") {
+      const po = parseToolOutputText(m && m.text ? m.text : "");
+      const callId = String(po.callId || "").trim();
+      const meta = callId ? callMeta.get(callId) : null;
+      const toolName = String(meta && meta.tool_name ? meta.tool_name : "").trim();
+      const outputBody = extractOutputBody(String(po.outputRaw || ""));
+
+      // Mirror UI: update_plan tool_output is redundant (already shown in tool_call as "更新计划").
+      if (toolName === "update_plan") continue;
+      if (!toolName && String(outputBody || "").trim() === "Plan updated") {
+        kindName = "更新计划";
+        text = ["**更新计划**", "```text", "- Plan updated", "```"].join("\n");
+      } else {
+        kindName = `${_kindLabel(kind)}${toolName ? ` · ${toolName}` : ""}`;
+        text = _renderToolOutputMd(po.outputRaw || "", meta);
+      }
     } else {
       const raw = String((m && m.text) ? m.text : "").trimEnd();
-      if (mode === "full" && (kind === "tool_call" || kind === "tool_output")) {
-        text = _safeCodeFence(raw, "text");
-      } else {
-        text = _balanceFences(raw);
-      }
+      text = _balanceFences(raw);
     }
+    idx += 1;
+    const head = `## ${idx}. ${kindName}${tsLocal ? ` · ${tsLocal}` : ""}`;
     sections.push([head, "", text || ""].join("\n").trimEnd());
   }
   lines.push(sections.join("\n\n---\n\n"));
 
-  const labelBase = custom ? _sanitizeFileName(custom) : "";
-  const idForName = threadId ? _shortIdForFile(threadId) : _shortIdForFile(_extractUuid(k) || (k.split("/").slice(-1)[0] || k));
-  const idBase = _sanitizeFileName(idForName);
-  const base = labelBase ? `${labelBase}_${idBase || "thread"}` : (idBase || "thread");
-  const stamp = new Date().toISOString().replaceAll(/[:.]/g, "-");
-  const name = `codex-sidecar_${base}_${stamp}.md`;
+  const safeTitle = _sanitizeFileName(title) || "导出";
+  const name = `${safeTitle}.md`;
   const _cls = (s) => {
     const t = (s ?? "").trim();
     if (!t) return "blank";
@@ -425,7 +646,7 @@ export async function exportThreadMarkdown(state, key, opts = {}) {
   while (bodyLines.length && !bodyLines[bodyLines.length - 1].trim()) bodyLines.pop();
 
   _download(name, bodyLines.join("\n") + "\n");
-  return { ok: true, mode, count: selected.length, translated: translateStat };
+  return { ok: true, mode, count: sections.length, translated: translateStat };
 }
 
 export async function exportCurrentThreadMarkdown(state, opts = {}) {

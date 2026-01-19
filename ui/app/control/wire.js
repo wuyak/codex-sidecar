@@ -10,6 +10,7 @@ import { buildThinkingMetaRight } from "../thinking/meta.js";
 import { maybePlayNotifySound, preloadNotifySound } from "../sound.js";
 import { colorForKey, rolloutStampFromFile, shortId } from "../utils.js";
 import { exportThreadMarkdown } from "../export.js";
+import { getExportPrefsForKey, setExportPrefsForKey } from "../export_prefs.js";
 import { getCustomLabel, setCustomLabel } from "../sidebar/labels.js";
 import { saveClosedThreads } from "../closed_threads.js";
 import { saveHiddenThreads } from "../sidebar/hidden.js";
@@ -23,8 +24,6 @@ export function wireControlEvents(dom, state, helpers) {
   const MASK = "********";
   const _LS_UI_FONT = "codex_sidecar_ui_font_size";
   const _LS_UI_BTN = "codex_sidecar_ui_btn_size";
-  const _LS_EXPORT_QUICK = "codex_sidecar_export_quick_v1";
-  const _LS_EXPORT_TRANSLATE = "codex_sidecar_export_translate_v1";
   const _LS_TABS_COLLAPSED = "codex_sidecar_tabs_collapsed_v1";
 
   const _applyUiFontSize = (px) => {
@@ -349,45 +348,81 @@ export function wireControlEvents(dom, state, helpers) {
       if (e && String(e.key || "") === "Enter") { try { e.preventDefault(); } catch (_) {} try { dom.uiFontSize.blur(); } catch (_) {} }
     });
   }
-  if (dom.uiBtnSize) {
-    dom.uiBtnSize.addEventListener("input", () => _applyUiBtnDraft());
-    dom.uiBtnSize.addEventListener("change", () => _applyUiBtnInput(false));
-    dom.uiBtnSize.addEventListener("keydown", (e) => {
-      if (e && String(e.key || "") === "Enter") { try { e.preventDefault(); } catch (_) {} try { dom.uiBtnSize.blur(); } catch (_) {} }
-    });
-  }
+	  if (dom.uiBtnSize) {
+	    dom.uiBtnSize.addEventListener("input", () => _applyUiBtnDraft());
+	    dom.uiBtnSize.addEventListener("change", () => _applyUiBtnInput(false));
+	    dom.uiBtnSize.addEventListener("keydown", (e) => {
+	      if (e && String(e.key || "") === "Enter") { try { e.preventDefault(); } catch (_) {} try { dom.uiBtnSize.blur(); } catch (_) {} }
+	    });
+	  }
 
-  const _getExportPrefs = () => {
-    const quick = _readSavedBool(_LS_EXPORT_QUICK, true);
-    const translate = _readSavedBool(_LS_EXPORT_TRANSLATE, true);
-    return { quick, translate };
-  };
+	  // 标签栏收起状态（由会话菜单长按切换）
+	  _applyTabsCollapsedLocal(_readSavedBool(_LS_TABS_COLLAPSED, false), null, true);
 
-  const _syncExportPrefsUI = (silent = true) => {
-    const p = _getExportPrefs();
-    try { if (dom.exportQuick) dom.exportQuick.checked = !!p.quick; } catch (_) {}
-    try { if (dom.exportTranslate) dom.exportTranslate.checked = !!p.translate; } catch (_) {}
-    if (!silent) {
-      try { _toastFromEl(dom.exportOptions || dom.exportQuick, `导出：${p.quick ? "精简" : "全量"} · ${p.translate ? "含翻译" : "仅原文"}`, { durationMs: 1400 }); } catch (_) {}
-    }
-    return p;
-  };
+	  // 导出偏好：会话级（每个会话可单独设置 精简/全量、译文/原文）。
+	  let _exportPrefsKey = "";
+	  const _sanitizeExportPrefsKey = (v) => {
+	    const s = String(v || "").trim();
+	    return (!s || s === "all") ? "" : s;
+	  };
+	  const _exportPrefsText = (p) => `${p && p.quick ? "精简" : "全量"} · ${p && p.translate ? "译文" : "原文"}`;
 
-  _syncExportPrefsUI(true);
+	  const _syncExportPrefsPanel = (key, labelText = "", silent = true) => {
+	    const k = _sanitizeExportPrefsKey(key) || _sanitizeExportPrefsKey(_exportPrefsKey) || _sanitizeExportPrefsKey(state.currentKey);
+	    const details = dom && dom.exportPrefsDetails ? dom.exportPrefsDetails : null;
+	    if (!details) return null;
+	    if (!k) {
+	      try { details.style.display = "none"; } catch (_) {}
+	      return null;
+	    }
+	    try { details.style.display = ""; } catch (_) {}
+	    _exportPrefsKey = k;
+	    const p = getExportPrefsForKey(k);
+	    try { if (dom.exportPrefsThread) dom.exportPrefsThread.textContent = labelText || (getCustomLabel(k) || k); } catch (_) {}
+	    try { if (dom.exportPrefsQuick) dom.exportPrefsQuick.checked = !!p.quick; } catch (_) {}
+	    try { if (dom.exportPrefsTranslate) dom.exportPrefsTranslate.checked = !!p.translate; } catch (_) {}
+	    try { if (dom.exportPrefsSummary) dom.exportPrefsSummary.textContent = _exportPrefsText(p); } catch (_) {}
+	    if (!silent) {
+	      try { _toastFromEl(details, `导出：${_exportPrefsText(p)}`, { durationMs: 1400 }); } catch (_) {}
+	    }
+	    return p;
+	  };
 
-  // 标签栏收起状态（由会话菜单长按切换）
-  _applyTabsCollapsedLocal(_readSavedBool(_LS_TABS_COLLAPSED, false), null, true);
+	  const _openExportPrefsPanel = (key, labelText = "") => {
+	    try { openBookmarkDrawer(dom); } catch (_) {}
+	    const p = _syncExportPrefsPanel(key, labelText, true);
+	    try { if (dom.exportPrefsDetails) dom.exportPrefsDetails.open = true; } catch (_) {}
+	    try {
+	      setTimeout(() => {
+	        try { if (dom.exportPrefsDetails && dom.exportPrefsDetails.scrollIntoView) dom.exportPrefsDetails.scrollIntoView({ block: "center" }); } catch (_) {}
+	      }, 0);
+	    } catch (_) {}
+	    return p;
+	  };
 
-  if (dom.exportQuick) dom.exportQuick.addEventListener("change", () => {
-    const v = !!dom.exportQuick.checked;
-    try { localStorage.setItem(_LS_EXPORT_QUICK, v ? "1" : "0"); } catch (_) {}
-    _syncExportPrefsUI(false);
-  });
-  if (dom.exportTranslate) dom.exportTranslate.addEventListener("change", () => {
-    const v = !!dom.exportTranslate.checked;
-    try { localStorage.setItem(_LS_EXPORT_TRANSLATE, v ? "1" : "0"); } catch (_) {}
-    _syncExportPrefsUI(false);
-  });
+	  const _wireExportPrefsPanel = () => {
+	    const quickEl = dom && dom.exportPrefsQuick ? dom.exportPrefsQuick : null;
+	    const trEl = dom && dom.exportPrefsTranslate ? dom.exportPrefsTranslate : null;
+	    if (!quickEl && !trEl) return;
+	    const onChange = (sourceEl) => {
+	      const k = _sanitizeExportPrefsKey(_exportPrefsKey) || _sanitizeExportPrefsKey(state.currentKey);
+	      if (!k) return;
+	      const cur = getExportPrefsForKey(k);
+	      const next = {
+	        quick: quickEl ? !!quickEl.checked : !!cur.quick,
+	        translate: trEl ? !!trEl.checked : !!cur.translate,
+	      };
+	      const p = setExportPrefsForKey(k, next);
+	      _syncExportPrefsPanel(k, "", true);
+	      try { if (sourceEl) _toastFromEl(sourceEl, `导出：${_exportPrefsText(p)}`, { durationMs: 1400 }); } catch (_) {}
+	    };
+	    try { if (quickEl) quickEl.addEventListener("change", () => onChange(quickEl)); } catch (_) {}
+	    try { if (trEl) trEl.addEventListener("change", () => onChange(trEl)); } catch (_) {}
+
+	    try { _syncExportPrefsPanel(state.currentKey, "", true); } catch (_) {}
+	  };
+
+	  _wireExportPrefsPanel();
 
   if (dom.configToggleBtn) dom.configToggleBtn.addEventListener("click", () => {
     try {
@@ -609,17 +644,12 @@ export function wireControlEvents(dom, state, helpers) {
             startX = Number(e && e.clientX) || 0;
             startY = Number(e && e.clientY) || 0;
             if (pressT) { try { clearTimeout(pressT); } catch (_) {} }
-            pressT = window.setTimeout(() => {
-              if (!pressed || moved) return;
-              longFired = true;
-              try { openDrawer(dom); } catch (_) {}
-              try {
-                setTimeout(() => {
-                  try { if (dom.exportOptions && dom.exportOptions.scrollIntoView) dom.exportOptions.scrollIntoView({ block: "center" }); } catch (_) {}
-                }, 0);
-              } catch (_) {}
-            }, LONG_MS);
-          });
+	            pressT = window.setTimeout(() => {
+	              if (!pressed || moved) return;
+	              longFired = true;
+	              try { _openExportPrefsPanel(String(it.key || ""), String(it.label || "")); } catch (_) {}
+	            }, LONG_MS);
+	          });
           exportBtn.addEventListener("pointermove", (e) => {
             if (!pressed) return;
             const x = Number(e && e.clientX) || 0;
@@ -896,15 +926,15 @@ export function wireControlEvents(dom, state, helpers) {
 	    if (btn && btn.dataset) {
 	      const action = String(btn.dataset.action || "");
 	      try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
-	      if (action === "rename") { _enterInlineRename(row, key); return; }
-	      if (action === "export") {
-        const p = _getExportPrefs();
-        const mode = p.quick ? "quick" : "full";
-        const reasoningLang = p.translate ? "zh" : "en";
-        const r = await exportThreadMarkdown(state, key, { mode, reasoningLang });
-	        _toastFromEl(btn, r && r.ok ? "已导出" : "导出失败");
-	        return;
-	      }
+		      if (action === "rename") { _enterInlineRename(row, key); return; }
+		      if (action === "export") {
+	        const p = getExportPrefsForKey(key);
+	        const mode = p.quick ? "quick" : "full";
+	        const reasoningLang = p.translate ? "zh" : "en";
+	        const r = await exportThreadMarkdown(state, key, { mode, reasoningLang });
+		        _toastFromEl(btn, r && r.ok ? "已导出" : "导出失败");
+		        return;
+		      }
 	      if (action === "listenOff") {
 	        const hidden = _ensureHiddenSet();
 	        if (!hidden.has(key)) hidden.add(key);
