@@ -72,4 +72,13 @@
 - 202601172126_repo_cleanup_old_archive
 - 202601172128_nvidia_translate_migration_guide
 - 202601172149_repo_flatten_phase2
-- 202601172128_nvidia_translate_migration_guide
+- 202601190815_ui_hint_cleanup
+- 202601190839_ui_remove_hover_hint
+- 202601190919_ui_theme_sound_overhaul
+- 202601191316_ui_export_session_prefs
+- 202601191500_ui_bookmark_drawer_hover_actions
+- 202601191511_restore_bookmark_drawer_info
+- 202601191523_export_markdown_polish
+- 202601191539_quickview_hover_kind
+- 202601191559_bookmark_drawer_button_titles
+- 202601191640_export_md_fix
