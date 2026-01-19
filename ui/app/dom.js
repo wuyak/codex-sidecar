@@ -15,8 +15,6 @@ export function getDom() {
     bookmarkHiddenList: byId("bookmarkHiddenList"),
     exportPrefsDialog: byId("exportPrefsDialog"),
     exportPrefsDialogCloseBtn: byId("exportPrefsDialogCloseBtn"),
-    exportPrefsSummary: byId("exportPrefsSummary"),
-    exportPrefsThread: byId("exportPrefsThread"),
     exportPrefsQuickBtn: byId("exportPrefsQuickBtn"),
     exportPrefsTranslateBtn: byId("exportPrefsTranslateBtn"),
 

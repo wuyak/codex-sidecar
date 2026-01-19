@@ -426,14 +426,13 @@ export function wireControlEvents(dom, state, helpers) {
 	  };
 	  const _exportPrefsText = (p) => `${p && p.quick ? "精简" : "全量"} · ${p && p.translate ? "译文" : "原文"}`;
 
-	  const _syncExportPrefsPanel = (key, labelText = "", silent = true) => {
+	  const _syncExportPrefsPanel = (key, silent = true) => {
 	    const k = _sanitizeExportPrefsKey(key) || _sanitizeExportPrefsKey(_exportPrefsKey) || _sanitizeExportPrefsKey(state.currentKey);
 	    const dlg = dom && dom.exportPrefsDialog ? dom.exportPrefsDialog : null;
 	    if (!dlg) return null;
 	    if (!k) return null;
 	    _exportPrefsKey = k;
 	    const p = getExportPrefsForKey(k);
-	    try { if (dom.exportPrefsThread) dom.exportPrefsThread.textContent = labelText || (getCustomLabel(k) || k); } catch (_) {}
 	    try {
 	      if (dom.exportPrefsQuickBtn) {
 	        dom.exportPrefsQuickBtn.setAttribute("aria-pressed", p.quick ? "true" : "false");
@@ -448,15 +447,14 @@ export function wireControlEvents(dom, state, helpers) {
 	        dom.exportPrefsTranslateBtn.classList.toggle("is-on-b", !p.translate);
 	      }
 	    } catch (_) {}
-	    try { if (dom.exportPrefsSummary) dom.exportPrefsSummary.textContent = _exportPrefsText(p); } catch (_) {}
 	    if (!silent) {
 	      try { _toastFromEl(dlg, `导出：${_exportPrefsText(p)}`, { durationMs: 1400 }); } catch (_) {}
 	    }
 	    return p;
 	  };
 
-	  const _openExportPrefsPanel = (key, labelText = "", anchorEl = null) => {
-	    const p = _syncExportPrefsPanel(key, labelText, true);
+	  const _openExportPrefsPanel = (key, anchorEl = null) => {
+	    const p = _syncExportPrefsPanel(key, true);
 	    const dlg = dom && dom.exportPrefsDialog ? dom.exportPrefsDialog : null;
 	    const ok = _openPopupNearEl(dlg, anchorEl, { prefer: "left", align: "end", gap: 10, pad: 12 });
 	    if (ok) {
@@ -477,7 +475,7 @@ export function wireControlEvents(dom, state, helpers) {
 	      const k = _sanitizeExportPrefsKey(_exportPrefsKey) || _sanitizeExportPrefsKey(state.currentKey);
 	      if (!k) return;
 	      const p = setExportPrefsForKey(k, next);
-	      _syncExportPrefsPanel(k, "", true);
+	      _syncExportPrefsPanel(k, true);
 	      try { _renderBookmarkDrawerList(); } catch (_) {}
 	      try { if (sourceEl) _toastFromEl(sourceEl, `导出：${_exportPrefsText(p)}`, { durationMs: 1400 }); } catch (_) {}
 	    };
@@ -496,7 +494,7 @@ export function wireControlEvents(dom, state, helpers) {
 	      });
 	    } catch (_) {}
 
-	    try { _syncExportPrefsPanel(state.currentKey, "", true); } catch (_) {}
+	    try { _syncExportPrefsPanel(state.currentKey, true); } catch (_) {}
 	  };
 
 	  _wireExportPrefsPanel();
@@ -727,9 +725,9 @@ export function wireControlEvents(dom, state, helpers) {
 	            pressT = window.setTimeout(() => {
 	              if (!pressed || moved) return;
 	              longFired = true;
-	              try { _openExportPrefsPanel(String(it.key || ""), String(it.label || ""), exportBtn); } catch (_) {}
-	            }, LONG_MS);
-	          });
+		              try { _openExportPrefsPanel(String(it.key || ""), exportBtn); } catch (_) {}
+		            }, LONG_MS);
+		          });
           exportBtn.addEventListener("pointermove", (e) => {
             if (!pressed) return;
             const x = Number(e && e.clientX) || 0;
