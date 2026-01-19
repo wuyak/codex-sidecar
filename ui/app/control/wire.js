@@ -93,6 +93,84 @@ export function wireControlEvents(dom, state, helpers) {
     } catch (_) {}
   };
 
+  const _clamp = (n, a, b) => {
+    const x = Number(n);
+    if (!Number.isFinite(x)) return a;
+    return Math.min(b, Math.max(a, x));
+  };
+
+  const _openPopupNearEl = (dlg, anchorEl, opts = {}) => {
+    const dialog = dlg && typeof dlg.show === "function" ? dlg : null;
+    const anchor = anchorEl && typeof anchorEl.getBoundingClientRect === "function" ? anchorEl : null;
+    if (!dialog || !anchor) return false;
+
+    const pad = Number.isFinite(Number(opts.pad)) ? Number(opts.pad) : 12;
+    const gap = Number.isFinite(Number(opts.gap)) ? Number(opts.gap) : 10;
+    const prefer = String(opts.prefer || "left").trim().toLowerCase(); // left|right
+    const align = String(opts.align || "start").trim().toLowerCase(); // start|center|end
+
+    // Avoid flicker: show hidden first, then position.
+    let prevVis = "";
+    try { prevVis = String(dialog.style.visibility || ""); } catch (_) {}
+    try { dialog.style.visibility = "hidden"; } catch (_) {}
+    try { dialog.style.left = "0px"; dialog.style.top = "0px"; } catch (_) {}
+    try { if (dialog.open) dialog.close(); } catch (_) {}
+    try { dialog.show(); } catch (_) { return false; }
+
+    let cleanup = null;
+    try {
+      const ar = anchor.getBoundingClientRect();
+      const dr = dialog.getBoundingClientRect();
+      const vw = window.innerWidth || 0;
+      const vh = window.innerHeight || 0;
+
+      let left = 0;
+      if (prefer === "right") left = ar.right + gap;
+      else left = ar.left - dr.width - gap;
+
+      let top = 0;
+      if (align === "end") top = ar.bottom - dr.height;
+      else if (align === "center") top = ar.top + (ar.height - dr.height) / 2;
+      else top = ar.top;
+
+      // If our first choice is off-screen, try the other side.
+      if (left < pad && prefer !== "right") left = ar.right + gap;
+      if ((left + dr.width + pad) > vw && prefer === "right") left = ar.left - dr.width - gap;
+
+      left = _clamp(left, pad, Math.max(pad, vw - dr.width - pad));
+      top = _clamp(top, pad, Math.max(pad, vh - dr.height - pad));
+
+      try { dialog.style.left = `${left}px`; } catch (_) {}
+      try { dialog.style.top = `${top}px`; } catch (_) {}
+    } catch (_) {}
+
+    try { dialog.style.visibility = prevVis || "visible"; } catch (_) {}
+
+    // Close when clicking outside (popover-like).
+    try {
+      const onDown = (e) => {
+        try {
+          if (!dialog.open) return;
+          const t = e && e.target ? e.target : null;
+          if (!t) return;
+          if (dialog.contains && dialog.contains(t)) return;
+          if (anchor.contains && anchor.contains(t)) return;
+          try { dialog.close(); } catch (_) {}
+        } catch (_) {}
+      };
+      const onClose = () => {
+        try { document.removeEventListener("pointerdown", onDown, true); } catch (_) {}
+      };
+      cleanup = onClose;
+      try { document.addEventListener("pointerdown", onDown, true); } catch (_) {}
+      try { dialog.addEventListener("close", onClose, { once: true }); } catch (_) {}
+    } catch (_) {}
+
+    // Safety: if dialog is removed or throws, ensure listeners don't linger.
+    void cleanup;
+    return true;
+  };
+
   const _applyTranslateModeLocal = (mode) => {
     const m = _sanitizeTranslateMode(mode);
     try { state.translateMode = m; } catch (_) {}
@@ -384,12 +462,11 @@ export function wireControlEvents(dom, state, helpers) {
 	    return p;
 	  };
 
-	  const _openExportPrefsPanel = (key, labelText = "") => {
+	  const _openExportPrefsPanel = (key, labelText = "", anchorEl = null) => {
 	    const p = _syncExportPrefsPanel(key, labelText, true);
 	    const dlg = dom && dom.exportPrefsDialog ? dom.exportPrefsDialog : null;
-	    const canModal = !!(dlg && typeof dlg.showModal === "function");
-	    if (canModal) {
-	      try { dlg.showModal(); } catch (_) {}
+	    const ok = _openPopupNearEl(dlg, anchorEl, { prefer: "left", align: "center", gap: 10, pad: 12 });
+	    if (ok) {
 	      try {
 	        setTimeout(() => {
 	          try { if (dom.exportPrefsQuick && typeof dom.exportPrefsQuick.focus === "function") dom.exportPrefsQuick.focus(); } catch (_) {}
@@ -657,7 +734,7 @@ export function wireControlEvents(dom, state, helpers) {
 	            pressT = window.setTimeout(() => {
 	              if (!pressed || moved) return;
 	              longFired = true;
-	              try { _openExportPrefsPanel(String(it.key || ""), String(it.label || "")); } catch (_) {}
+	              try { _openExportPrefsPanel(String(it.key || ""), String(it.label || ""), exportBtn); } catch (_) {}
 	            }, LONG_MS);
 	          });
           exportBtn.addEventListener("pointermove", (e) => {
@@ -817,31 +894,12 @@ export function wireControlEvents(dom, state, helpers) {
   if (dom.drawerCloseBtn) dom.drawerCloseBtn.addEventListener("click", () => { closeDrawer(dom); });
   if (dom.translateDrawerOverlay) dom.translateDrawerOverlay.addEventListener("click", () => { closeTranslateDrawer(dom); });
   if (dom.translateDrawerCloseBtn) dom.translateDrawerCloseBtn.addEventListener("click", () => { closeTranslateDrawer(dom); });
-  if (dom.quickViewDialog) {
-    const dlg = dom.quickViewDialog;
-    try {
-      dlg.addEventListener("click", (e) => {
-        if (e && e.target === dlg) { try { dlg.close(); } catch (_) {} }
-      });
-    } catch (_) {}
-  }
-  if (dom.exportPrefsDialog) {
-    const dlg = dom.exportPrefsDialog;
-    try {
-      dlg.addEventListener("click", (e) => {
-        if (e && e.target === dlg) { try { dlg.close(); } catch (_) {} }
-      });
-    } catch (_) {}
-  }
   window.addEventListener("keydown", (e) => {
     try {
       if (e && e.key === "Escape") {
-        const hasDialog = !!(
-          (dom.confirmDialog && dom.confirmDialog.open)
-          || (dom.quickViewDialog && dom.quickViewDialog.open)
-          || (dom.exportPrefsDialog && dom.exportPrefsDialog.open)
-        );
-        if (hasDialog) return;
+        if (dom.exportPrefsDialog && dom.exportPrefsDialog.open) { try { e.preventDefault(); } catch (_) {} try { dom.exportPrefsDialog.close(); } catch (_) {} return; }
+        if (dom.quickViewDialog && dom.quickViewDialog.open) { try { e.preventDefault(); } catch (_) {} try { dom.quickViewDialog.close(); } catch (_) {} return; }
+        if (dom.confirmDialog && dom.confirmDialog.open) return;
         closeBookmarkDrawer(dom);
         closeTranslateDrawer(dom);
         closeDrawer(dom);
@@ -1067,15 +1125,16 @@ export function wireControlEvents(dom, state, helpers) {
 
     const openQuickViewSettings = () => {
       const dlg = dom && dom.quickViewDialog ? dom.quickViewDialog : null;
-      const canModal = !!(dlg && typeof dlg.showModal === "function");
-      if (!canModal) return;
+      const canPopup = !!(dlg && typeof dlg.show === "function");
+      if (!canPopup) return;
 
-      // Keep UI clean: quick-view settings dialog is exclusive with drawers.
+      // Keep UI clean: quick-view settings popover is exclusive with drawers.
       try { closeDrawer(dom); } catch (_) {}
       try { closeTranslateDrawer(dom); } catch (_) {}
       try { closeBookmarkDrawer(dom); } catch (_) {}
 
-      try { dlg.showModal(); } catch (_) {}
+      const ok = _openPopupNearEl(dlg, btn, { prefer: "left", align: "start", gap: 10, pad: 12 });
+      if (!ok) return;
       try {
         setTimeout(() => {
           try { if (dom.quickBlockList && dom.quickBlockList.querySelector) dom.quickBlockList.querySelector("input[type=checkbox]")?.focus?.(); } catch (_) {}
