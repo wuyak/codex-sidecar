@@ -22,13 +22,6 @@ export function setTopStatusSummary(dom, state) {
   if (selMode === "pin") parts.push("固定");
   if (err) parts.push("异常");
   setStatus(dom, parts.join(" · "));
-
-  // Prefer native tooltip for this button (space-saving).
-  try {
-    if (dom && dom.quickViewBtn) {
-      dom.quickViewBtn.title = `精简显示：${isQuick ? "已开启" : "已关闭"}（长按：精简显示设置）`;
-    }
-  } catch (_) {}
 }
 
 export function openDrawer(dom) {

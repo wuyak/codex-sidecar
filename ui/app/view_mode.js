@@ -1,5 +1,3 @@
-import { flashToastAt } from "./utils/toast.js";
-
 const _LS_KEY = "codex_sidecar_view_mode";
 
 function _sanitize(mode) {
@@ -19,14 +17,10 @@ function _applyButton(dom, mode) {
   try {
     btn.classList.toggle("active", mode === "quick");
   } catch (_) {}
-}
-
-function _toastFromButton(dom, text) {
-  const btn = dom && dom.quickViewBtn ? dom.quickViewBtn : null;
-  if (!btn || !btn.getBoundingClientRect) return;
   try {
-    const r = btn.getBoundingClientRect();
-    flashToastAt(r.left + r.width / 2, r.top + r.height / 2, text, { isLight: true, durationMs: 1200 });
+    const text = `精简显示：${mode === "quick" ? "已开启" : "已关闭"}（长按打开精简显示设置）`;
+    btn.setAttribute("aria-label", text);
+    btn.removeAttribute("title");
   } catch (_) {}
 }
 
@@ -44,9 +38,6 @@ export function setViewMode(dom, state, mode, opts = {}) {
   _applyClass(m);
   _applyButton(dom, m);
   try { localStorage.setItem(_LS_KEY, m); } catch (_) {}
-  if (!opts.silent) {
-    _toastFromButton(dom, m === "quick" ? "精简信息：已开启" : "精简信息：已关闭");
-  }
   return m;
 }
 
