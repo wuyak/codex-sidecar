@@ -808,6 +808,14 @@ export function wireControlEvents(dom, state, helpers) {
   if (dom.drawerCloseBtn) dom.drawerCloseBtn.addEventListener("click", () => { closeDrawer(dom); });
   if (dom.translateDrawerOverlay) dom.translateDrawerOverlay.addEventListener("click", () => { closeTranslateDrawer(dom); });
   if (dom.translateDrawerCloseBtn) dom.translateDrawerCloseBtn.addEventListener("click", () => { closeTranslateDrawer(dom); });
+  if (dom.quickViewDialog) {
+    const dlg = dom.quickViewDialog;
+    try {
+      dlg.addEventListener("click", (e) => {
+        if (e && e.target === dlg) { try { dlg.close(); } catch (_) {} }
+      });
+    } catch (_) {}
+  }
   window.addEventListener("keydown", (e) => {
     try {
       if (e && e.key === "Escape") { closeBookmarkDrawer(dom); closeTranslateDrawer(dom); closeDrawer(dom); }
@@ -1031,16 +1039,19 @@ export function wireControlEvents(dom, state, helpers) {
     };
 
     const openQuickViewSettings = () => {
-      try { openDrawer(dom); } catch (_) {}
-      try {
-        if (dom.quickViewSettingsDetails) dom.quickViewSettingsDetails.open = true;
-      } catch (_) {}
+      const dlg = dom && dom.quickViewDialog ? dom.quickViewDialog : null;
+      const canModal = !!(dlg && typeof dlg.showModal === "function");
+      if (!canModal) return;
+
+      // Keep UI clean: quick-view settings dialog is exclusive with drawers.
+      try { closeDrawer(dom); } catch (_) {}
+      try { closeTranslateDrawer(dom); } catch (_) {}
+      try { closeBookmarkDrawer(dom); } catch (_) {}
+
+      try { dlg.showModal(); } catch (_) {}
       try {
         setTimeout(() => {
-          try {
-            const el = dom.quickViewSettingsDetails || dom.quickBlocksResetBtn || dom.quickBlockList;
-            if (el && el.scrollIntoView) el.scrollIntoView({ block: "center" });
-          } catch (_) {}
+          try { if (dom.quickBlockList && dom.quickBlockList.querySelector) dom.quickBlockList.querySelector("input[type=checkbox]")?.focus?.(); } catch (_) {}
         }, 0);
       } catch (_) {}
     };
