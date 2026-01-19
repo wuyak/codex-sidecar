@@ -392,8 +392,9 @@
 		      #bookmarks .bm-rail .bookmark.active .bm-close { opacity: .9; }
 		      #bookmarks .bm-rail .bookmark .bm-close:hover { background: var(--c-soft); border-color: var(--c-border); color: var(--c-text); }
 		      #bookmarks .bm-rail .bookmark.editing .bm-close { display: none; }
-		      #bookmarks .bm-rail .bookmark.has-unread::after { right: 30px; }
-		      #bookmarks .bm-rail .bookmark[data-key="all"].has-unread::after { right: 8px; }
+		      #bookmarks .bm-rail .bookmark.has-unread .bm-label { padding-right: 16px; }
+		      #bookmarks .bm-rail .bookmark.has-unread::after { right: 26px; top: -6px; }
+		      #bookmarks .bm-rail .bookmark[data-key="all"].has-unread::after { right: 6px; top: -6px; }
 
 						      #main { margin: 16px; padding-bottom: calc(6px + var(--safe-bottom) + var(--tabs-bar-h)); padding-right: var(--content-safe-right); }
 			      body[data-tabs-collapsed="1"] #bookmarks { display: none; }
@@ -804,7 +805,17 @@
 	      .copy-toast { position:absolute; top: -10px; right: 34px; padding: 4px 10px; border-radius: 999px; font-size: clamp(11px, calc(var(--ui-font-size, 14px) - 2px), 16px); line-height: 1; background: rgba(15,23,42,.72); color:#e2e8f0; border: 1px solid rgba(148,163,184,.35); box-shadow: 0 10px 24px rgba(0,0,0,.14); pointer-events:none; animation: copyToastFade 1.2s ease forwards; }
 	      .copy-toast.light { background: rgba(255,255,255,.92); color:#0f172a; border-color:#e2e8f0; }
 		      .copy-toast.fixed { position: fixed; top: var(--safe-top); left: var(--safe-left); right: auto; z-index: var(--z-toast); }
-		      .corner-notify { position: fixed; right: calc(64px + var(--safe-right)); bottom: calc(16px + var(--safe-bottom)); z-index: var(--z-toast); display:flex; flex-direction:column; gap: 8px; pointer-events:none; }
+		      .corner-notify {
+		        position: fixed;
+		        right: calc(var(--rightbar-right) + var(--rightbar-w) + 12px);
+		        bottom: calc(16px + var(--safe-bottom) + var(--tabs-bar-h) + 10px);
+		        z-index: var(--z-toast);
+		        display:flex;
+		        flex-direction:column;
+		        gap: 8px;
+		        pointer-events:none;
+		      }
+		      body[data-tabs-collapsed="1"] .corner-notify { bottom: calc(16px + var(--safe-bottom)); }
 	      .corner-toast { pointer-events:none; min-width: 220px; max-width: min(460px, calc(100vw - 28px - 64px)); padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(148,163,184,.35); background: rgba(15,23,42,.92); color:#e2e8f0; box-shadow: 0 16px 44px rgba(0,0,0,.22); animation: cornerToastIn .16s ease-out forwards; }
 	      .corner-toast.info { border-color: rgba(148,163,184,.35); }
 	      .corner-toast.warn { border-color: rgba(248,113,113,.55); background: rgba(127,29,29,.86); }
