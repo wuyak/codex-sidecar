@@ -565,17 +565,18 @@ export function wireControlEvents(dom, state, helpers) {
 	        return;
 	      }
 
-	      for (const it of rows) {
-	        const row = document.createElement("div");
-	        row.className = "tab"
-	          + (it.active ? " active" : "")
-	          + (it.closed ? " tab-closed" : "")
-	          + (isHiddenList ? " tab-hidden" : "");
-	        row.dataset.key = String(it.key || "");
-	        row.dataset.hint = isHiddenList ? "点击：恢复到标签栏" : "左键长按：删除该会话";
-	        if (isHiddenList) row.dataset.hidden = "1";
-	        row.setAttribute("role", "button");
-	        row.tabIndex = 0;
+		      for (const it of rows) {
+		        const row = document.createElement("div");
+		        row.className = "tab"
+		          + (it.active ? " active" : "")
+		          + (it.closed ? " tab-closed" : "")
+		          + (isHiddenList ? " tab-hidden" : "");
+		        row.dataset.key = String(it.key || "");
+		        row.dataset.label = String(it.label || "");
+		        row.dataset.hint = isHiddenList ? "点击：恢复到标签栏" : "点击：切换会话";
+		        if (isHiddenList) row.dataset.hidden = "1";
+		        row.setAttribute("role", "button");
+		        row.tabIndex = 0;
           try { row.removeAttribute("title"); } catch (_) {}
 
 	        const dot = document.createElement("span");
@@ -606,23 +607,23 @@ export function wireControlEvents(dom, state, helpers) {
         actions.className = "tab-actions";
 
         const renameBtn = document.createElement("button");
-        renameBtn.className = "mini-btn";
-        renameBtn.type = "button";
-        renameBtn.dataset.action = "rename";
-        renameBtn.setAttribute("aria-label", "重命名");
-        renameBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="#i-edit"></use></svg>`;
-        try { renameBtn.addEventListener("mouseenter", () => _bmTip(renameBtn, "重命名~ (´▽｀)")); } catch (_) {}
+	        renameBtn.className = "mini-btn";
+	        renameBtn.type = "button";
+	        renameBtn.dataset.action = "rename";
+	        renameBtn.setAttribute("aria-label", "重命名");
+	        renameBtn.title = "重命名";
+	        renameBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="#i-edit"></use></svg>`;
 
-        const exportBtn = document.createElement("button");
-        exportBtn.className = "mini-btn";
-        exportBtn.type = "button";
-        exportBtn.dataset.action = "export";
-        exportBtn.setAttribute("aria-label", "导出（长按设置）");
-        exportBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="#i-download"></use></svg>`;
-        try { exportBtn.addEventListener("mouseenter", () => _bmTip(exportBtn, "长按：导出设置~ (￣▽￣)")); } catch (_) {}
-        try {
-          let pressT = 0;
-          let startX = 0;
+	        const exportBtn = document.createElement("button");
+	        exportBtn.className = "mini-btn";
+	        exportBtn.type = "button";
+	        exportBtn.dataset.action = "export";
+	        exportBtn.setAttribute("aria-label", "导出（长按设置）");
+	        exportBtn.title = "导出（长按设置）";
+	        exportBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="#i-download"></use></svg>`;
+	        try {
+	          let pressT = 0;
+	          let startX = 0;
           let startY = 0;
           let moved = false;
           let pressed = false;
@@ -673,16 +674,25 @@ export function wireControlEvents(dom, state, helpers) {
         } catch (_) {}
 
         const toggleBtn = document.createElement("button");
-        toggleBtn.className = "mini-btn";
-        toggleBtn.type = "button";
-        toggleBtn.dataset.action = isHiddenList ? "listenOn" : "listenOff";
-        toggleBtn.setAttribute("aria-label", isHiddenList ? "开启监听" : "关闭监听");
-        toggleBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="${isHiddenList ? "#i-eye" : "#i-eye-closed"}"></use></svg>`;
-        try { toggleBtn.addEventListener("mouseenter", () => _bmTip(toggleBtn, isHiddenList ? "开启监听" : "关闭监听")); } catch (_) {}
+	        toggleBtn.className = "mini-btn";
+	        toggleBtn.type = "button";
+	        toggleBtn.dataset.action = isHiddenList ? "listenOn" : "listenOff";
+	        toggleBtn.setAttribute("aria-label", isHiddenList ? "开启监听" : "关闭监听");
+	        toggleBtn.title = isHiddenList ? "开启监听" : "关闭监听";
+	        toggleBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="${isHiddenList ? "#i-eye" : "#i-eye-closed"}"></use></svg>`;
+	
+	        const delBtn = document.createElement("button");
+	        delBtn.className = "mini-btn danger";
+	        delBtn.type = "button";
+	        delBtn.dataset.action = "delete";
+	        delBtn.setAttribute("aria-label", "清除会话");
+	        delBtn.title = "清除会话";
+	        delBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="#i-trash"></use></svg>`;
 
-	        actions.appendChild(renameBtn);
-	        actions.appendChild(exportBtn);
-	        actions.appendChild(toggleBtn);
+		        actions.appendChild(renameBtn);
+		        actions.appendChild(exportBtn);
+		        actions.appendChild(toggleBtn);
+		        actions.appendChild(delBtn);
 
           const main = document.createElement("div");
           main.className = "tab-main";
@@ -701,72 +711,7 @@ export function wireControlEvents(dom, state, helpers) {
             });
           } catch (_) {}
 
-          // Long press to rename (more direct than opening dialogs).
-          try {
-            let pressT = 0;
-            let startX = 0;
-            let startY = 0;
-            let moved = false;
-            const clear = () => { if (pressT) { try { clearTimeout(pressT); } catch (_) {} } pressT = 0; moved = false; };
-            row.addEventListener("pointerdown", (e) => {
-              try {
-                if (e && typeof e.button === "number" && e.button !== 0) return;
-                const t = e && e.target;
-                if (t && t.closest && t.closest("button")) return;
-              } catch (_) {}
-              clear();
-              startX = Number(e && e.clientX) || 0;
-              startY = Number(e && e.clientY) || 0;
-              moved = false;
-              pressT = setTimeout(() => {
-                if (moved) return;
-                try { row.dataset.lp = String(Date.now()); } catch (_) {}
-                (async () => {
-                  const k = String(it.key || "");
-                  if (!k) return;
-                  const ok = await confirmDialog(dom, {
-                    title: "清除该会话？",
-                    desc: `将从会话列表清除：${String(it.label || "")}\n（不会删除原始会话文件；有新输出会自动回来）`,
-                    confirmText: "清除",
-                    cancelText: "取消",
-                    danger: true,
-                  });
-                  if (!ok) return;
-                  const t0 = state.threadIndex.get(k) || { last_seq: 0 };
-                  const atSeq = Number(t0 && t0.last_seq) || 0;
-                  const kk = (t0 && t0.kinds && typeof t0.kinds === "object") ? t0.kinds : {};
-                  const m = (state.closedThreads && typeof state.closedThreads.set === "function") ? state.closedThreads : (state.closedThreads = new Map());
-                  m.set(k, {
-                    at_seq: atSeq,
-                    at_count: Number(t0 && t0.count) || 0,
-                    at_ts: String((t0 && t0.last_ts) ? t0.last_ts : ""),
-                    at_kinds: {
-                      assistant_message: Number(kk.assistant_message) || 0,
-                      user_message: Number(kk.user_message) || 0,
-                      reasoning_summary: Number(kk.reasoning_summary) || 0,
-                    },
-                  });
-                  try { saveClosedThreads(m); } catch (_) {}
-                  _toastFromEl(row, "已清除（有新输出会自动回来）");
-                  try { renderTabs(); } catch (_) {}
-                  _renderBookmarkDrawerList();
-                  if (String(state.currentKey || "all") === k) await onSelectKey(_pickFallbackKey(k));
-                })().catch(() => {});
-              }, 460);
-            });
-            row.addEventListener("pointermove", (e) => {
-              if (!pressT) return;
-              const x = Number(e && e.clientX) || 0;
-              const y = Number(e && e.clientY) || 0;
-              const dx = x - startX;
-              const dy = y - startY;
-              if ((dx * dx + dy * dy) > (8 * 8)) { moved = true; clear(); }
-            });
-            row.addEventListener("pointerup", clear);
-            row.addEventListener("pointercancel", clear);
-            row.addEventListener("pointerleave", clear);
-          } catch (_) {}
-	      }
+		      }
 
 	      target.appendChild(frag);
 	    };
@@ -927,18 +872,51 @@ export function wireControlEvents(dom, state, helpers) {
 	      const action = String(btn.dataset.action || "");
 	      try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
 		      if (action === "rename") { _enterInlineRename(row, key); return; }
-		      if (action === "export") {
-	        const p = getExportPrefsForKey(key);
-	        const mode = p.quick ? "quick" : "full";
-	        const reasoningLang = p.translate ? "zh" : "en";
-	        const r = await exportThreadMarkdown(state, key, { mode, reasoningLang });
-		        _toastFromEl(btn, r && r.ok ? "已导出" : "导出失败");
+			      if (action === "export") {
+		        const p = getExportPrefsForKey(key);
+		        const mode = p.quick ? "quick" : "full";
+		        const reasoningLang = p.translate ? "zh" : "en";
+		        const r = await exportThreadMarkdown(state, key, { mode, reasoningLang });
+			        _toastFromEl(btn, r && r.ok ? "已导出" : "导出失败");
+			        return;
+			      }
+		      if (action === "delete") {
+		        const labelText = row && row.dataset ? String(row.dataset.label || "") : "";
+		        const ok = await confirmDialog(dom, {
+		          title: "清除该会话？",
+		          desc: `将从会话列表清除：${labelText || key}\n（不会删除原始会话文件；有新输出会自动回来）`,
+		          confirmText: "清除",
+		          cancelText: "取消",
+		          danger: true,
+		        });
+		        if (!ok) return;
+		        const t0 = state.threadIndex.get(key) || { last_seq: 0 };
+		        const atSeq = Number(t0 && t0.last_seq) || 0;
+		        const kk = (t0 && t0.kinds && typeof t0.kinds === "object") ? t0.kinds : {};
+		        const m = (state.closedThreads && typeof state.closedThreads.set === "function") ? state.closedThreads : (state.closedThreads = new Map());
+		        m.set(key, {
+		          at_seq: atSeq,
+		          at_count: Number(t0 && t0.count) || 0,
+		          at_ts: String((t0 && t0.last_ts) ? t0.last_ts : ""),
+		          at_kinds: {
+		            assistant_message: Number(kk.assistant_message) || 0,
+		            user_message: Number(kk.user_message) || 0,
+		            reasoning_summary: Number(kk.reasoning_summary) || 0,
+		          },
+		        });
+		        try { saveClosedThreads(m); } catch (_) {}
+		        _toastFromEl(btn, "已清除（有新输出会自动回来）");
+		        try { renderTabs(); } catch (_) {}
+		        _renderBookmarkDrawerList();
+		        if (String(state.currentKey || "all") === key) {
+		          await onSelectKey(_pickFallbackKey(key));
+		        }
 		        return;
 		      }
-	      if (action === "listenOff") {
-	        const hidden = _ensureHiddenSet();
-	        if (!hidden.has(key)) hidden.add(key);
-	        saveHiddenThreads(hidden);
+		      if (action === "listenOff") {
+		        const hidden = _ensureHiddenSet();
+		        if (!hidden.has(key)) hidden.add(key);
+		        saveHiddenThreads(hidden);
 	        _toastFromEl(btn, "监听：已关闭（已隐藏）");
 	        try { renderTabs(); } catch (_) {}
 	        _renderBookmarkDrawerList();
