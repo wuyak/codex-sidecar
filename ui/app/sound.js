@@ -1,110 +1,53 @@
 import { flashToastAt } from "./utils/toast.js";
 
-const _SOUND_VARIANTS = {
-  "soft-1-low": { base: "soft-1", volume: 0.18 },
-  "soft-1": { base: "soft-1", volume: 0.28 },
-  "soft-1-high": { base: "soft-1", volume: 0.42 },
-  "soft-2-low": { base: "soft-2", volume: 0.18 },
-  "soft-2": { base: "soft-2", volume: 0.28 },
-  "soft-2-high": { base: "soft-2", volume: 0.42 },
-  "soft-3-low": { base: "soft-3", volume: 0.18 },
-  "soft-3": { base: "soft-3", volume: 0.28 },
-  "soft-3-high": { base: "soft-3", volume: 0.42 },
-};
-const _cache = new Map(); // base -> Audio
+const _cache = new Map(); // url -> Audio
 
-let _ctx = null; // AudioContext
 let _unlockHooked = false;
 let _lastPlayMs = 0;
 let _warnedBlocked = false;
 
-function _sanitizeId(id) {
-  const s = String(id || "").trim().toLowerCase();
-  if (!s || s === "none") return "none";
-  return (s in _SOUND_VARIANTS) ? s : "none";
+function _clamp(n, lo, hi, fallback) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return fallback;
+  return Math.max(lo, Math.min(hi, v));
 }
 
-function _resolve(id) {
-  const sid = _sanitizeId(id);
-  if (sid === "none") return { base: "", volume: 0 };
-  const spec = _SOUND_VARIANTS[sid];
-  if (!spec) return { base: "", volume: 0 };
-  const base = String(spec.base || "").trim().toLowerCase();
-  const volume = Math.max(0.01, Math.min(1, Number(spec.volume) || 0.28));
-  return { base, volume };
+function _pickId(state, kind) {
+  const k = String(kind || "assistant").trim().toLowerCase();
+  if (k === "tool_gate") return String(state && state.notifySoundToolGate ? state.notifySoundToolGate : "none").trim() || "none";
+  return String(state && state.notifySoundAssistant ? state.notifySoundAssistant : "none").trim() || "none";
 }
 
-function _srcForId(id) {
-  const r = _resolve(id);
-  if (!r.base) return "";
-  return `/ui/music/${r.base}.ogg`;
-}
+function _resolveSpec(state, id) {
+  const sid = String(id || "").trim();
+  if (!sid || sid === "none") return null;
 
-function _getAudioCtx() {
-  if (_ctx) return _ctx;
   try {
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return null;
-    _ctx = new AC();
-    return _ctx;
-  } catch (_) {
-    _ctx = null;
-    return null;
-  }
-}
-
-function _resumeCtx() {
-  const ctx = _getAudioCtx();
-  if (!ctx) return;
-  try {
-    if (ctx.state === "suspended" && typeof ctx.resume === "function") ctx.resume();
-  } catch (_) {}
-}
-
-function _playSynth(base, volume) {
-  const ctx = _getAudioCtx();
-  if (!ctx) return false;
-  try { _resumeCtx(); } catch (_) {}
-
-  const now = ctx.currentTime || 0;
-  const v = Math.max(0.01, Math.min(1, Number(volume) || 0.28));
-
-  const tone = (t0, { freq, dur, type = "sine", gain = 1.0 }) => {
-    const osc = ctx.createOscillator();
-    const g = ctx.createGain();
-    const f = ctx.createBiquadFilter ? ctx.createBiquadFilter() : null;
-    osc.type = type;
-    osc.frequency.value = Math.max(80, Number(freq) || 440);
-    g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(Math.max(0.0001, v * (Number(gain) || 1.0)), t0 + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + Math.max(0.03, Number(dur) || 0.08));
-    if (f) {
-      // Soften harshness a bit.
-      f.type = "lowpass";
-      f.frequency.value = 3800;
-      osc.connect(f);
-      f.connect(g);
-    } else {
-      osc.connect(g);
+    const idx = (state && state.sfxIndex && typeof state.sfxIndex.get === "function") ? state.sfxIndex : null;
+    const hit = idx ? idx.get(sid) : null;
+    if (hit && typeof hit === "object") {
+      const url = String(hit.url || "").trim();
+      if (!url) return null;
+      return {
+        url,
+        volume: _clamp(hit.volume, 0.0, 2.0, 1.0),
+        rate: _clamp(hit.rate, 0.5, 2.0, 1.0),
+      };
     }
-    g.connect(ctx.destination);
-    osc.start(t0);
-    osc.stop(t0 + Math.max(0.06, Number(dur) || 0.08) + 0.02);
-  };
+  } catch (_) {}
 
-  // Three tasteful, UI-like synth tones (no external assets required).
-  if (base === "soft-1") {
-    tone(now + 0.00, { freq: 880, dur: 0.08, type: "sine", gain: 0.90 });
-  } else if (base === "soft-2") {
-    tone(now + 0.00, { freq: 660, dur: 0.07, type: "triangle", gain: 0.85 });
-    tone(now + 0.06, { freq: 990, dur: 0.06, type: "triangle", gain: 0.60 });
-  } else if (base === "soft-3") {
-    tone(now + 0.00, { freq: 523.25, dur: 0.10, type: "sine", gain: 0.80 });
-    tone(now + 0.08, { freq: 659.25, dur: 0.12, type: "sine", gain: 0.70 });
-  } else {
-    tone(now + 0.00, { freq: 880, dur: 0.08, type: "sine", gain: 0.90 });
+  // Fallback: derive URL from id (when /api/sfx hasn't been loaded yet).
+  if (sid.startsWith("builtin:")) {
+    const name = sid.slice("builtin:".length).trim().toLowerCase();
+    if (!name) return null;
+    return { url: `/ui/sfx/builtin/${name}.wav`, volume: 1.0, rate: 1.0 };
   }
-  return true;
+  if (sid.startsWith("file:")) {
+    const name = sid.slice("file:".length).trim();
+    if (!name) return null;
+    return { url: `/api/sfx/file/${encodeURIComponent(name)}`, volume: 1.0, rate: 1.0 };
+  }
+  return null;
 }
 
 function _toastBlocked(dom) {
@@ -122,8 +65,8 @@ export function initSound(dom, state) {
   if (_unlockHooked) return;
   _unlockHooked = true;
 
+  // Browsers may block audio until a user gesture; preload after first interaction.
   const unlock = () => {
-    try { _resumeCtx(); } catch (_) {}
     try { preloadNotifySound(state); } catch (_) {}
   };
   try { window.addEventListener("pointerdown", unlock, { once: true, capture: true }); } catch (_) {}
@@ -131,39 +74,56 @@ export function initSound(dom, state) {
 }
 
 export function preloadNotifySound(state) {
-  const r = _resolve(state && state.notifySound);
-  if (!r.base) return;
-  // Prefer synth sounds; no preload needed (and avoid creating AudioContext without a user gesture).
-  if (_ctx) return;
-  const src = _srcForId(r.base);
-  if (!src) return;
-  if (_cache.has(r.base)) return;
-  try {
-    const a = new Audio(src);
-    a.preload = "auto";
-    a.load();
-    _cache.set(r.base, a);
-  } catch (_) {}
+  const ids = [];
+  try { ids.push(_pickId(state, "assistant")); } catch (_) {}
+  try { ids.push(_pickId(state, "tool_gate")); } catch (_) {}
+  for (const id of ids) {
+    const spec = _resolveSpec(state, id);
+    if (!spec || !spec.url) continue;
+    if (_cache.has(spec.url)) continue;
+    try {
+      const a = new Audio(spec.url);
+      a.preload = "auto";
+      a.load();
+      _cache.set(spec.url, a);
+    } catch (_) {}
+  }
 }
 
-export function maybePlayNotifySound(dom, state) {
-  const r = _resolve(state && state.notifySound);
-  const src = _srcForId(r.base);
-  if (!src && !r.base) return false;
+export function maybePlayNotifySound(dom, state, opts = {}) {
+  const kind = String(opts && opts.kind ? opts.kind : "assistant").trim().toLowerCase();
+  const force = !!(opts && opts.force);
+
+  const id = _pickId(state, kind);
+  const spec = _resolveSpec(state, id);
+  if (!spec || !spec.url) return false;
 
   const now = Date.now();
-  if (now - _lastPlayMs < 1500) return false;
+  const minGapMs = 320;
+  if (!force && (now - _lastPlayMs) < minGapMs) return false;
   _lastPlayMs = now;
 
+  let a = null;
+  try { a = _cache.get(spec.url) || null; } catch (_) { a = null; }
+  if (!a) {
+    try {
+      a = new Audio(spec.url);
+      _cache.set(spec.url, a);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  try { a.volume = _clamp(spec.volume, 0.0, 1.0, 1.0); } catch (_) {}
+  try { a.playbackRate = _clamp(spec.rate, 0.5, 2.0, 1.0); } catch (_) {}
+  try { a.currentTime = 0; } catch (_) {}
+
   try {
-    if (_ctx && _playSynth(r.base, r.volume || 0.28)) return true;
-    // Use a fresh element each time to allow overlaps if needed; browser cache keeps it fast.
-    const a = new Audio(src);
-    a.volume = r.volume || 0.28;
     const p = a.play();
     if (p && typeof p.catch === "function") p.catch(() => _toastBlocked(dom));
     return true;
   } catch (_) {
+    _toastBlocked(dom);
     return false;
   }
 }

@@ -142,7 +142,7 @@ export function connectEventStream(dom, state, upsertThread, renderTabs, renderM
             notifyCorner("tool_gate", "终端等待确认", _summarizeToolGate(txt) || "请回到终端完成确认/授权后继续。", { level: "warn", sticky: true });
             try { markUnread(state, msg); } catch (_) {}
             updateUnreadButton(dom, state);
-            try { maybePlayNotifySound(dom, state); } catch (_) {}
+            try { maybePlayNotifySound(dom, state, { kind: "tool_gate" }); } catch (_) {}
           } else if (_toolGateReleased(txt)) {
             notifyCorner("tool_gate", "终端已确认", _summarizeToolGate(txt) || "tool gate 已解除。", { level: "success", ttlMs: 1600 });
           }
@@ -152,7 +152,7 @@ export function connectEventStream(dom, state, upsertThread, renderTabs, renderM
         if (op !== "update" && kind === "assistant_message") {
           markUnread(state, msg);
           updateUnreadButton(dom, state);
-          try { maybePlayNotifySound(dom, state); } catch (_) {}
+          try { maybePlayNotifySound(dom, state, { kind: "assistant" }); } catch (_) {}
         }
       } catch (_) {}
 

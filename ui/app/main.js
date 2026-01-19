@@ -11,7 +11,7 @@ import { initViewMode } from "./view_mode.js";
 import { activateView, initViews } from "./views.js";
 import { initSound } from "./sound.js";
 import { clearUnreadForKey } from "./unread.js";
-import { initSkin } from "./skin.js";
+import { initTheme } from "./theme.js";
 import { loadClosedThreads, saveClosedThreads } from "./closed_threads.js";
 
 export async function initApp() {
@@ -20,7 +20,7 @@ export async function initApp() {
   initSound(dom, state);
   initViews(dom, state);
   initViewMode(dom, state);
-  initSkin(dom, { setStatus });
+  await initTheme(dom, { setStatus });
   try { state.hiddenThreads = loadHiddenThreads(); } catch (_) { state.hiddenThreads = new Set(); }
   try { state.showHiddenThreads = loadShowHiddenFlag(); } catch (_) { state.showHiddenThreads = false; }
   try { state.closedThreads = loadClosedThreads(); } catch (_) { state.closedThreads = new Map(); }

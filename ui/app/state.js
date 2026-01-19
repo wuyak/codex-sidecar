@@ -28,8 +28,11 @@ export function createState() {
     // 翻译模式（来自服务端 config）：auto | manual
     translateMode: "auto",
     translatorProvider: "openai",
-    // 提示音（来自服务端 config）：none | soft-1 | soft-2 | soft-3
-    notifySound: "none",
+    // 提示音（来自服务端 config）：none | builtin:* | file:*
+    notifySoundAssistant: "none",
+    notifySoundToolGate: "none",
+    // 音效索引（来自 /api/sfx）：id -> { id, label, url, volume, rate, source }
+    sfxIndex: new Map(),
     // 手动翻译防抖：mid -> in-flight
     translateInFlight: new Set(),
     // 用户点击“重译”后的完成提示：mid -> { oldZh, x, y }

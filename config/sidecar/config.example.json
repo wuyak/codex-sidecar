@@ -10,7 +10,8 @@
   "codex_process_regex": "codex",
   "only_follow_when_process": true,
   "translate_mode": "auto",
-  "notify_sound": "none",
+  "notify_sound_assistant": "none",
+  "notify_sound_tool_gate": "none",
   "translator_provider": "openai",
   "translator_config": {
     "openai": {

@@ -1,23 +1,31 @@
 import json
 import os
+import re
 import tempfile
 from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 
-_VALID_NOTIFY_SOUNDS = (
-    "none",
-    "soft-1",
-    "soft-1-low",
-    "soft-1-high",
-    "soft-2",
-    "soft-2-low",
-    "soft-2-high",
-    "soft-3",
-    "soft-3-low",
-    "soft-3-high",
-)
+_SFX_BUILTIN_RE = re.compile(r"^builtin:([a-z0-9][a-z0-9_-]{0,63})$")
+_SFX_FILE_RE = re.compile(r"^file:([A-Za-z0-9][A-Za-z0-9._-]{0,119})$")
+_SFX_FILE_ALLOWED_EXTS = (".ogg", ".mp3", ".wav")
+
+
+def _sanitize_sfx_id(v: Any) -> str:
+    s = str(v or "").strip()
+    if not s or s.lower() == "none":
+        return "none"
+    m = _SFX_BUILTIN_RE.fullmatch(s.lower())
+    if m:
+        return f"builtin:{m.group(1)}"
+    m2 = _SFX_FILE_RE.fullmatch(s)
+    if m2:
+        name = m2.group(1)
+        ext = Path(name).suffix.lower()
+        if ext in _SFX_FILE_ALLOWED_EXTS:
+            return f"file:{name}"
+    return "none"
 
 
 @dataclass
@@ -53,8 +61,11 @@ class SidecarConfig:
     # - manual: 仅在 UI 触发（点击思考块 / 重译按钮）时翻译
     translate_mode: str = "auto"
 
-    # 提示音（UI）：none（无）或预置音效 id（如 soft-1/soft-2/soft-3，支持 -low/-high 音量档）。
-    notify_sound: str = "none"
+    # 提示音（UI）：none（无）或音效 id（builtin:* / file:*）。
+    # - notify_sound_assistant: 回答输出（assistant_message）
+    # - notify_sound_tool_gate: 终端确认等待（tool_gate）
+    notify_sound_assistant: str = "none"
+    notify_sound_tool_gate: str = "none"
 
     translator_provider: str = "openai"  # http | openai | nvidia
     translator_config: Dict[str, Any] = None  # provider-specific
@@ -113,9 +124,8 @@ class SidecarConfig:
         tm = str(d.get("translate_mode") or "auto").strip().lower()
         if tm not in ("auto", "manual"):
             tm = "auto"
-        ns = str(d.get("notify_sound") or "none").strip().lower()
-        if ns not in _VALID_NOTIFY_SOUNDS:
-            ns = "none"
+        ns_assistant = _sanitize_sfx_id(d.get("notify_sound_assistant"))
+        ns_tool_gate = _sanitize_sfx_id(d.get("notify_sound_tool_gate"))
         return SidecarConfig(
             config_home=cfg_home,
             watch_codex_home=watch_home,
@@ -129,7 +139,8 @@ class SidecarConfig:
             codex_process_regex=str(d.get("codex_process_regex") or "codex"),
             only_follow_when_process=bool(only_follow_when_process),
             translate_mode=tm,
-            notify_sound=ns,
+            notify_sound_assistant=ns_assistant,
+            notify_sound_tool_gate=ns_tool_gate,
             translator_provider=str(d.get("translator_provider") or "openai"),
             translator_config=translator_config,
         )
@@ -186,7 +197,8 @@ def default_config(config_home: Path) -> SidecarConfig:
         codex_process_regex="codex",
         only_follow_when_process=True,
         translate_mode="auto",
-        notify_sound="none",
+        notify_sound_assistant="none",
+        notify_sound_tool_gate="none",
         translator_provider="openai",
         translator_config={
             "openai": {

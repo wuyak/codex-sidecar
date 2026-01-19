@@ -10,6 +10,7 @@ from typing import Any, Dict, Optional
 from urllib.parse import parse_qs, urlparse
 
 from .state import SidecarState
+from .sfx import list_sfx, read_custom_sfx_bytes
 from .ui_assets import load_ui_text, resolve_ui_path, ui_content_type, ui_dir
 from ..security import redact_sidecar_config
 
@@ -139,6 +140,48 @@ class SidecarHandler(BaseHTTPRequestHandler):
             except Exception:
                 pass
             self._send_json(HTTPStatus.OK, st)
+            return
+
+        if path == "/api/sfx":
+            try:
+                cfg = self._controller.get_config()
+            except Exception:
+                cfg = {}
+            try:
+                cfg_home = Path(str((cfg or {}).get("config_home") or "")).expanduser()
+            except Exception:
+                cfg_home = Path.cwd()
+            payload = list_sfx(cfg_home)
+            try:
+                if isinstance(cfg, dict) and isinstance(payload, dict):
+                    payload["selected_assistant"] = str(cfg.get("notify_sound_assistant") or "none")
+                    payload["selected_tool_gate"] = str(cfg.get("notify_sound_tool_gate") or "none")
+            except Exception:
+                pass
+            self._send_json(HTTPStatus.OK, payload if isinstance(payload, dict) else {"ok": False})
+            return
+
+        if path.startswith("/api/sfx/file/"):
+            name = path[len("/api/sfx/file/") :]
+            try:
+                cfg = self._controller.get_config()
+            except Exception:
+                cfg = {}
+            try:
+                cfg_home = Path(str((cfg or {}).get("config_home") or "")).expanduser()
+            except Exception:
+                cfg_home = Path.cwd()
+            data, ct = read_custom_sfx_bytes(cfg_home, name)
+            if data is None:
+                self._send_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": "not_found"})
+                return
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", ct or "application/octet-stream")
+            self.send_header("Cache-Control", "no-store, max-age=0")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
             return
 
         if path == "/api/translators":

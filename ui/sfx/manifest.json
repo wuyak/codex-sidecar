@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "builtin": [
+    { "id": "chime-soft-1", "label": "舒缓铃声 1", "file": "chime-soft-1.wav", "volume": 1.0, "rate": 1.0 },
+    { "id": "chime-soft-2", "label": "舒缓铃声 2", "file": "chime-soft-2.wav", "volume": 1.0, "rate": 1.0 },
+    { "id": "chime-soft-3", "label": "舒缓铃声 3", "file": "chime-soft-3.wav", "volume": 1.0, "rate": 1.0 },
+    { "id": "chime-gentle-up", "label": "轻铃 · 上行", "file": "chime-gentle-up.wav", "volume": 1.0, "rate": 1.0 },
+    { "id": "chime-gentle-down", "label": "轻铃 · 下行", "file": "chime-gentle-down.wav", "volume": 1.0, "rate": 1.0 },
+    { "id": "chime-double", "label": "轻铃 · 双击", "file": "chime-double.wav", "volume": 1.0, "rate": 1.0 },
+    { "id": "chime-alert-soft", "label": "提醒 · 柔和", "file": "chime-alert-soft.wav", "volume": 1.0, "rate": 1.0 },
+    { "id": "chime-alert-warm", "label": "提醒 · 温和", "file": "chime-alert-warm.wav", "volume": 1.0, "rate": 1.0 }
+  ]
+}

@@ -87,13 +87,62 @@ export async function loadControl(dom, state) {
     cfg = {};
   }
 
+  // 2.5) SFX（提示音列表：内置 + 自定义）
+  let sfx = { builtin: [], custom: [] };
+  try {
+    const r = await fetch(`/api/sfx?t=${ts}`, { cache: "no-store" }).then(r => r.json());
+    if (r && typeof r === "object") sfx = r;
+  } catch (e) {
+    debugLines.push(`[warn] /api/sfx: ${fmtErr(e)}`);
+    sfx = { builtin: [], custom: [] };
+  }
+  let sfxList = [{ id: "none", label: "无", url: "", source: "none", volume: 1.0, rate: 1.0 }];
+  try {
+    const builtin = Array.isArray(sfx && sfx.builtin) ? sfx.builtin : [];
+    const custom = Array.isArray(sfx && sfx.custom) ? sfx.custom : [];
+    for (const it of [...builtin, ...custom]) {
+      if (!it || typeof it !== "object") continue;
+      const id = String(it.id || "").trim();
+      const label = String(it.label || "").trim();
+      const url = String(it.url || "").trim();
+      const source = String(it.source || "").trim() || "unknown";
+      const volume = Number.isFinite(Number(it.volume)) ? Number(it.volume) : 1.0;
+      const rate = Number.isFinite(Number(it.rate)) ? Number(it.rate) : 1.0;
+      if (!id || !label) continue;
+      sfxList.push({ id, label, url, source, volume, rate });
+    }
+  } catch (_) {}
+  const sfxIndex = new Map();
+  try { for (const it of sfxList) sfxIndex.set(String(it.id || ""), it); } catch (_) {}
+  try { if (state) state.sfxIndex = sfxIndex; } catch (_) {}
+
+  const _renderSfxSelect = (sel) => {
+    if (!sel) return;
+    try { sel.innerHTML = ""; } catch (_) {}
+    for (const it of sfxList) {
+      try {
+        const opt = document.createElement("option");
+        opt.value = String(it.id || "");
+        opt.textContent = String(it.label || "");
+        sel.appendChild(opt);
+      } catch (_) {}
+    }
+  };
+  try {
+    _renderSfxSelect(dom.notifySoundAssistant);
+    _renderSfxSelect(dom.notifySoundToolGate);
+  } catch (_) {}
+
   // 3) Apply config to UI（尽量继续，不让某个字段报错导致整体“全无”）
   try {
     if (dom.cfgHome) dom.cfgHome.value = String(cfg.config_home_display || "").trim() || _prettyPath(cfg.config_home || "");
     if (dom.watchHome) dom.watchHome.value = _prettyPath(cfg.watch_codex_home || "");
     if (dom.autoStart) dom.autoStart.value = cfg.auto_start ? "1" : "0";
     if (dom.translateMode) dom.translateMode.value = (cfg.translate_mode === "manual") ? "manual" : "auto";
-    if (dom.notifySound) dom.notifySound.value = String(cfg.notify_sound || "none").trim().toLowerCase() || "none";
+    const nsA = String(cfg.notify_sound_assistant || "none").trim() || "none";
+    const nsG = String(cfg.notify_sound_tool_gate || "none").trim() || "none";
+    if (dom.notifySoundAssistant) dom.notifySoundAssistant.value = sfxIndex.has(nsA) ? nsA : "none";
+    if (dom.notifySoundToolGate) dom.notifySoundToolGate.value = sfxIndex.has(nsG) ? nsG : "none";
     if (dom.followProc) dom.followProc.value = cfg.follow_codex_process ? "1" : "0";
     if (dom.onlyWhenProc) dom.onlyWhenProc.value = (cfg.only_follow_when_process === false) ? "0" : "1";
     if (dom.procRegex) dom.procRegex.value = cfg.codex_process_regex || "codex";
@@ -164,7 +213,8 @@ export async function loadControl(dom, state) {
     state.watchCodexHome = String(cfg.watch_codex_home || "");
     state.translateMode = (cfg.translate_mode === "manual") ? "manual" : "auto";
     state.translatorProvider = String(cfg.translator_provider || "openai").trim().toLowerCase() || "openai";
-    state.notifySound = String(cfg.notify_sound || "none").trim().toLowerCase() || "none";
+    state.notifySoundAssistant = String(cfg.notify_sound_assistant || "none").trim() || "none";
+    state.notifySoundToolGate = String(cfg.notify_sound_tool_gate || "none").trim() || "none";
   } catch (_) {}
   try { preloadNotifySound(state); } catch (_) {}
   try {

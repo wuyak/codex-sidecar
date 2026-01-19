@@ -207,30 +207,32 @@ export function wireControlEvents(dom, state, helpers) {
     });
   });
 
-  if (dom.notifySound) dom.notifySound.addEventListener("change", async () => {
-    const v = String(dom.notifySound.value || "none").trim().toLowerCase() || "none";
-    try { state.notifySound = v; } catch (_) {}
-    try { preloadNotifySound(state); } catch (_) {}
-    try {
-      await api("POST", "/api/config", { notify_sound: v });
-    } catch (_) {}
-    try {
-      const label = (() => {
-        try {
-          const sel = dom.notifySound;
-          const idx = Number(sel && typeof sel.selectedIndex === "number" ? sel.selectedIndex : -1);
-          const opt = (sel && sel.options && idx >= 0) ? sel.options[idx] : null;
-          const t = opt ? String(opt.textContent || "").trim() : "";
-          return t || "";
-        } catch (_) {
-          return "";
-        }
-      })();
-      const r = dom.notifySound.getBoundingClientRect();
-      flashToastAt(r.left + r.width / 2, r.top + r.height / 2, v === "none" ? "提示音：已关闭" : (`提示音：${label || "已开启"}`), { isLight: true, durationMs: 1100 });
-    } catch (_) {}
-    try { if (v !== "none") maybePlayNotifySound(dom, state); } catch (_) {}
-  });
+  const _wireSfxSelect = (sel, { field, kind, toastLabel }) => {
+    if (!sel) return;
+    sel.addEventListener("change", async () => {
+      const v = String(sel.value || "none").trim() || "none";
+      try {
+        if (kind === "tool_gate") state.notifySoundToolGate = v;
+        else state.notifySoundAssistant = v;
+      } catch (_) {}
+      try { preloadNotifySound(state); } catch (_) {}
+      try { await api("POST", "/api/config", { [field]: v }); } catch (_) {}
+      try {
+        const idx = Number(typeof sel.selectedIndex === "number" ? sel.selectedIndex : -1);
+        const opt = (sel.options && idx >= 0) ? sel.options[idx] : null;
+        const label = opt ? String(opt.textContent || "").trim() : "";
+        const r = sel.getBoundingClientRect();
+        const msg = v === "none"
+          ? `${toastLabel}：已关闭`
+          : `${toastLabel}：${label || "已开启"}`;
+        flashToastAt(r.left + r.width / 2, r.top + r.height / 2, msg, { isLight: true, durationMs: 1100 });
+      } catch (_) {}
+      try { if (v !== "none") maybePlayNotifySound(dom, state, { kind, force: true }); } catch (_) {}
+    });
+  };
+
+  _wireSfxSelect(dom.notifySoundAssistant, { field: "notify_sound_assistant", kind: "assistant", toastLabel: "回答提示音" });
+  _wireSfxSelect(dom.notifySoundToolGate, { field: "notify_sound_tool_gate", kind: "tool_gate", toastLabel: "终端提示音" });
 
   const _readSavedInt = (lsKey, fallback) => {
     try {
