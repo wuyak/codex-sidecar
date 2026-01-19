@@ -86,4 +86,5 @@
 - 202601192147_ui_quickview_close_btn_fix
 - 202601192219_ui_tabs_auto_width
 - 202601192233_ui_settings_cleanup_tabs_rename
+- 202601192251_ui_hint_refactor
 - 202601192302_ui_tabs_stable_order_badge
