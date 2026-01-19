@@ -465,7 +465,7 @@ export function wireControlEvents(dom, state, helpers) {
 	  const _openExportPrefsPanel = (key, labelText = "", anchorEl = null) => {
 	    const p = _syncExportPrefsPanel(key, labelText, true);
 	    const dlg = dom && dom.exportPrefsDialog ? dom.exportPrefsDialog : null;
-	    const ok = _openPopupNearEl(dlg, anchorEl, { prefer: "left", align: "center", gap: 10, pad: 12 });
+	    const ok = _openPopupNearEl(dlg, anchorEl, { prefer: "left", align: "end", gap: 10, pad: 12 });
 	    if (ok) {
 	      try {
 	        setTimeout(() => {
