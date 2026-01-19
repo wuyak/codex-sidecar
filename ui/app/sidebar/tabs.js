@@ -73,8 +73,62 @@ function _pickFallbackKey(state, excludeKey = "") {
   return "all";
 }
 
-let _lastHoverTipMs = 0;
-let _lastCloseTipMs = 0;
+let _bmHoverTipEl = null;
+
+function _ensureBmHoverTipEl() {
+  try {
+    if (_bmHoverTipEl && document.body && document.body.contains(_bmHoverTipEl)) return _bmHoverTipEl;
+  } catch (_) {}
+  try {
+    const el = document.createElement("div");
+    el.className = "bm-hover-tip";
+    el.setAttribute("aria-hidden", "true");
+    document.body.appendChild(el);
+    _bmHoverTipEl = el;
+    return el;
+  } catch (_) {
+    _bmHoverTipEl = null;
+    return null;
+  }
+}
+
+function _placeBmHoverTip(anchorEl) {
+  const tip = _ensureBmHoverTipEl();
+  if (!tip || !anchorEl || typeof anchorEl.getBoundingClientRect !== "function") return;
+  try {
+    const r = anchorEl.getBoundingClientRect();
+    let x = r.left + r.width / 2;
+    const y = r.top - 8;
+    tip.style.left = `${x}px`;
+    tip.style.top = `${y}px`;
+    requestAnimationFrame(() => {
+      try {
+        const tr = tip.getBoundingClientRect();
+        const half = tr.width / 2;
+        const pad = 10;
+        if (x - half < pad) x = pad + half;
+        if (x + half > (window.innerWidth - pad)) x = window.innerWidth - pad - half;
+        tip.style.left = `${x}px`;
+      } catch (_) {}
+    });
+  } catch (_) {}
+}
+
+function _showBmHoverTip(anchorEl, text) {
+  const tip = _ensureBmHoverTipEl();
+  if (!tip) return;
+  const msg = String(text || "").trim();
+  if (!msg) return;
+  try { tip.textContent = msg; } catch (_) {}
+  try { tip.classList.add("show"); } catch (_) {}
+  _placeBmHoverTip(anchorEl);
+}
+
+function _hideBmHoverTip() {
+  const tip = _ensureBmHoverTipEl();
+  if (!tip) return;
+  try { tip.classList.remove("show"); } catch (_) {}
+}
 
 export function clearTabs(dom) {
   const host = dom.bookmarks;
@@ -107,7 +161,6 @@ function _ensureBookmarkStructure(btn) {
   dot.className = "bm-dot";
   const l = document.createElement("span");
   l.className = "bm-label";
-  l.title = "鼠标左键长按进行重命名";
   const i = document.createElement("input");
   i.className = "bm-edit";
   i.type = "text";
@@ -116,7 +169,6 @@ function _ensureBookmarkStructure(btn) {
   i.placeholder = "重命名…";
   const c = document.createElement("span");
   c.className = "bm-close";
-  c.title = "关闭监听";
   c.textContent = "×";
   try { c.setAttribute("aria-hidden", "true"); } catch (_) {}
   btn.appendChild(tip);
@@ -130,6 +182,51 @@ function _ensureBookmarkStructure(btn) {
 function _wireBookmarkInteractions(btn) {
   if (!btn || btn.__bmWired) return;
   btn.__bmWired = true;
+
+  const canHoverTip = (e) => {
+    try {
+      const pt = e && e.pointerType ? String(e.pointerType) : "";
+      if (pt && pt !== "mouse") return false;
+    } catch (_) {}
+    try {
+      if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) return false;
+    } catch (_) {}
+    return true;
+  };
+
+  const tipRename = "鼠标左键长按进行重命名";
+  const tipClose = "关闭监听";
+
+  btn.addEventListener("pointerenter", (e) => {
+    if (!canHoverTip(e)) return;
+    if (btn.classList && btn.classList.contains("editing")) return;
+    _showBmHoverTip(btn, tipRename);
+  });
+  btn.addEventListener("pointerleave", (e) => {
+    if (!canHoverTip(e)) return;
+    _hideBmHoverTip();
+  });
+
+  try {
+    const parts = _ensureBookmarkStructure(btn);
+    const closeEl = parts && parts.closeSpan ? parts.closeSpan : null;
+    if (closeEl && !closeEl.__bmTipWired) {
+      closeEl.__bmTipWired = true;
+      closeEl.addEventListener("pointerenter", (e) => {
+        if (!canHoverTip(e)) return;
+        _showBmHoverTip(btn, tipClose);
+      });
+      closeEl.addEventListener("pointerleave", (e) => {
+        if (!canHoverTip(e)) return;
+        try {
+          if (btn.matches && btn.matches(":hover")) _showBmHoverTip(btn, tipRename);
+          else _hideBmHoverTip();
+        } catch (_) {
+          _hideBmHoverTip();
+        }
+      });
+    }
+  } catch (_) {}
 
   let startX = 0;
   let startY = 0;
@@ -231,8 +328,6 @@ function _wireBookmarkInteractions(btn) {
   btn.addEventListener("pointerup", clearPress);
   btn.addEventListener("pointercancel", clearPress);
   btn.addEventListener("pointerleave", clearPress);
-
-  // Hover tips: keep only one hint source (native tooltip via title), avoid extra floating toasts.
 
   btn.addEventListener("click", async (e) => {
     try {
@@ -454,10 +549,9 @@ export function renderTabs(dom, state, onSelectKey) {
       } catch (_) {}
       const parts = _ensureBookmarkStructure(btn);
       if (parts) {
-        try { parts.tipSpan.textContent = "左键长按：重命名~ (´▽｀)"; } catch (_) {}
         try { parts.labelSpan.textContent = label; } catch (_) {}
-        try { parts.labelSpan.title = "鼠标左键长按进行重命名"; } catch (_) {}
-        try { parts.closeSpan.title = "关闭监听"; } catch (_) {}
+        try { parts.labelSpan.removeAttribute("title"); } catch (_) {}
+        try { parts.closeSpan.removeAttribute("title"); } catch (_) {}
       }
       try {
         btn.dataset.label = label;

@@ -303,6 +303,33 @@
 		      body[data-bm-skin="dark"] .bookmark { background: rgba(15,23,42,.62); border-color: rgba(148,163,184,.22); }
 		      .bookmark:hover { background: var(--c-soft-2); }
 		      .bookmark .bm-tip { display: none; }
+		      .bm-hover-tip {
+		        position: fixed;
+		        left: 0;
+		        top: 0;
+		        padding: 6px 10px;
+		        border-radius: 10px;
+		        border: 1px solid rgba(148,163,184,.35);
+		        background: rgba(255,255,255,.96);
+		        color: var(--c-text);
+		        font-size: var(--ui-font-xs);
+		        white-space: nowrap;
+		        box-shadow: var(--shadow-sm);
+		        opacity: 0;
+		        pointer-events: none;
+		        transform: translate(-50%, -100%) translateY(-2px);
+		        transition: opacity .12s ease, transform .12s ease;
+		        z-index: calc(var(--z-bookmarks) + 5);
+		      }
+		      .bm-hover-tip.show {
+		        opacity: 1;
+		        transform: translate(-50%, -100%) translateY(0);
+		      }
+		      body[data-bm-skin="dark"] .bm-hover-tip {
+		        background: rgba(15,23,42,.92);
+		        color: rgba(226,232,240,.98);
+		        border-color: rgba(148,163,184,.22);
+		      }
 		      .bookmark .bm-dot {
 		        width: 10px;
 		        height: 10px;
