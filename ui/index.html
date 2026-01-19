@@ -168,6 +168,19 @@
 				          提示：选择后会播放预览。
 				        </div>
 
+				        <details id="quickViewSettingsDetails" class="drawer-details" style="margin-top:10px;">
+				          <summary class="drawer-subtitle">精简显示设置 <span id="quickBlocksSummary" class="pill">—</span></summary>
+				          <div class="meta" style="margin-top:8px; line-height:1.6;">
+				            选择“精简模式”下要显示的内容块（共 7 类）。<br>
+				            提示：长按右侧闪电按钮可快速打开本设置。
+				          </div>
+				          <div id="quickBlockList" class="qk-list" style="margin-top:10px;"></div>
+				          <div class="btns" style="margin-top:10px; justify-content:flex-end;">
+				            <button id="quickBlocksResetBtn" type="button">恢复默认</button>
+				          </div>
+				          <div id="quickBlocksErrorText" class="meta form-error" style="margin-top:6px;"></div>
+				        </details>
+
 				        <details class="drawer-details">
 				          <summary class="drawer-subtitle">高级选项</summary>
 				          <div class="grid grid-compact">

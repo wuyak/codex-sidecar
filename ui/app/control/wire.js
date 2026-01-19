@@ -1005,7 +1005,84 @@ export function wireControlEvents(dom, state, helpers) {
     }
   });
   if (dom.clearBtn) dom.clearBtn.addEventListener("click", async () => { await clearView(dom, state, refreshList); });
-  if (dom.quickViewBtn) dom.quickViewBtn.addEventListener("click", () => { toggleViewMode(dom, state); try { setTopStatusSummary(dom, state); } catch (_) {} });
+  if (dom.quickViewBtn) {
+    const btn = dom.quickViewBtn;
+    let pressT = 0;
+    let startX = 0;
+    let startY = 0;
+    let moved = false;
+    let pressed = false;
+    let longFired = false;
+    const LONG_MS = 520;
+    const MOVE_PX = 8;
+
+    const clearPress = () => {
+      pressed = false;
+      if (pressT) { try { clearTimeout(pressT); } catch (_) {} }
+      pressT = 0;
+    };
+
+    const openQuickViewSettings = () => {
+      try { openDrawer(dom); } catch (_) {}
+      try {
+        if (dom.quickViewSettingsDetails) dom.quickViewSettingsDetails.open = true;
+      } catch (_) {}
+      try {
+        setTimeout(() => {
+          try {
+            const el = dom.quickViewSettingsDetails || dom.quickBlocksResetBtn || dom.quickBlockList;
+            if (el && el.scrollIntoView) el.scrollIntoView({ block: "center" });
+          } catch (_) {}
+        }, 0);
+      } catch (_) {}
+    };
+
+    const onDown = (e) => {
+      try {
+        if (e && typeof e.button === "number" && e.button !== 0) return;
+      } catch (_) {}
+      moved = false;
+      pressed = true;
+      longFired = false;
+      startX = Number(e && e.clientX) || 0;
+      startY = Number(e && e.clientY) || 0;
+      if (pressT) { try { clearTimeout(pressT); } catch (_) {} }
+      pressT = window.setTimeout(() => {
+        if (!pressed || moved) return;
+        longFired = true;
+        openQuickViewSettings();
+      }, LONG_MS);
+    };
+
+    const onMove = (e) => {
+      if (!pressed) return;
+      const x = Number(e && e.clientX) || 0;
+      const y = Number(e && e.clientY) || 0;
+      const dx = x - startX;
+      const dy = y - startY;
+      if ((dx * dx + dy * dy) > (MOVE_PX * MOVE_PX)) {
+        moved = true;
+        if (pressT) { try { clearTimeout(pressT); } catch (_) {} }
+        pressT = 0;
+      }
+    };
+
+    btn.addEventListener("pointerdown", onDown);
+    btn.addEventListener("pointermove", onMove);
+    btn.addEventListener("pointerup", clearPress);
+    btn.addEventListener("pointercancel", clearPress);
+    btn.addEventListener("pointerleave", clearPress);
+
+    btn.addEventListener("click", (e) => {
+      if (longFired) {
+        longFired = false;
+        try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+        return;
+      }
+      toggleViewMode(dom, state);
+      try { setTopStatusSummary(dom, state); } catch (_) {}
+    });
+  }
   if (dom.translateMode) dom.translateMode.addEventListener("change", async () => {
     const next = _sanitizeTranslateMode(dom.translateMode.value);
     await _setTranslateMode(next, dom.translateMode);
