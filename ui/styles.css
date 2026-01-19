@@ -981,6 +981,40 @@
 			        box-shadow: 0 10px 24px rgba(0,0,0,.14);
 			        pointer-events: none;
 			      }
+			      .mini-btn .mini-flag {
+			        position: absolute;
+			        width: 14px;
+			        height: 14px;
+			        border-radius: 999px;
+			        border: 1px solid rgba(148,163,184,.35);
+			        background: rgba(255,255,255,.96);
+			        box-shadow: 0 10px 24px rgba(0,0,0,.14);
+			        color: var(--c-text);
+			        display: none;
+			        align-items: center;
+			        justify-content: center;
+			        pointer-events: none;
+			      }
+			      .mini-btn .ico.ico-mini {
+			        width: 11px;
+			        height: 11px;
+			        stroke-width: 2.2;
+			      }
+			      .mini-btn.flag-tr .mini-flag.flag-tr {
+			        display: flex;
+			        top: -4px;
+			        left: -4px;
+			      }
+			      .mini-btn.flag-quick .mini-flag.flag-quick {
+			        display: flex;
+			        right: -4px;
+			        bottom: -4px;
+			      }
+			      body[data-bm-skin="dark"] .mini-btn .mini-flag {
+			        border-color: rgba(148,163,184,.22);
+			        background: rgba(15,23,42,.92);
+			        color: rgba(226,232,240,.98);
+			      }
 			      .mini-btn[aria-label]:not([title])::after {
 			        content: attr(aria-label);
 			        position: absolute;
