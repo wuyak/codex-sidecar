@@ -369,34 +369,33 @@ export function wireControlEvents(dom, state, helpers) {
 
 	  const _syncExportPrefsPanel = (key, labelText = "", silent = true) => {
 	    const k = _sanitizeExportPrefsKey(key) || _sanitizeExportPrefsKey(_exportPrefsKey) || _sanitizeExportPrefsKey(state.currentKey);
-	    const details = dom && dom.exportPrefsDetails ? dom.exportPrefsDetails : null;
-	    if (!details) return null;
-	    if (!k) {
-	      try { details.style.display = "none"; } catch (_) {}
-	      return null;
-	    }
-	    try { details.style.display = ""; } catch (_) {}
+	    const dlg = dom && dom.exportPrefsDialog ? dom.exportPrefsDialog : null;
+	    if (!dlg) return null;
+	    if (!k) return null;
 	    _exportPrefsKey = k;
 	    const p = getExportPrefsForKey(k);
 	    try { if (dom.exportPrefsThread) dom.exportPrefsThread.textContent = labelText || (getCustomLabel(k) || k); } catch (_) {}
-	    try { if (dom.exportPrefsQuick) dom.exportPrefsQuick.checked = !!p.quick; } catch (_) {}
-	    try { if (dom.exportPrefsTranslate) dom.exportPrefsTranslate.checked = !!p.translate; } catch (_) {}
+	    try { if (dom.exportPrefsQuick) { dom.exportPrefsQuick.disabled = false; dom.exportPrefsQuick.checked = !!p.quick; } } catch (_) {}
+	    try { if (dom.exportPrefsTranslate) { dom.exportPrefsTranslate.disabled = false; dom.exportPrefsTranslate.checked = !!p.translate; } } catch (_) {}
 	    try { if (dom.exportPrefsSummary) dom.exportPrefsSummary.textContent = _exportPrefsText(p); } catch (_) {}
 	    if (!silent) {
-	      try { _toastFromEl(details, `导出：${_exportPrefsText(p)}`, { durationMs: 1400 }); } catch (_) {}
+	      try { _toastFromEl(dlg, `导出：${_exportPrefsText(p)}`, { durationMs: 1400 }); } catch (_) {}
 	    }
 	    return p;
 	  };
 
 	  const _openExportPrefsPanel = (key, labelText = "") => {
-	    try { openBookmarkDrawer(dom); } catch (_) {}
 	    const p = _syncExportPrefsPanel(key, labelText, true);
-	    try { if (dom.exportPrefsDetails) dom.exportPrefsDetails.open = true; } catch (_) {}
-	    try {
-	      setTimeout(() => {
-	        try { if (dom.exportPrefsDetails && dom.exportPrefsDetails.scrollIntoView) dom.exportPrefsDetails.scrollIntoView({ block: "center" }); } catch (_) {}
-	      }, 0);
-	    } catch (_) {}
+	    const dlg = dom && dom.exportPrefsDialog ? dom.exportPrefsDialog : null;
+	    const canModal = !!(dlg && typeof dlg.showModal === "function");
+	    if (canModal) {
+	      try { dlg.showModal(); } catch (_) {}
+	      try {
+	        setTimeout(() => {
+	          try { if (dom.exportPrefsQuick && typeof dom.exportPrefsQuick.focus === "function") dom.exportPrefsQuick.focus(); } catch (_) {}
+	        }, 0);
+	      } catch (_) {}
+	    }
 	    return p;
 	  };
 
@@ -414,6 +413,7 @@ export function wireControlEvents(dom, state, helpers) {
 	      };
 	      const p = setExportPrefsForKey(k, next);
 	      _syncExportPrefsPanel(k, "", true);
+	      try { _renderBookmarkDrawerList(); } catch (_) {}
 	      try { if (sourceEl) _toastFromEl(sourceEl, `导出：${_exportPrefsText(p)}`, { durationMs: 1400 }); } catch (_) {}
 	    };
 	    try { if (quickEl) quickEl.addEventListener("change", () => onChange(quickEl)); } catch (_) {}
@@ -618,8 +618,17 @@ export function wireControlEvents(dom, state, helpers) {
 	        exportBtn.className = "mini-btn";
 	        exportBtn.type = "button";
 	        exportBtn.dataset.action = "export";
-	        exportBtn.setAttribute("aria-label", "导出（长按设置）");
-	        exportBtn.title = "导出（长按设置）";
+	        try {
+	          const p = getExportPrefsForKey(String(it.key || ""));
+	          const badge = `${p && p.quick ? "精" : "全"}${p && p.translate ? "译" : "原"}`;
+	          exportBtn.dataset.badge = badge;
+	          exportBtn.classList.toggle("active", badge !== "精译");
+	          exportBtn.setAttribute("aria-label", `导出（${_exportPrefsText(p)}；长按设置）`);
+	          exportBtn.title = `导出（${_exportPrefsText(p)}；长按设置）`;
+	        } catch (_) {
+	          exportBtn.setAttribute("aria-label", "导出（长按设置）");
+	          exportBtn.title = "导出（长按设置）";
+	        }
 	        exportBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="#i-download"></use></svg>`;
 	        try {
 	          let pressT = 0;
@@ -816,9 +825,27 @@ export function wireControlEvents(dom, state, helpers) {
       });
     } catch (_) {}
   }
+  if (dom.exportPrefsDialog) {
+    const dlg = dom.exportPrefsDialog;
+    try {
+      dlg.addEventListener("click", (e) => {
+        if (e && e.target === dlg) { try { dlg.close(); } catch (_) {} }
+      });
+    } catch (_) {}
+  }
   window.addEventListener("keydown", (e) => {
     try {
-      if (e && e.key === "Escape") { closeBookmarkDrawer(dom); closeTranslateDrawer(dom); closeDrawer(dom); }
+      if (e && e.key === "Escape") {
+        const hasDialog = !!(
+          (dom.confirmDialog && dom.confirmDialog.open)
+          || (dom.quickViewDialog && dom.quickViewDialog.open)
+          || (dom.exportPrefsDialog && dom.exportPrefsDialog.open)
+        );
+        if (hasDialog) return;
+        closeBookmarkDrawer(dom);
+        closeTranslateDrawer(dom);
+        closeDrawer(dom);
+      }
     } catch (_) {}
   });
 

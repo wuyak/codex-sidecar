@@ -873,6 +873,21 @@
 			      .mini-btn.active { background: rgba(2,132,199,.10); color: var(--c-text); border-color: rgba(14,165,233,.55); }
 			      .mini-btn.danger { border-color: rgba(248,113,113,.45); color: var(--c-danger); }
 			      .mini-btn.danger:hover { background: var(--c-danger-bg); }
+			      .mini-btn[data-badge]::before {
+			        content: attr(data-badge);
+			        position: absolute;
+			        top: -6px;
+			        right: -6px;
+			        padding: 0 5px;
+			        border-radius: 999px;
+			        background: rgba(2,132,199,.96);
+			        color: #fff;
+			        font-size: 10px;
+			        line-height: 16px;
+			        border: 1px solid rgba(255,255,255,.92);
+			        box-shadow: 0 10px 24px rgba(0,0,0,.14);
+			        pointer-events: none;
+			      }
 			      .mini-btn[aria-label]:not([title])::after {
 			        content: attr(aria-label);
 			        position: absolute;

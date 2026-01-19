@@ -326,17 +326,6 @@
 						      </div>
 						      <div class="drawer-sec">
 							        <div id="bookmarkList" class="tabs" style="margin-top:10px;"></div>
-							        <details id="exportPrefsDetails" class="drawer-details" style="margin-top:10px;">
-							          <summary class="meta">导出设置 <span id="exportPrefsSummary" class="pill">—</span></summary>
-							          <div class="meta" style="margin-top:8px; line-height:1.6;">
-							            当前会话：<span id="exportPrefsThread" class="pill">—</span><br>
-							            提示：点击导出图标直接导出；长按导出图标打开本设置。
-							          </div>
-							          <div class="check-row" style="margin-top:10px;">
-							            <label class="check"><input id="exportPrefsQuick" type="checkbox" />精简</label>
-							            <label class="check"><input id="exportPrefsTranslate" type="checkbox" />译文</label>
-							          </div>
-							        </details>
 							        <details id="bookmarkHiddenDetails" class="drawer-details" style="margin-top:10px;">
 							          <summary class="meta">已关闭监听 <span id="bookmarkHiddenCount" class="pill">0</span></summary>
 							          <div id="bookmarkHiddenList" class="tabs" style="margin-top:10px;"></div>
@@ -358,6 +347,22 @@
 						          <button id="quickBlocksResetBtn" type="button">恢复默认</button>
 						        </div>
 						        <div id="quickBlocksErrorText" class="meta form-error" style="margin-top:6px;"></div>
+						      </form>
+						    </dialog>
+						    <dialog id="exportPrefsDialog" class="popup-dialog" role="dialog" aria-modal="true" aria-label="导出设置">
+						      <form method="dialog" class="popup-dialog-form">
+						        <div class="popup-head">
+						          <div class="popup-title">导出设置 <span id="exportPrefsSummary" class="pill">—</span></div>
+						          <button id="exportPrefsDialogCloseBtn" class="drawer-close" value="cancel" type="submit" aria-label="关闭">×</button>
+						        </div>
+						        <div class="meta" style="margin-top:8px; line-height:1.6;">
+						          当前会话：<span id="exportPrefsThread" class="pill">—</span><br>
+						          提示：点击导出图标直接导出；长按导出图标打开本设置。
+						        </div>
+						        <div class="check-row" style="margin-top:10px;">
+						          <label class="check"><input id="exportPrefsQuick" type="checkbox" />精简</label>
+						          <label class="check"><input id="exportPrefsTranslate" type="checkbox" />译文</label>
+						        </div>
 						      </form>
 						    </dialog>
 							    <dialog id="confirmDialog" class="confirm-dialog" role="alertdialog" aria-labelledby="confirmDialogTitle" aria-describedby="confirmDialogDesc">
