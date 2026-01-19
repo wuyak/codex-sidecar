@@ -327,9 +327,9 @@
 		      .bookmark.has-unread::after {
 		        content: attr(data-unread);
 		        position: absolute;
-		        top: 50%;
+		        top: 6px;
 		        right: 8px;
-		        transform: translateY(-50%);
+		        transform: none;
 		        min-width: 18px;
 		        height: 18px;
 		        padding: 0 6px;
@@ -340,7 +340,7 @@
 		        line-height: 18px;
 		        text-align: center;
 		        border: 1px solid rgba(255,255,255,.92);
-		        box-shadow: 0 10px 24px rgba(0,0,0,.14);
+		        box-shadow: 0 8px 18px rgba(0,0,0,.12);
 		      }
 			      .bookmark .bm-edit { display:none; flex: 1 1 auto; min-width: 0; width: auto; padding: 5px 8px; border: 1px solid rgba(14,165,233,.55); border-radius: 10px; outline: none; font-size: 12px; background: var(--c-surface); color: var(--c-text); box-shadow: var(--ring); }
 		      .bookmark.editing .bm-label { display:none; }

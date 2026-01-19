@@ -11,9 +11,22 @@ export async function refreshThreads(state, signal) {
       const k = (t && typeof t.key === "string") ? t.key : "";
       if (k) next.set(k, t);
     }
-    if (state.threadIndex && typeof state.threadIndex.clear === "function") {
-      state.threadIndex.clear();
-      for (const [k, v] of next.entries()) state.threadIndex.set(k, v);
+    // Keep tab order stable: update existing entries in-place, append new keys, and only delete missing ones.
+    if (state.threadIndex && typeof state.threadIndex.set === "function") {
+      const cur = state.threadIndex;
+      for (const [k, v] of next.entries()) {
+        const prev = cur.get(k);
+        if (prev && typeof prev === "object" && v && typeof v === "object") {
+          const merged = { ...prev, ...v };
+          if (prev.kinds && !v.kinds) merged.kinds = prev.kinds;
+          cur.set(k, merged);
+        } else {
+          cur.set(k, v);
+        }
+      }
+      for (const k of Array.from(cur.keys())) {
+        if (!next.has(k)) cur.delete(k);
+      }
     }
     try { pruneClosedThreads(state); } catch (_) {}
     state.threadsLastSyncMs = Date.now();

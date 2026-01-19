@@ -384,12 +384,8 @@ export function renderTabs(dom, state, onSelectKey) {
     }
   } catch (_) {}
 
-  const items = Array.from(state.threadIndex.values()).sort((a, b) => {
-    const sa = Number(a && a.last_seq) || 0;
-    const sb = Number(b && b.last_seq) || 0;
-    if (sa !== sb) return sb - sa;
-    return String(b.last_ts || "").localeCompare(String(a.last_ts || ""));
-  });
+  // Tabs should keep a stable order (browser-like). Do not reorder by activity on every refresh.
+  const items = Array.from(state.threadIndex.values());
 
   const hidden = (state && state.hiddenThreads && typeof state.hiddenThreads.has === "function")
     ? state.hiddenThreads
@@ -541,5 +537,11 @@ export function renderTabs(dom, state, onSelectKey) {
 
   const railFrag = renderList(rail, existingRail, { mode: "rail" });
 
+  // Preserve horizontal scroll position to avoid “jumping” when SSE refreshes rerender the rail.
+  let prevScrollLeft = 0;
+  try { prevScrollLeft = rail ? Number(rail.scrollLeft) || 0 : 0; } catch (_) {}
+
   try { if (rail) rail.replaceChildren(railFrag); } catch (_) { try { while (rail && rail.firstChild) rail.removeChild(rail.firstChild); rail && rail.appendChild(railFrag); } catch (_) {} }
+
+  try { if (rail) rail.scrollLeft = prevScrollLeft; } catch (_) {}
 }
