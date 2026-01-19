@@ -4,7 +4,7 @@ import { saveConfig, saveTranslateConfig } from "./config.js";
 import { applyProfileToInputs, readHttpInputs, refreshHttpProfileSelect, upsertSelectedProfileFromInputs } from "./http_profiles.js";
 import { closeBookmarkDrawer, closeDrawer, closeTranslateDrawer, confirmDialog, openBookmarkDrawer, openDrawer, openTranslatorSettings, setDebug, setStatus, setTopStatusSummary, showProviderBlocks } from "./ui.js";
 import { showShutdownScreen } from "../shutdown.js";
-import { toggleViewMode } from "../view_mode.js";
+import { setViewMode, toggleViewMode } from "../view_mode.js";
 import { flashToastAt } from "../utils/toast.js";
 import { buildThinkingMetaRight } from "../thinking/meta.js";
 import { maybePlayNotifySound, preloadNotifySound } from "../sound.js";
@@ -284,7 +284,7 @@ export function wireControlEvents(dom, state, helpers) {
     });
   });
 
-  const _wireSfxSelect = (sel, { field, kind, toastLabel }) => {
+  const _wireSfxSelect = (sel, { field, kind }) => {
     if (!sel) return;
     sel.addEventListener("change", async () => {
       const v = String(sel.value || "none").trim() || "none";
@@ -294,22 +294,12 @@ export function wireControlEvents(dom, state, helpers) {
       } catch (_) {}
       try { preloadNotifySound(state); } catch (_) {}
       try { await api("POST", "/api/config", { [field]: v }); } catch (_) {}
-      try {
-        const idx = Number(typeof sel.selectedIndex === "number" ? sel.selectedIndex : -1);
-        const opt = (sel.options && idx >= 0) ? sel.options[idx] : null;
-        const label = opt ? String(opt.textContent || "").trim() : "";
-        const r = sel.getBoundingClientRect();
-        const msg = v === "none"
-          ? `${toastLabel}：已关闭`
-          : `${toastLabel}：${label || "已开启"}`;
-        flashToastAt(r.left + r.width / 2, r.top + r.height / 2, msg, { isLight: true, durationMs: 1100 });
-      } catch (_) {}
       try { if (v !== "none") maybePlayNotifySound(dom, state, { kind, force: true }); } catch (_) {}
     });
   };
 
-  _wireSfxSelect(dom.notifySoundAssistant, { field: "notify_sound_assistant", kind: "assistant", toastLabel: "回答提示音" });
-  _wireSfxSelect(dom.notifySoundToolGate, { field: "notify_sound_tool_gate", kind: "tool_gate", toastLabel: "终端提示音" });
+  _wireSfxSelect(dom.notifySoundAssistant, { field: "notify_sound_assistant", kind: "assistant" });
+  _wireSfxSelect(dom.notifySoundToolGate, { field: "notify_sound_tool_gate", kind: "tool_gate" });
 
   const _readSavedInt = (lsKey, fallback) => {
     try {
@@ -369,13 +359,11 @@ export function wireControlEvents(dom, state, helpers) {
     if (n == null || n < 12 || n > 24) {
       _setInvalid(el, true);
       try { el.value = String(prev); } catch (_) {}
-      if (!silent) _toastFromEl(el, "字体大小需为整数（12-24px）", { durationMs: 1500 });
       return;
     }
     _setInvalid(el, false);
     const v = _applyUiFontSize(n);
     try { localStorage.setItem(_LS_UI_FONT, String(v)); } catch (_) {}
-    if (!silent) _toastFromEl(el, `字体大小：${v}px`);
   };
 
   const _applyUiFontDraft = () => {
@@ -398,13 +386,11 @@ export function wireControlEvents(dom, state, helpers) {
     if (n == null || n < 32 || n > 72) {
       _setInvalid(el, true);
       try { el.value = String(prev); } catch (_) {}
-      if (!silent) _toastFromEl(el, "按钮大小需为整数（32-72px）", { durationMs: 1500 });
       return;
     }
     _setInvalid(el, false);
     const v = _applyUiButtonSize(n);
     try { localStorage.setItem(_LS_UI_BTN, String(v)); } catch (_) {}
-    if (!silent) _toastFromEl(el, `按钮大小：${v}px`);
   };
 
   const _applyUiBtnDraft = () => {
@@ -453,8 +439,20 @@ export function wireControlEvents(dom, state, helpers) {
 	    _exportPrefsKey = k;
 	    const p = getExportPrefsForKey(k);
 	    try { if (dom.exportPrefsThread) dom.exportPrefsThread.textContent = labelText || (getCustomLabel(k) || k); } catch (_) {}
-	    try { if (dom.exportPrefsQuick) { dom.exportPrefsQuick.disabled = false; dom.exportPrefsQuick.checked = !!p.quick; } } catch (_) {}
-	    try { if (dom.exportPrefsTranslate) { dom.exportPrefsTranslate.disabled = false; dom.exportPrefsTranslate.checked = !!p.translate; } } catch (_) {}
+	    try {
+	      if (dom.exportPrefsQuickBtn) {
+	        dom.exportPrefsQuickBtn.setAttribute("aria-pressed", p.quick ? "true" : "false");
+	        dom.exportPrefsQuickBtn.classList.toggle("is-on-a", !!p.quick);
+	        dom.exportPrefsQuickBtn.classList.toggle("is-on-b", !p.quick);
+	      }
+	    } catch (_) {}
+	    try {
+	      if (dom.exportPrefsTranslateBtn) {
+	        dom.exportPrefsTranslateBtn.setAttribute("aria-pressed", p.translate ? "true" : "false");
+	        dom.exportPrefsTranslateBtn.classList.toggle("is-on-a", !!p.translate);
+	        dom.exportPrefsTranslateBtn.classList.toggle("is-on-b", !p.translate);
+	      }
+	    } catch (_) {}
 	    try { if (dom.exportPrefsSummary) dom.exportPrefsSummary.textContent = _exportPrefsText(p); } catch (_) {}
 	    if (!silent) {
 	      try { _toastFromEl(dlg, `导出：${_exportPrefsText(p)}`, { durationMs: 1400 }); } catch (_) {}
@@ -469,7 +467,7 @@ export function wireControlEvents(dom, state, helpers) {
 	    if (ok) {
 	      try {
 	        setTimeout(() => {
-	          try { if (dom.exportPrefsQuick && typeof dom.exportPrefsQuick.focus === "function") dom.exportPrefsQuick.focus(); } catch (_) {}
+	          try { if (dom.exportPrefsQuickBtn && typeof dom.exportPrefsQuickBtn.focus === "function") dom.exportPrefsQuickBtn.focus(); } catch (_) {}
 	        }, 0);
 	      } catch (_) {}
 	    }
@@ -477,24 +475,31 @@ export function wireControlEvents(dom, state, helpers) {
 	  };
 
 	  const _wireExportPrefsPanel = () => {
-	    const quickEl = dom && dom.exportPrefsQuick ? dom.exportPrefsQuick : null;
-	    const trEl = dom && dom.exportPrefsTranslate ? dom.exportPrefsTranslate : null;
-	    if (!quickEl && !trEl) return;
-	    const onChange = (sourceEl) => {
+	    const quickBtn = dom && dom.exportPrefsQuickBtn ? dom.exportPrefsQuickBtn : null;
+	    const trBtn = dom && dom.exportPrefsTranslateBtn ? dom.exportPrefsTranslateBtn : null;
+	    if (!quickBtn && !trBtn) return;
+	    const apply = (next, sourceEl) => {
 	      const k = _sanitizeExportPrefsKey(_exportPrefsKey) || _sanitizeExportPrefsKey(state.currentKey);
 	      if (!k) return;
-	      const cur = getExportPrefsForKey(k);
-	      const next = {
-	        quick: quickEl ? !!quickEl.checked : !!cur.quick,
-	        translate: trEl ? !!trEl.checked : !!cur.translate,
-	      };
 	      const p = setExportPrefsForKey(k, next);
 	      _syncExportPrefsPanel(k, "", true);
 	      try { _renderBookmarkDrawerList(); } catch (_) {}
 	      try { if (sourceEl) _toastFromEl(sourceEl, `导出：${_exportPrefsText(p)}`, { durationMs: 1400 }); } catch (_) {}
 	    };
-	    try { if (quickEl) quickEl.addEventListener("change", () => onChange(quickEl)); } catch (_) {}
-	    try { if (trEl) trEl.addEventListener("change", () => onChange(trEl)); } catch (_) {}
+	    try {
+	      if (quickBtn) quickBtn.addEventListener("click", () => {
+	        const k = _sanitizeExportPrefsKey(_exportPrefsKey) || _sanitizeExportPrefsKey(state.currentKey);
+	        const cur = getExportPrefsForKey(k);
+	        apply({ quick: !cur.quick, translate: !!cur.translate }, quickBtn);
+	      });
+	    } catch (_) {}
+	    try {
+	      if (trBtn) trBtn.addEventListener("click", () => {
+	        const k = _sanitizeExportPrefsKey(_exportPrefsKey) || _sanitizeExportPrefsKey(state.currentKey);
+	        const cur = getExportPrefsForKey(k);
+	        apply({ quick: !!cur.quick, translate: !cur.translate }, trBtn);
+	      });
+	    } catch (_) {}
 
 	    try { _syncExportPrefsPanel(state.currentKey, "", true); } catch (_) {}
 	  };
@@ -697,16 +702,19 @@ export function wireControlEvents(dom, state, helpers) {
 	        exportBtn.dataset.action = "export";
 	        try {
 	          const p = getExportPrefsForKey(String(it.key || ""));
-	          const badge = `${p && p.quick ? "精" : "全"}${p && p.translate ? "译" : "原"}`;
-	          exportBtn.dataset.badge = badge;
-	          exportBtn.classList.toggle("active", badge !== "精译");
+	          exportBtn.classList.toggle("flag-quick", !!p.quick);
+	          exportBtn.classList.toggle("flag-tr", !!p.translate);
 	          exportBtn.setAttribute("aria-label", `导出（${_exportPrefsText(p)}；长按设置）`);
 	          exportBtn.title = `导出（${_exportPrefsText(p)}；长按设置）`;
 	        } catch (_) {
 	          exportBtn.setAttribute("aria-label", "导出（长按设置）");
 	          exportBtn.title = "导出（长按设置）";
 	        }
-	        exportBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="#i-download"></use></svg>`;
+	        exportBtn.innerHTML = `
+	          <svg class="ico" aria-hidden="true"><use href="#i-download"></use></svg>
+	          <span class="mini-flag flag-tr" aria-hidden="true"><svg class="ico ico-mini" aria-hidden="true"><use href="#i-globe"></use></svg></span>
+	          <span class="mini-flag flag-quick" aria-hidden="true"><svg class="ico ico-mini" aria-hidden="true"><use href="#i-bolt"></use></svg></span>
+	        `;
 	        try {
 	          let pressT = 0;
 	          let startX = 0;
@@ -894,6 +902,8 @@ export function wireControlEvents(dom, state, helpers) {
   if (dom.drawerCloseBtn) dom.drawerCloseBtn.addEventListener("click", () => { closeDrawer(dom); });
   if (dom.translateDrawerOverlay) dom.translateDrawerOverlay.addEventListener("click", () => { closeTranslateDrawer(dom); });
   if (dom.translateDrawerCloseBtn) dom.translateDrawerCloseBtn.addEventListener("click", () => { closeTranslateDrawer(dom); });
+  if (dom.exportPrefsDialogCloseBtn) dom.exportPrefsDialogCloseBtn.addEventListener("click", () => { try { if (dom.exportPrefsDialog) dom.exportPrefsDialog.close(); } catch (_) {} });
+  if (dom.quickViewDialogCloseBtn) dom.quickViewDialogCloseBtn.addEventListener("click", () => { try { if (dom.quickViewDialog) dom.quickViewDialog.close(); } catch (_) {} });
   window.addEventListener("keydown", (e) => {
     try {
       if (e && e.key === "Escape") {
@@ -1127,6 +1137,7 @@ export function wireControlEvents(dom, state, helpers) {
       const dlg = dom && dom.quickViewDialog ? dom.quickViewDialog : null;
       const canPopup = !!(dlg && typeof dlg.show === "function");
       if (!canPopup) return;
+      try { if (dlg.open) { dlg.close(); return; } } catch (_) {}
 
       // Keep UI clean: quick-view settings popover is exclusive with drawers.
       try { closeDrawer(dom); } catch (_) {}

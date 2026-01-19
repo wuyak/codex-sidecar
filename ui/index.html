@@ -332,38 +332,46 @@
 							        </details>
 						      </div>
 						    </div>
-						    <dialog id="quickViewDialog" class="popup-dialog" role="dialog" aria-label="精简显示设置">
-						      <form method="dialog" class="popup-dialog-form">
+						    <dialog id="quickViewDialog" class="popup-dialog" role="dialog" aria-label="精简显示">
+						      <div class="popup-dialog-form">
 						        <div class="popup-head">
-						          <div class="popup-title">精简显示设置 <span id="quickBlocksSummary" class="pill">—</span></div>
-						          <button id="quickViewDialogCloseBtn" class="drawer-close" value="cancel" type="submit" aria-label="关闭">×</button>
+						          <div class="popup-title">精简显示</div>
+						          <button id="quickViewDialogCloseBtn" class="drawer-close" type="button" aria-label="关闭">×</button>
 						        </div>
-						        <div class="meta" style="margin-top:8px; line-height:1.6;">
-						          选择“精简模式”下要显示的内容块（共 7 类）。<br>
-						          提示：长按右侧闪电按钮可快速打开本设置。
+						        <div class="popup-subhead" style="margin-top:10px;">
+						          <span id="quickBlocksSummary" class="pill">—</span>
+						          <button id="quickBlocksResetBtn" class="pill pill-btn" type="button" style="margin-left:auto;">恢复默认</button>
 						        </div>
-						        <div id="quickBlockList" class="qk-list" style="margin-top:10px;"></div>
-						        <div class="btns" style="margin-top:12px; justify-content:flex-end;">
-						          <button id="quickBlocksResetBtn" type="button">恢复默认</button>
-						        </div>
+						        <div id="quickBlockList" class="qk-panel" style="margin-top:10px;"></div>
 						        <div id="quickBlocksErrorText" class="meta form-error" style="margin-top:6px;"></div>
-						      </form>
+						      </div>
 						    </dialog>
 						    <dialog id="exportPrefsDialog" class="popup-dialog" role="dialog" aria-label="导出设置">
-						      <form method="dialog" class="popup-dialog-form">
+						      <div class="popup-dialog-form">
 						        <div class="popup-head">
 						          <div class="popup-title">导出设置 <span id="exportPrefsSummary" class="pill">—</span></div>
-						          <button id="exportPrefsDialogCloseBtn" class="drawer-close" value="cancel" type="submit" aria-label="关闭">×</button>
+						          <button id="exportPrefsDialogCloseBtn" class="drawer-close" type="button" aria-label="关闭">×</button>
 						        </div>
-						        <div class="meta" style="margin-top:8px; line-height:1.6;">
-						          当前会话：<span id="exportPrefsThread" class="pill">—</span><br>
-						          提示：点击导出图标直接导出；长按导出图标打开本设置。
+						        <div class="meta" style="margin-top:10px;">
+						          当前会话：<span id="exportPrefsThread" class="pill">—</span>
 						        </div>
-						        <div class="check-row" style="margin-top:10px;">
-						          <label class="check"><input id="exportPrefsQuick" type="checkbox" />精简</label>
-						          <label class="check"><input id="exportPrefsTranslate" type="checkbox" />译文</label>
+						        <div class="pref-menu" style="margin-top:10px;">
+						          <button id="exportPrefsQuickBtn" class="pref-row" type="button" aria-pressed="false">
+						            <span class="pref-check" aria-hidden="true"></span>
+						            <span class="pref-label">精简导出</span>
+						            <span class="pref-option" aria-hidden="true">
+						              <span class="opt opt-a">精简</span><span class="slash">/</span><span class="opt opt-b">全量</span>
+						            </span>
+						          </button>
+						          <button id="exportPrefsTranslateBtn" class="pref-row" type="button" aria-pressed="false">
+						            <span class="pref-check" aria-hidden="true"></span>
+						            <span class="pref-label">包含译文</span>
+						            <span class="pref-option" aria-hidden="true">
+						              <span class="opt opt-a">译文</span><span class="slash">/</span><span class="opt opt-b">原文</span>
+						            </span>
+						          </button>
 						        </div>
-						      </form>
+						      </div>
 						    </dialog>
 							    <dialog id="confirmDialog" class="confirm-dialog" role="alertdialog" aria-labelledby="confirmDialogTitle" aria-describedby="confirmDialogDesc">
 							      <form method="dialog" class="confirm-dialog-form">

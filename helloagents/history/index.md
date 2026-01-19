@@ -82,3 +82,5 @@
 - 202601191539_quickview_hover_kind
 - 202601191559_bookmark_drawer_button_titles
 - 202601191640_export_md_fix
+- 202601192134_ui_quickview_fix
+- 202601192147_ui_quickview_close_btn_fix

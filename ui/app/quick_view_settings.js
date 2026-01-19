@@ -113,7 +113,9 @@ function _applyQuickStyle(enabled) {
   const lines = [];
   // Override the default quick-view filter so every block can be toggled on/off.
   // Keep topbar / empty placeholder always visible.
-  lines.push(`body.quick-view.quick-custom .row:not(#topbar):not(.row-empty) { display: none; }`);
+  lines.push(`body.quick-view.quick-custom .row { display: none; }`);
+  lines.push(`body.quick-view.quick-custom #topbar.row { display: flex; }`);
+  lines.push(`body.quick-view.quick-custom .row.row-empty { display: block; }`);
   for (const b of _BLOCKS) {
     if (!on.has(b.id)) continue;
     lines.push(`body.quick-view.quick-custom ${b.selector} { display: block; }`);

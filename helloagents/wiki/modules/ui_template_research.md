@@ -198,4 +198,8 @@
 - 回滚/对照（legacy 快照）：已归档到 `old/`（不再提供 `/ui-legacy` 路由）
 - UI v2（已归档）：`old/tools/codex_thinking_sidecar/codex_thinking_sidecar/ui_v2/`（不再提供 `/ui-v2` 路由）
 
+### 10.1 样式细节（小抄）
+
+- 行内 `code`（例如 `git add -A`）的背景透明度：在 `ui/styles.css` 的 `.md code` 规则中调整；背景基于 `--c-soft` 并可通过 `color-mix(..., transparent)` 进一步变“更透明”。
+
 > 备注：本报告中“零构建可集成”的模板/设计系统仍可作为备选路径参考；UI v2 的迁移以“逐项确认保留 legacy 交互与筛选能力”为约束推进。

@@ -18,8 +18,8 @@ export function getDom() {
     exportPrefsDialogCloseBtn: byId("exportPrefsDialogCloseBtn"),
     exportPrefsSummary: byId("exportPrefsSummary"),
     exportPrefsThread: byId("exportPrefsThread"),
-    exportPrefsQuick: byId("exportPrefsQuick"),
-    exportPrefsTranslate: byId("exportPrefsTranslate"),
+    exportPrefsQuickBtn: byId("exportPrefsQuickBtn"),
+    exportPrefsTranslateBtn: byId("exportPrefsTranslateBtn"),
 
     cfgHome: byId("cfgHome"),
     watchHome: byId("watchHome"),

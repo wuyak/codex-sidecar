@@ -696,12 +696,19 @@
 				      .drawer-close:active { transform: translateY(1px); }
 				      .drawer-close:focus-visible { outline: none; box-shadow: var(--shadow-sm), var(--ring); border-color: rgba(14,165,233,.55); }
 				      .drawer-sec { margin-top: 10px; border: none; border-radius: 0; background: transparent; padding: 0; }
-      .drawer-details { margin-top: 10px; }
-      .drawer-details > summary { cursor:pointer; font-weight: 800; color: var(--c-muted); list-style: none; padding: 8px 10px; border: 1px solid var(--c-border); border-radius: 12px; background: var(--c-soft-2); }
-      .drawer-details > summary.drawer-subtitle { font-weight: 900; color: var(--c-text); font-size: 13px; }
-      .drawer-details > summary::-webkit-details-marker { display: none; }
-      .drawer-details[open] > summary { color: var(--c-text); background: var(--c-surface); box-shadow: var(--shadow-sm); }
-      .drawer-details .grid { margin-top: 10px; }
+	      .drawer-details { margin-top: 10px; }
+	      .drawer-details > summary { cursor:pointer; font-weight: 800; color: var(--c-muted); list-style: none; padding: 8px 10px; border: 1px solid var(--c-border); border-radius: 12px; background: var(--c-soft-2); }
+	      .drawer-details > summary.drawer-subtitle { font-weight: 900; color: var(--c-text); font-size: 13px; }
+	      .drawer-details > summary::-webkit-details-marker { display: none; }
+	      .drawer-details[open] > summary { color: var(--c-text); background: var(--c-surface); box-shadow: var(--shadow-sm); }
+	      .drawer-details .grid { margin-top: 10px; }
+
+	      /* 调试信息（在设置抽屉里）：做成“代码/kv 面板”风格，便于快速扫读与复制。 */
+	      #debugDetails { margin-top: 10px; }
+	      #debugDetails > summary { cursor:pointer; font-weight: 800; color: var(--c-muted); list-style: none; padding: 8px 10px; border: 1px solid var(--c-border); border-radius: 12px; background: var(--c-soft-2); }
+	      #debugDetails > summary::-webkit-details-marker { display: none; }
+	      #debugDetails[open] > summary { color: var(--c-text); background: var(--c-surface); box-shadow: var(--shadow-sm); }
+	      #debugText { margin: 10px 0 0; border: 1px solid var(--c-border); border-radius: 12px; padding: 10px 12px; background: var(--c-soft-2); color: var(--c-text); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; line-height: 1.45; font-variant-numeric: tabular-nums; overflow: auto; max-height: 52vh; }
 
 			      .drawer-sec > summary { cursor:pointer; font-weight: 700; color:#0f172a; list-style: none; }
 				      .drawer-sec > summary::-webkit-details-marker { display: none; }
@@ -711,11 +718,62 @@
 				      .confirm-dialog-form { padding: 12px 12px 10px; }
 				      .confirm-dialog-title { font-weight: 900; }
 				      .confirm-dialog-desc { margin-top: 8px; }
-				      .popup-dialog { position: fixed; margin: 0; border: 1px solid var(--c-border); border-radius: 14px; padding: 0; width: min(460px, calc(100vw - 32px - var(--safe-left) - var(--safe-right))); background: var(--c-surface); color: var(--c-text); box-shadow: var(--shadow-md); }
+				      .popup-dialog {
+				        position: fixed;
+				        inset: auto;
+				        left: auto;
+				        top: auto;
+				        right: auto;
+				        bottom: auto;
+				        margin: 0;
+				        border: 1px solid var(--c-border);
+				        border-radius: 14px;
+				        padding: 0;
+				        width: min(420px, calc(100vw - 24px - var(--safe-left) - var(--safe-right)));
+				        max-height: calc(100vh - 24px - var(--safe-top) - var(--safe-bottom));
+				        overflow: auto;
+				        background: var(--c-surface);
+				        color: var(--c-text);
+				        box-shadow: var(--shadow-md);
+				      }
 				      .popup-dialog::backdrop { background: rgba(15,23,42,.22); }
 				      .popup-dialog-form { padding: 12px 12px 10px; }
 				      .popup-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
 				      .popup-title { font-weight: 900; }
+				      .popup-subhead { display:flex; align-items:center; gap:10px; }
+
+				      /* 精简显示弹层（右侧面板样式，列表为整块分割线）。 */
+				      #quickViewDialog { width: min(360px, calc(100vw - 24px - var(--safe-left) - var(--safe-right))); }
+				      .qk-panel { border: 1px solid var(--c-border); border-radius: 12px; overflow: hidden; background: var(--c-surface); }
+				      .qk-row { width: 100%; display:flex; align-items:center; gap: 10px; padding: 10px 12px; border: none; background: transparent; color: var(--c-text); cursor: pointer; text-align: left; }
+				      .qk-row + .qk-row { border-top: 1px solid var(--c-border); }
+				      .qk-row:hover { background: var(--c-soft-2); }
+				      .qk-row:active { transform: translateY(1px); }
+				      .qk-row:focus-visible { outline: none; box-shadow: var(--ring); }
+				      .qk-dot { width: 18px; height: 18px; border-radius: 999px; border: 1px solid var(--c-border-strong); display:flex; align-items:center; justify-content:center; font-size: 12px; font-weight: 900; flex: 0 0 auto; color: var(--c-accent); }
+				      .qk-row[aria-pressed="false"] .qk-dot { color: transparent; }
+				      .qk-dot::before { content: "✓"; }
+				      .qk-row[aria-pressed="false"] .qk-dot::before { content: ""; }
+
+				      /* 导出设置弹层（小菜单风格）。 */
+				      #exportPrefsDialog { width: min(340px, calc(100vw - 24px - var(--safe-left) - var(--safe-right))); }
+				      .pref-menu { border: 1px solid var(--c-border); border-radius: 12px; overflow: hidden; background: var(--c-surface); }
+				      .pref-row { width: 100%; display:flex; align-items:center; gap: 10px; padding: 10px 12px; border: none; background: transparent; color: var(--c-text); cursor: pointer; text-align: left; }
+				      .pref-row + .pref-row { border-top: 1px solid var(--c-border); }
+				      .pref-row:hover { background: var(--c-soft-2); }
+				      .pref-row:active { transform: translateY(1px); }
+				      .pref-row:focus-visible { outline: none; box-shadow: var(--ring); }
+				      .pref-check { width: 18px; height: 18px; border-radius: 999px; border: 1px solid var(--c-border-strong); display:flex; align-items:center; justify-content:center; font-size: 12px; font-weight: 900; flex: 0 0 auto; color: var(--c-accent); }
+				      .pref-row[aria-pressed="false"] .pref-check { color: transparent; }
+				      .pref-check::before { content: "✓"; }
+				      .pref-row[aria-pressed="false"] .pref-check::before { content: ""; }
+				      .pref-label { font-weight: 800; }
+				      .pref-option { margin-left: auto; font-size: var(--ui-font-xs); color: var(--c-muted); font-variant-numeric: tabular-nums; display:inline-flex; align-items:center; gap: 0; }
+				      .pref-option .slash { opacity: .6; padding: 0 2px; }
+				      .pref-row.is-on-a .pref-option .opt-a { font-weight: 900; color: var(--c-text); }
+				      .pref-row.is-on-a .pref-option .opt-b { opacity: .8; }
+				      .pref-row.is-on-b .pref-option .opt-b { font-weight: 900; color: var(--c-text); }
+				      .pref-row.is-on-b .pref-option .opt-a { opacity: .8; }
 				      /* Tool blocks: keep the code block as the only "card" (pure dark pre), avoid extra outer frame. */
 				      .tool-card { background: transparent; border: none; border-radius: 0; padding: 0; margin-top: 8px; }
 				      .tool-card pre.code { margin: 0; }
@@ -797,14 +855,15 @@
 	      .md strong { font-weight: 900; }
 	      .md a { color: var(--c-accent); text-decoration: underline; text-underline-offset: 2px; text-decoration-thickness: 1px; }
 	      .md a:hover { text-decoration-thickness: 2px; }
-		      .md code {
-		        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-		        font-size: clamp(12px, calc(var(--ui-font-size, 14px) - 2px), 16px);
-		        background: var(--c-soft);
-		        border: 1px solid var(--c-border);
-		        padding: 1px 6px;
-		        border-radius: 6px;
-		      }
+			      .md code {
+			        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+			        font-size: clamp(12px, calc(var(--ui-font-size, 14px) - 2px), 16px);
+			        background: var(--c-soft);
+			        background: color-mix(in srgb, var(--c-soft) 55%, transparent);
+			        border: 1px solid var(--c-border);
+			        padding: 1px 6px;
+			        border-radius: 6px;
+			      }
 	      .md pre code { background: transparent; padding: 0; }
 	      .md blockquote {
 	        margin: 10px 0;
@@ -843,7 +902,7 @@
 	      .row.think-mode-en .think-zh { display: none; }
 	      .row.think-mode-en .think-wait { display: none; }
 	      .row.think-mode-zh .think-en { display: none; }
-	      body.quick-view .row:not(#topbar):not(.row-empty):not(.kind-user_message):not(.kind-assistant_message):not(.kind-reasoning_summary):not(.tool-update_plan) { display: none; }
+	      body.quick-view:not(.quick-custom) .row:not([id="topbar"]):not(.row-empty):not(.kind-user_message):not(.kind-assistant_message):not(.kind-reasoning_summary):not(.kind-tool_gate):not(.tool-update_plan) { display: none; }
 
 	      @media (prefers-reduced-motion: reduce) {
 	        html:focus-within { scroll-behavior: auto; }
