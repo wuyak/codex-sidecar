@@ -11,6 +11,7 @@ import { maybePlayNotifySound, preloadNotifySound } from "../sound.js";
 import { colorForKey, rolloutStampFromFile, shortId } from "../utils.js";
 import { exportThreadMarkdown } from "../export.js";
 import { getCustomLabel, setCustomLabel } from "../sidebar/labels.js";
+import { saveClosedThreads } from "../closed_threads.js";
 import { saveHiddenThreads } from "../sidebar/hidden.js";
 import { getUnreadCount } from "../unread.js";
 
@@ -701,8 +702,19 @@ export function wireControlEvents(dom, state, helpers) {
                   if (!ok) return;
                   const t0 = state.threadIndex.get(k) || { last_seq: 0 };
                   const atSeq = Number(t0 && t0.last_seq) || 0;
+                  const kk = (t0 && t0.kinds && typeof t0.kinds === "object") ? t0.kinds : {};
                   const m = (state.closedThreads && typeof state.closedThreads.set === "function") ? state.closedThreads : (state.closedThreads = new Map());
-                  m.set(k, { at_seq: atSeq, at_count: Number(t0 && t0.count) || 0, at_ts: String((t0 && t0.last_ts) ? t0.last_ts : "") });
+                  m.set(k, {
+                    at_seq: atSeq,
+                    at_count: Number(t0 && t0.count) || 0,
+                    at_ts: String((t0 && t0.last_ts) ? t0.last_ts : ""),
+                    at_kinds: {
+                      assistant_message: Number(kk.assistant_message) || 0,
+                      user_message: Number(kk.user_message) || 0,
+                      reasoning_summary: Number(kk.reasoning_summary) || 0,
+                    },
+                  });
+                  try { saveClosedThreads(m); } catch (_) {}
                   _toastFromEl(row, "已清除（有新输出会自动回来）");
                   try { renderTabs(); } catch (_) {}
                   _renderBookmarkDrawerList();
@@ -884,12 +896,11 @@ export function wireControlEvents(dom, state, helpers) {
 	      try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
 	      if (action === "rename") { _enterInlineRename(row, key); return; }
 	      if (action === "export") {
-        _toastFromEl(btn, "正在导出…");
         const p = _getExportPrefs();
         const mode = p.quick ? "quick" : "full";
-        const reasoningLang = p.translate ? "toggle" : "en";
+        const reasoningLang = p.translate ? "zh" : "en";
         const r = await exportThreadMarkdown(state, key, { mode, reasoningLang });
-	        _toastFromEl(btn, r && r.ok ? "已导出（下载）" : "导出失败");
+	        _toastFromEl(btn, r && r.ok ? "已导出" : "导出失败");
 	        return;
 	      }
 	      if (action === "listenOff") {

@@ -1,3 +1,5 @@
+import { pruneClosedThreads } from "../closed_threads.js";
+
 export async function refreshThreads(state, signal) {
   if (!state || typeof state !== "object") return;
   try {
@@ -13,8 +15,8 @@ export async function refreshThreads(state, signal) {
       state.threadIndex.clear();
       for (const [k, v] of next.entries()) state.threadIndex.set(k, v);
     }
+    try { pruneClosedThreads(state); } catch (_) {}
     state.threadsLastSyncMs = Date.now();
     state.threadsDirty = false;
   } catch (_) {}
 }
-

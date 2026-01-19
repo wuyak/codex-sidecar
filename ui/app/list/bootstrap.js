@@ -42,6 +42,7 @@ export async function bootstrap(dom, state, renderTabs, renderMessage, renderEmp
     try {
       const cur = String(state && state.currentKey ? state.currentKey : "all");
       const hidden = (state && state.hiddenThreads && typeof state.hiddenThreads.has === "function") ? state.hiddenThreads : new Set();
+      const closed = (state && state.closedThreads && typeof state.closedThreads.has === "function") ? state.closedThreads : null;
       if (cur === "all" && state.threadIndex && typeof state.threadIndex.values === "function") {
         const arr = Array.from(state.threadIndex.values());
         arr.sort((a, b) => {
@@ -55,6 +56,7 @@ export async function bootstrap(dom, state, renderTabs, renderMessage, renderEmp
           const k = String((t && t.key) ? t.key : "");
           if (!k) continue;
           if (hidden && typeof hidden.has === "function" && hidden.has(k)) continue;
+          if (closed && typeof closed.has === "function" && closed.has(k)) continue;
           pick = k;
           break;
         }

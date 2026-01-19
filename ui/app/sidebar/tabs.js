@@ -1,6 +1,7 @@
 import { colorForKey, keyOf, rolloutStampFromFile, shortId } from "../utils.js";
 import { getCustomLabel, setCustomLabel } from "./labels.js";
 import { loadHiddenThreads, saveHiddenThreads } from "./hidden.js";
+import { saveClosedThreads } from "../closed_threads.js";
 import { getUnreadCount } from "../unread.js";
 import { flashToastAt } from "../utils/toast.js";
 
@@ -328,24 +329,38 @@ function _wireBookmarkInteractions(btn) {
 export function upsertThread(state, msg) {
   const key = keyOf(msg);
   const prev = state.threadIndex.get(key) || { key, thread_id: msg.thread_id || "", file: msg.file || "", count: 0, last_ts: "", last_seq: 0 };
-  prev.count = (prev.count || 0) + 1;
-  const ts = msg.ts || "";
-  if (ts && (!prev.last_ts || ts > prev.last_ts)) prev.last_ts = ts;
-  const seq = Number.isFinite(Number(msg && msg.seq)) ? Number(msg.seq) : 0;
-  if (seq && (!prev.last_seq || seq > prev.last_seq)) prev.last_seq = seq;
+  const kind = String(msg && msg.kind ? msg.kind : "");
+  const isGate = kind === "tool_gate";
+
+  // Keep kinds for closed-thread baseline comparisons (avoid waking closed sessions on gate noise).
+  try {
+    if (!prev.kinds || typeof prev.kinds !== "object") prev.kinds = {};
+    if (kind) prev.kinds[kind] = Number(prev.kinds[kind] || 0) + 1;
+  } catch (_) {}
+
+  // Thread ordering/count should be driven by meaningful dialog output; tool_gate is UI-only noise.
+  if (!isGate) {
+    prev.count = (prev.count || 0) + 1;
+    const ts = msg.ts || "";
+    if (ts && (!prev.last_ts || ts > prev.last_ts)) prev.last_ts = ts;
+    const seq = Number.isFinite(Number(msg && msg.seq)) ? Number(msg.seq) : 0;
+    if (seq && (!prev.last_seq || seq > prev.last_seq)) prev.last_seq = seq;
+  }
   state.threadIndex.set(key, prev);
   try {
     // “关闭监听”仅是临时 UI 行为：如果该会话有新输出，自动回到标签栏。
     const closed = (state && state.closedThreads && typeof state.closedThreads.get === "function") ? state.closedThreads : null;
     if (closed && closed.has(key)) {
       const info = closed.get(key) || {};
-      const atSeq = Number(info.at_seq) || 0;
-      const atCount = Number(info.at_count) || 0;
-      const atTs = String(info.at_ts || "");
-      const count = Number(prev && prev.count) || 0;
-      const lastTs = String(prev && prev.last_ts ? prev.last_ts : "");
-      const lastSeq = Number(prev && prev.last_seq) || 0;
-      if ((lastSeq && lastSeq > atSeq) || count > atCount || (lastTs && atTs && lastTs > atTs)) closed.delete(key);
+      const atKinds = (info.at_kinds && typeof info.at_kinds === "object") ? info.at_kinds : {};
+      const curKinds = (prev.kinds && typeof prev.kinds === "object") ? prev.kinds : {};
+      const hasNewDialog = (Number(curKinds.assistant_message) || 0) > (Number(atKinds.assistant_message) || 0)
+        || (Number(curKinds.user_message) || 0) > (Number(atKinds.user_message) || 0)
+        || (Number(curKinds.reasoning_summary) || 0) > (Number(atKinds.reasoning_summary) || 0);
+      if (hasNewDialog) {
+        closed.delete(key);
+        try { saveClosedThreads(closed); } catch (_) {}
+      }
     }
   } catch (_) {}
 }
@@ -446,12 +461,19 @@ export function renderTabs(dom, state, onSelectKey) {
     if (!k || k === "all") return;
     const t = state.threadIndex.get(k) || { last_seq: 0 };
     const atSeq = Number(t && t.last_seq) || 0;
+    const kk = (t && t.kinds && typeof t.kinds === "object") ? t.kinds : {};
     const m = _ensureClosedMap();
     m.set(k, {
       at_seq: atSeq,
       at_count: Number(t && t.count) || 0,
       at_ts: String((t && t.last_ts) ? t.last_ts : ""),
+      at_kinds: {
+        assistant_message: Number(kk.assistant_message) || 0,
+        user_message: Number(kk.user_message) || 0,
+        reasoning_summary: Number(kk.reasoning_summary) || 0,
+      },
     });
+    try { saveClosedThreads(m); } catch (_) {}
     _toastFromEl(sourceEl || host, "已临时关闭（有新输出会自动回来）", { durationMs: 1600 });
     if (String(state.currentKey || "all") === k) await onSelectKey(_pickFallbackKey(state, k));
     else renderTabs(dom, state, onSelectKey);

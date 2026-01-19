@@ -12,6 +12,7 @@ import { activateView, initViews } from "./views.js";
 import { initSound } from "./sound.js";
 import { clearUnreadForKey } from "./unread.js";
 import { initSkin } from "./skin.js";
+import { loadClosedThreads, saveClosedThreads } from "./closed_threads.js";
 
 export async function initApp() {
   const dom = getDom();
@@ -22,6 +23,7 @@ export async function initApp() {
   initSkin(dom, { setStatus });
   try { state.hiddenThreads = loadHiddenThreads(); } catch (_) { state.hiddenThreads = new Set(); }
   try { state.showHiddenThreads = loadShowHiddenFlag(); } catch (_) { state.showHiddenThreads = false; }
+  try { state.closedThreads = loadClosedThreads(); } catch (_) { state.closedThreads = new Map(); }
 
   const applyFollowPolicy = async (key) => {
     try {
@@ -60,7 +62,12 @@ export async function initApp() {
   const onSelectKey = async (key) => {
     // Selecting a session implies "read it": clear unread badge on that bookmark.
     try { if (key && key !== "all") clearUnreadForKey(state, key); } catch (_) {}
-    try { if (key && key !== "all" && state.closedThreads && typeof state.closedThreads.delete === "function") state.closedThreads.delete(key); } catch (_) {}
+    try {
+      if (key && key !== "all" && state.closedThreads && typeof state.closedThreads.delete === "function") {
+        const had = state.closedThreads.delete(key);
+        if (had) saveClosedThreads(state.closedThreads);
+      }
+    } catch (_) {}
     state.currentKey = key;
     const { needsRefresh } = activateView(dom, state, key);
     // 快速 UI 反馈：先更新选中态，再异步拉取/重绘消息列表。
