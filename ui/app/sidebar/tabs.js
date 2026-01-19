@@ -107,7 +107,7 @@ function _ensureBookmarkStructure(btn) {
   dot.className = "bm-dot";
   const l = document.createElement("span");
   l.className = "bm-label";
-  l.title = "左键长按可重命名哦~（｀・ω・´）";
+  l.title = "鼠标左键长按进行重命名";
   const i = document.createElement("input");
   i.className = "bm-edit";
   i.type = "text";
@@ -116,7 +116,7 @@ function _ensureBookmarkStructure(btn) {
   i.placeholder = "重命名…";
   const c = document.createElement("span");
   c.className = "bm-close";
-  c.title = "左键长按可关闭监听哦~（｀・ω・´）";
+  c.title = "关闭监听";
   c.textContent = "×";
   try { c.setAttribute("aria-hidden", "true"); } catch (_) {}
   btn.appendChild(tip);
@@ -232,37 +232,7 @@ function _wireBookmarkInteractions(btn) {
   btn.addEventListener("pointercancel", clearPress);
   btn.addEventListener("pointerleave", clearPress);
 
-  // Hover hint (avoid native tooltip; use lightweight toast near the tab).
-  btn.addEventListener("mouseenter", () => {
-    try {
-      if (btn.classList && btn.classList.contains("editing")) return;
-      const k = String(btn.dataset && btn.dataset.key ? btn.dataset.key : "").trim();
-      if (!k || k === "all") return;
-      const now = Date.now();
-      if (now - _lastHoverTipMs < 2400) return;
-      _lastHoverTipMs = now;
-      _toastFromEl(btn, "左键长按：重命名~ (´▽｀)", { durationMs: 1400 });
-    } catch (_) {}
-  });
-
-  // Close/Hide hint (the × inside the tab).
-  try {
-    const parts = _ensureBookmarkStructure(btn);
-    const closeSpan = parts ? parts.closeSpan : null;
-    if (closeSpan && !closeSpan.__bmCloseTip) {
-      closeSpan.__bmCloseTip = true;
-      closeSpan.addEventListener("mouseenter", () => {
-        try {
-          const k = String(btn.dataset && btn.dataset.key ? btn.dataset.key : "").trim();
-          if (!k || k === "all") return;
-          const now = Date.now();
-          if (now - _lastCloseTipMs < 2200) return;
-          _lastCloseTipMs = now;
-          _toastFromEl(closeSpan, "点击 ×：关闭监听（有新输出会自动回来）", { durationMs: 1600 });
-        } catch (_) {}
-      });
-    }
-  } catch (_) {}
+  // Hover tips: keep only one hint source (native tooltip via title), avoid extra floating toasts.
 
   btn.addEventListener("click", async (e) => {
     try {
@@ -394,14 +364,7 @@ export function renderTabs(dom, state, onSelectKey) {
     ? state.closedThreads
     : new Map();
 
-  // One-time hint (replaces noisy native tooltips).
-  try {
-    const TIP_KEY = "codex_sidecar_tabs_rename_tip_v1";
-    if (items.length > 0 && localStorage.getItem(TIP_KEY) !== "1") {
-      localStorage.setItem(TIP_KEY, "1");
-      _toastFromEl(rail || host, "提示：左键长按标签可重命名哦~ (´▽｀)", { durationMs: 2200 });
-    }
-  } catch (_) {}
+  // No auto-hints: only show feedback for explicit actions (click/long-press), per requirements.
   const fragRail = document.createDocumentFragment();
   const fragPop = document.createDocumentFragment();
 
@@ -493,7 +456,8 @@ export function renderTabs(dom, state, onSelectKey) {
       if (parts) {
         try { parts.tipSpan.textContent = "左键长按：重命名~ (´▽｀)"; } catch (_) {}
         try { parts.labelSpan.textContent = label; } catch (_) {}
-        try { parts.closeSpan.removeAttribute("title"); } catch (_) {}
+        try { parts.labelSpan.title = "鼠标左键长按进行重命名"; } catch (_) {}
+        try { parts.closeSpan.title = "关闭监听"; } catch (_) {}
       }
       try {
         btn.dataset.label = label;
