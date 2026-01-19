@@ -4,7 +4,6 @@ export function getDom() {
     statusText: byId("statusText"),
     statusMain: byId("statusMain"),
     statusHover: byId("statusHover"),
-    debugText: byId("debugText"),
     bookmarks: byId("bookmarks"),
     bookmarkDrawerToggleBtn: byId("bookmarkDrawerToggleBtn"),
     bookmarkDrawerOverlay: byId("bookmarkDrawerOverlay"),

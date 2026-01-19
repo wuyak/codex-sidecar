@@ -5,10 +5,6 @@ export function setStatus(dom, s) {
   } catch (_) {}
 }
 
-export function setDebug(dom, s) {
-  try { if (dom.debugText) dom.debugText.textContent = s || ""; } catch (_) {}
-}
-
 export function setTopStatusSummary(dom, state) {
   const isRunning = !!(state && state.running);
   const followFiles = (state && Array.isArray(state.statusFollowFiles)) ? state.statusFollowFiles : [];

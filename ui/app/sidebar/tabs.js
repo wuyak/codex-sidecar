@@ -38,14 +38,6 @@ function _baseName(p) {
   return parts[parts.length - 1] || s;
 }
 
-function _tabSizeClass(label) {
-  const s = String(label || "").trim();
-  const n = s.length;
-  if (n <= 4) return " bm-s";
-  if (n <= 14) return " bm-m";
-  return " bm-l";
-}
-
 function threadLabels(t) {
   const stampFull = rolloutStampFromFile(t.file || "");
   const stampShort = _stampShort(stampFull);
@@ -495,7 +487,7 @@ export function renderTabs(dom, state, onSelectKey) {
       const fullLabel = labels.full;
       const custom = getCustomLabel(t.key);
       const label = custom || defaultLabel;
-      btn.className = "bookmark" + _tabSizeClass(label) + (isHidden ? " tab-hidden" : "") + (currentKey === t.key ? " active" : "") + (u > 0 ? " has-unread" : "");
+      btn.className = "bookmark" + (isHidden ? " tab-hidden" : "") + (currentKey === t.key ? " active" : "") + (u > 0 ? " has-unread" : "");
 
       try {
         btn.style.setProperty("--bm-accent", clr.fg);

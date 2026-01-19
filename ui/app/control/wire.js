@@ -2,7 +2,7 @@ import { api } from "./api.js";
 import { clearView, restartProcess, startWatch, stopWatch } from "./actions.js";
 import { saveConfig, saveTranslateConfig } from "./config.js";
 import { applyProfileToInputs, readHttpInputs, refreshHttpProfileSelect, upsertSelectedProfileFromInputs } from "./http_profiles.js";
-import { closeBookmarkDrawer, closeDrawer, closeTranslateDrawer, confirmDialog, openBookmarkDrawer, openDrawer, openTranslatorSettings, setDebug, setStatus, setTopStatusSummary, showProviderBlocks } from "./ui.js";
+import { closeBookmarkDrawer, closeDrawer, closeTranslateDrawer, confirmDialog, openBookmarkDrawer, openDrawer, openTranslatorSettings, setStatus, setTopStatusSummary, showProviderBlocks } from "./ui.js";
 import { showShutdownScreen } from "../shutdown.js";
 import { setViewMode, toggleViewMode } from "../view_mode.js";
 import { flashToastAt } from "../utils/toast.js";

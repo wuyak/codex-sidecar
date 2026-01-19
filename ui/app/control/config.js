@@ -3,7 +3,7 @@ import { api } from "./api.js";
 import { flashToastAt } from "../utils/toast.js";
 import { countValidHttpProfiles, refreshHttpProfileSelect, upsertSelectedProfileFromInputs } from "./http_profiles.js";
 import { loadControl } from "./load.js";
-import { setDebug, setStatus } from "./ui.js";
+import { setStatus } from "./ui.js";
 
 function _clearFormError(dom, which) {
   try {

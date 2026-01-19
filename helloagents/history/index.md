@@ -84,3 +84,5 @@
 - 202601191640_export_md_fix
 - 202601192134_ui_quickview_fix
 - 202601192147_ui_quickview_close_btn_fix
+- 202601192219_ui_tabs_auto_width
+- 202601192233_ui_settings_cleanup_tabs_rename

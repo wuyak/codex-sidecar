@@ -342,26 +342,25 @@
 		        border: 1px solid rgba(255,255,255,.92);
 		        box-shadow: 0 10px 24px rgba(0,0,0,.14);
 		      }
-		      .bookmark .bm-edit { display:none; width: 100%; padding: 5px 8px; border: 1px solid rgba(14,165,233,.55); border-radius: 10px; outline: none; font-size: 12px; background: var(--c-surface); color: var(--c-text); box-shadow: var(--ring); }
+			      .bookmark .bm-edit { display:none; flex: 1 1 auto; min-width: 0; width: auto; padding: 5px 8px; border: 1px solid rgba(14,165,233,.55); border-radius: 10px; outline: none; font-size: 12px; background: var(--c-surface); color: var(--c-text); box-shadow: var(--ring); }
 		      .bookmark.editing .bm-label { display:none; }
 		      .bookmark.editing .bm-edit { display:block; }
 
 		      /* 标签按钮（tabs） */
-		      #bookmarks .bm-rail .bookmark {
-		        flex: 0 0 auto;
-		        min-width: 0;
-		        max-width: var(--tabs-max-w);
-		        height: calc(var(--tabs-bar-h) - 2px);
-		        min-height: calc(var(--tabs-bar-h) - 2px);
-		        padding: 0 8px;
+			      #bookmarks .bm-rail .bookmark {
+			        flex: 0 0 auto;
+			        min-width: var(--tabs-min-w);
+			        max-width: var(--tabs-max-w);
+			        height: calc(var(--tabs-bar-h) - 2px);
+			        min-height: calc(var(--tabs-bar-h) - 2px);
+			        padding: 0 8px;
 		        border-radius: 14px;
 		        background: rgba(255,255,255,.88);
 		        border-color: rgba(148, 163, 184, .35);
-		        box-shadow: none;
-		      }
-		      #bookmarks .bm-rail .bookmark.bm-s { width: clamp(90px, 10ch, 130px); }
-		      #bookmarks .bm-rail .bookmark.bm-m { width: clamp(140px, 16ch, 210px); }
-		      #bookmarks .bm-rail .bookmark.bm-l { width: clamp(200px, 24ch, 300px); }
+			        box-shadow: none;
+			      }
+			      /* 编辑态（长按重命名）：给输入框留出更舒服的宽度 */
+			      #bookmarks .bm-rail .bookmark.editing { min-width: min(var(--tabs-max-w), 240px); }
 		      body[data-bm-skin="dark"] #bookmarks .bm-rail .bookmark { background: rgba(15,23,42,.58); border-color: rgba(148,163,184,.20); }
 		      #bookmarks .bm-rail .bookmark:hover { background: var(--c-soft-2); border-color: var(--c-border); }
 		      #bookmarks .bm-rail .bookmark.active {
@@ -702,13 +701,6 @@
 	      .drawer-details > summary::-webkit-details-marker { display: none; }
 	      .drawer-details[open] > summary { color: var(--c-text); background: var(--c-surface); box-shadow: var(--shadow-sm); }
 	      .drawer-details .grid { margin-top: 10px; }
-
-	      /* 调试信息（在设置抽屉里）：做成“代码/kv 面板”风格，便于快速扫读与复制。 */
-	      #debugDetails { margin-top: 10px; }
-	      #debugDetails > summary { cursor:pointer; font-weight: 800; color: var(--c-muted); list-style: none; padding: 8px 10px; border: 1px solid var(--c-border); border-radius: 12px; background: var(--c-soft-2); }
-	      #debugDetails > summary::-webkit-details-marker { display: none; }
-	      #debugDetails[open] > summary { color: var(--c-text); background: var(--c-surface); box-shadow: var(--shadow-sm); }
-	      #debugText { margin: 10px 0 0; border: 1px solid var(--c-border); border-radius: 12px; padding: 10px 12px; background: var(--c-soft-2); color: var(--c-text); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; line-height: 1.45; font-variant-numeric: tabular-nums; overflow: auto; max-height: 52vh; }
 
 			      .drawer-sec > summary { cursor:pointer; font-weight: 700; color:#0f172a; list-style: none; }
 				      .drawer-sec > summary::-webkit-details-marker { display: none; }

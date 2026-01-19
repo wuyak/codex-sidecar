@@ -1,7 +1,7 @@
 import { fmtErr, rolloutStampFromFile, shortId } from "../utils.js";
 import { api } from "./api.js";
 import { applyProfileToInputs, normalizeHttpProfiles, refreshHttpProfileSelect } from "./http_profiles.js";
-import { setDebug, setTopStatusSummary, showProviderBlocks } from "./ui.js";
+import { setTopStatusSummary, showProviderBlocks } from "./ui.js";
 import { preloadNotifySound } from "../sound.js";
 
 const _LS_UI_FONT = "codex_sidecar_ui_font_size";
@@ -43,8 +43,14 @@ function _applyUiButtonSize(px) {
 
 export async function loadControl(dom, state) {
   const ts = Date.now();
-  const debugLines = [];
-  setDebug(dom, "");
+  const _dbg = (level, msg) => {
+    try {
+      const m = String(msg || "").trim();
+      if (!m) return;
+      if (level === "error") console.error(m);
+      else console.warn(m);
+    } catch (_) {}
+  };
 
   const _esc = (s) => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
@@ -59,7 +65,7 @@ export async function loadControl(dom, state) {
     const remote = Array.isArray(tr.translators) ? tr.translators : (Array.isArray(tr) ? tr : []);
     if (remote.length > 0) translators = remote;
   } catch (e) {
-    debugLines.push(`[warn] /api/translators: ${fmtErr(e)}`);
+    _dbg("warn", `[warn] /api/translators: ${fmtErr(e)}`);
   }
   try {
     if (dom.translatorSel) {
@@ -72,7 +78,7 @@ export async function loadControl(dom, state) {
       }
     }
   } catch (e) {
-    debugLines.push(`[error] render translators: ${fmtErr(e)}`);
+    _dbg("error", `[error] render translators: ${fmtErr(e)}`);
   }
 
   // 2) Config
@@ -83,7 +89,7 @@ export async function loadControl(dom, state) {
     const inner = (raw.config && typeof raw.config === "object") ? raw.config : raw;
     cfg = (inner && typeof inner === "object") ? inner : {};
   } catch (e) {
-    debugLines.push(`[warn] /api/config: ${fmtErr(e)}`);
+    _dbg("warn", `[warn] /api/config: ${fmtErr(e)}`);
     cfg = {};
   }
 
@@ -93,7 +99,7 @@ export async function loadControl(dom, state) {
     const r = await fetch(`/api/sfx?t=${ts}`, { cache: "no-store" }).then(r => r.json());
     if (r && typeof r === "object") sfx = r;
   } catch (e) {
-    debugLines.push(`[warn] /api/sfx: ${fmtErr(e)}`);
+    _dbg("warn", `[warn] /api/sfx: ${fmtErr(e)}`);
     sfx = { builtin: [], custom: [] };
   }
   let sfxList = [{ id: "none", label: "无", url: "", source: "none", volume: 1.0, rate: 1.0 }];
@@ -205,7 +211,7 @@ export async function loadControl(dom, state) {
       reset(dom.httpToken, dom.httpTokenEyeBtn, "Token");
     } catch (_) {}
   } catch (e) {
-    debugLines.push(`[error] apply config: ${fmtErr(e)}`);
+    _dbg("error", `[error] apply config: ${fmtErr(e)}`);
   }
 
   // Keep a copy on state for render logic (no need to re-fetch cfg on every click).
@@ -308,79 +314,6 @@ export async function loadControl(dom, state) {
       }
     } catch (_) {}
   } catch (e) {
-    debugLines.push(`[warn] /api/status: ${fmtErr(e)}`);
+    _dbg("warn", `[warn] /api/status: ${fmtErr(e)}`);
   }
-
-  // 5) Debug summary（不打印 token/url）
-  try {
-    const provider = String(cfg.translator_provider || "");
-    const profNames = (state.httpProfiles || []).map(p => (p && p.name) ? String(p.name) : "").filter(Boolean);
-    const cfgHomeShown = String(cfg.config_home_display || "").trim() || String(cfg.config_home || "").trim();
-    const cfgFile = String(cfg.config_file_display || "").trim() || (cfgHomeShown ? `${cfgHomeShown.replace(/\/+$/, "")}/config.json` : "");
-    const watchHomeShown = _prettyPath(cfg.watch_codex_home || "");
-    debugLines.unshift(
-      `config_home: ${cfgHomeShown}`,
-      `watch_codex_home: ${watchHomeShown}`,
-      `config_file: ${cfgFile}`,
-      `translator_provider: ${provider}`,
-      `http_profiles: ${profNames.length}${profNames.length ? " (" + profNames.join(", ") + ")" : ""}`,
-      `http_selected: ${state.httpSelected || ""}`,
-    );
-    try {
-      const ws = st && typeof st === "object" ? (st.watcher || {}) : {};
-      const wm = (ws && ws.watch_max_sessions !== undefined) ? ws.watch_max_sessions : "";
-      const rl = (ws && ws.replay_last_lines !== undefined) ? ws.replay_last_lines : "";
-      const pi = (ws && ws.poll_interval_s !== undefined) ? ws.poll_interval_s : "";
-      const si = (ws && ws.file_scan_interval_s !== undefined) ? ws.file_scan_interval_s : "";
-      if (wm || rl || pi || si) {
-        debugLines.splice(3, 0, `watch_runtime: max_sessions=${wm} replay_last_lines=${rl} poll_s=${pi} scan_s=${si}`);
-      }
-      const openPids = String((ws && ws.codex_pids) ? ws.codex_pids : "");
-      const candPids = String((ws && ws.codex_candidate_pids) ? ws.codex_candidate_pids : "");
-      if (openPids || candPids) {
-        debugLines.push(`codex_pids_open: ${openPids}`, `codex_pids_candidate: ${candPids}`);
-      }
-    } catch (_) {}
-    if (provider.toLowerCase() === "openai") {
-      const tc = cfg.translator_config || {};
-      const tcObj = (tc && typeof tc === "object") ? tc : {};
-      const openaiTc = (tcObj.openai && typeof tcObj.openai === "object") ? tcObj.openai : tcObj;
-      const base = String(openaiTc.base_url || "");
-      const model = String(openaiTc.model || "");
-      debugLines.splice(5, 0, `openai_base_url: ${base}`, `openai_model: ${model}`);
-    }
-    if (provider.toLowerCase() === "nvidia") {
-      const tc = cfg.translator_config || {};
-      const tcObj = (tc && typeof tc === "object") ? tc : {};
-      const nvidiaTc = (tcObj.nvidia && typeof tcObj.nvidia === "object") ? tcObj.nvidia : tcObj;
-      const base = String(nvidiaTc.base_url || "");
-      const model = String(nvidiaTc.model || "");
-      debugLines.splice(5, 0, `nvidia_base_url: ${base}`, `nvidia_model: ${model}`);
-    }
-    // Translation worker stats (help diagnose "ZH 翻译中…" delays).
-    try {
-      const ws = st && typeof st === "object" ? (st.watcher || {}) : {};
-      const tr = ws && typeof ws === "object" ? (ws.translate || {}) : {};
-      if (tr && typeof tr === "object") {
-        const hi = Number(tr.hi_q);
-        const lo = Number(tr.lo_q);
-        const lastMs = Number(tr.last_translate_ms);
-        const lastN = Number(tr.last_batch_n);
-        const dropOld = Number(tr.drop_old_hi || 0) + Number(tr.drop_old_lo || 0);
-        const dropNew = Number(tr.drop_new_hi || 0) + Number(tr.drop_new_lo || 0);
-        const done = Number(tr.done_items);
-        const err = String(tr.last_error || "");
-        const lines = [
-          `translate_q: hi=${Number.isFinite(hi) ? hi : ""} lo=${Number.isFinite(lo) ? lo : ""}`,
-          `translate_last: ${Number.isFinite(lastMs) ? lastMs.toFixed(0) : ""}ms batch_n=${Number.isFinite(lastN) ? lastN : ""}`,
-          `translate_done: ${Number.isFinite(done) ? done : ""} drop_old=${Number.isFinite(dropOld) ? dropOld : ""} drop_new=${Number.isFinite(dropNew) ? dropNew : ""}`,
-        ];
-        if (err) lines.push(`translate_last_error: ${err}`);
-        debugLines.push(...lines);
-      }
-    } catch (_) {}
-  } catch (e) {
-    debugLines.push(`[warn] debug: ${fmtErr(e)}`);
-  }
-  if (debugLines.length) setDebug(dom, debugLines.join("\n"));
 }
