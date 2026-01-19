@@ -323,18 +323,12 @@ export function wireControlEvents(dom, state, helpers) {
     }
   };
 
-  const _applyTabsCollapsedLocal = (collapsed, sourceEl = null, silent = true) => {
+  const _applyTabsCollapsedLocal = (collapsed) => {
     const on = !!collapsed;
     try {
       if (on) document.body.dataset.tabsCollapsed = "1";
       else delete document.body.dataset.tabsCollapsed;
     } catch (_) {}
-    try {
-      const hint = on ? "（长按展开标签页）" : "（长按收起标签页）";
-      const btn = dom && dom.bookmarkDrawerToggleBtn ? dom.bookmarkDrawerToggleBtn : null;
-      if (btn && btn.setAttribute) btn.setAttribute("aria-label", `会话列表${hint}`);
-    } catch (_) {}
-    if (!silent) _toastFromEl(sourceEl || (dom && dom.bookmarkDrawerToggleBtn), on ? "标签页：已收起" : "标签页：已展开");
     return on;
   };
 
@@ -421,7 +415,7 @@ export function wireControlEvents(dom, state, helpers) {
 	  }
 
 	  // 标签栏收起状态（由会话菜单长按切换）
-	  _applyTabsCollapsedLocal(_readSavedBool(_LS_TABS_COLLAPSED, false), null, true);
+	  _applyTabsCollapsedLocal(_readSavedBool(_LS_TABS_COLLAPSED, false));
 
 	  // 导出偏好：会话级（每个会话可单独设置 精简/全量、译文/原文）。
 	  let _exportPrefsKey = "";
@@ -844,12 +838,12 @@ export function wireControlEvents(dom, state, helpers) {
       pressT = 0;
     };
 
-    const toggleTabsCollapsed = () => {
-      const cur = _readSavedBool(_LS_TABS_COLLAPSED, false);
-      const next = !cur;
-      try { localStorage.setItem(_LS_TABS_COLLAPSED, next ? "1" : "0"); } catch (_) {}
-      _applyTabsCollapsedLocal(next, btn, false);
-    };
+	    const toggleTabsCollapsed = () => {
+	      const cur = _readSavedBool(_LS_TABS_COLLAPSED, false);
+	      const next = !cur;
+	      try { localStorage.setItem(_LS_TABS_COLLAPSED, next ? "1" : "0"); } catch (_) {}
+	      _applyTabsCollapsedLocal(next);
+	    };
 
     const onDown = (e) => {
       try {

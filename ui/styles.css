@@ -651,10 +651,36 @@
       button.primary { background:#111827; color:#fff; border-color:#111827; }
 		      button.danger { background: var(--c-danger-bg); border-color: rgba(248,113,113,.45); color: var(--c-danger); }
 		      .muted { opacity: .8; }
-		      .float-nav { position: fixed; right: var(--rightbar-right); left: auto; bottom: calc(16px + var(--safe-bottom)); display:flex; flex-direction:column; gap: var(--rightbar-gap); z-index: var(--z-float-nav); }
-		      .float-nav button { width: var(--rightbar-w); height: var(--rightbar-w); padding: 0; border-radius: 999px; box-shadow: var(--shadow-sm); border: 1px solid var(--c-border); background: var(--c-surface); color: var(--c-text); display:flex; align-items:center; justify-content:center; cursor:pointer; }
-			      .float-nav button:hover { background: var(--c-soft-2); }
-	      #scrollBottomBtn.has-unread { position: relative; }
+			      .float-nav { position: fixed; right: var(--rightbar-right); left: auto; bottom: calc(16px + var(--safe-bottom)); display:flex; flex-direction:column; gap: var(--rightbar-gap); z-index: var(--z-float-nav); }
+			      .float-nav button { width: var(--rightbar-w); height: var(--rightbar-w); padding: 0; border-radius: 999px; box-shadow: var(--shadow-sm); border: 1px solid var(--c-border); background: var(--c-surface); color: var(--c-text); display:flex; align-items:center; justify-content:center; cursor:pointer; position: relative; }
+				      .float-nav button:hover { background: var(--c-soft-2); }
+			      .float-nav button[aria-label]::before {
+			        content: attr(aria-label);
+			        position: absolute;
+			        right: calc(100% + 10px);
+			        top: 50%;
+			        transform: translateY(-50%) translateX(4px);
+			        padding: 6px 10px;
+			        border-radius: 999px;
+			        border: 1px solid rgba(148,163,184,.35);
+			        background: rgba(255,255,255,.96);
+			        color: var(--c-text);
+			        font-size: clamp(11px, calc(var(--ui-font-size, 14px) - 2px), 16px);
+			        white-space: nowrap;
+			        box-shadow: var(--shadow-sm);
+			        opacity: 0;
+			        pointer-events: none;
+			        transition: opacity .12s ease, transform .12s ease;
+			        z-index: calc(var(--z-float-nav) + 5);
+			      }
+			      body[data-bm-skin="dark"] .float-nav button[aria-label]::before {
+			        background: rgba(15,23,42,.92);
+			        color: rgba(226,232,240,.98);
+			        border-color: rgba(148,163,184,.22);
+			      }
+			      .float-nav button:hover::before,
+			      .float-nav button:focus-visible::before { opacity: 1; transform: translateY(-50%) translateX(0); }
+		      #scrollBottomBtn.has-unread { position: relative; }
 	      #scrollBottomBtn.has-unread::after {
 	        content: attr(data-unread);
 	        position: absolute;
