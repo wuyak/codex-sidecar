@@ -6,6 +6,7 @@ import { closeBookmarkDrawer, closeDrawer, closeTranslateDrawer, confirmDialog, 
 import { showShutdownScreen } from "../shutdown.js";
 import { setViewMode, toggleViewMode } from "../view_mode.js";
 import { flashToastAt } from "../utils/toast.js";
+import { copyToClipboard } from "../utils/clipboard.js";
 import { buildThinkingMetaRight } from "../thinking/meta.js";
 import { maybePlayNotifySound, preloadNotifySound } from "../sound.js";
 import { colorForKey, rolloutStampFromFile, shortId } from "../utils.js";
@@ -528,27 +529,18 @@ export function wireControlEvents(dom, state, helpers) {
     }
   };
 
-  const _threadLabel = (t) => {
-    const k = String((t && t.key) ? t.key : "");
-    const custom = getCustomLabel(k);
-    return custom || _threadDefaultLabel(t);
-  };
+	  const _threadLabel = (t) => {
+	    const k = String((t && t.key) ? t.key : "");
+	    const custom = getCustomLabel(k);
+	    return custom || _threadDefaultLabel(t);
+	  };
 
-  let _bookmarkDrawerEditingKey = "";
-  const _isBookmarkDrawerEditing = () => !!_bookmarkDrawerEditingKey;
-  let _bookmarkDrawerTipMs = 0;
-  const _bmTip = (el, text) => {
-    const msg = String(text || "").trim();
-    if (!msg) return;
-    const now = Date.now();
-    if (now - _bookmarkDrawerTipMs < 2200) return;
-    _bookmarkDrawerTipMs = now;
-    _toastFromEl(el, msg, { durationMs: 1400 });
-  };
-  const _ensureHiddenSet = () => {
-    if (!state.hiddenThreads || typeof state.hiddenThreads.add !== "function") state.hiddenThreads = new Set();
-    return state.hiddenThreads;
-  };
+	  let _bookmarkDrawerEditingKey = "";
+	  const _isBookmarkDrawerEditing = () => !!_bookmarkDrawerEditingKey;
+	  const _ensureHiddenSet = () => {
+	    if (!state.hiddenThreads || typeof state.hiddenThreads.add !== "function") state.hiddenThreads = new Set();
+	    return state.hiddenThreads;
+	  };
   const _sortThreads = (arr) => {
     arr.sort((a, b) => {
       const sa = Number(a && a.last_seq) || 0;
@@ -641,36 +633,35 @@ export function wireControlEvents(dom, state, helpers) {
 	        return;
 	      }
 
-		      for (const it of rows) {
-		        const row = document.createElement("div");
-		        row.className = "tab"
-		          + (it.active ? " active" : "")
-		          + (it.closed ? " tab-closed" : "")
-		          + (isHiddenList ? " tab-hidden" : "");
-		        row.dataset.key = String(it.key || "");
-		        row.dataset.label = String(it.label || "");
-		        row.dataset.hint = isHiddenList ? "点击：恢复到标签栏" : "点击：切换会话";
-		        if (isHiddenList) row.dataset.hidden = "1";
-		        row.setAttribute("role", "button");
-		        row.tabIndex = 0;
-          try { row.removeAttribute("title"); } catch (_) {}
+			      for (const it of rows) {
+			        const row = document.createElement("div");
+			        row.className = "tab"
+			          + (it.active ? " active" : "")
+			          + (it.closed ? " tab-closed" : "")
+			          + (isHiddenList ? " tab-hidden" : "");
+			        row.dataset.key = String(it.key || "");
+			        row.dataset.label = String(it.label || "");
+			        if (isHiddenList) row.dataset.hidden = "1";
+			        row.setAttribute("role", "button");
+			        row.tabIndex = 0;
+	          try { row.removeAttribute("title"); } catch (_) {}
+	          try { row.dataset.file = String(it.file || ""); } catch (_) {}
 
-	        const dot = document.createElement("span");
-	        dot.className = "tab-dot";
-	        try { dot.style.background = String((it.color && it.color.fg) ? it.color.fg : "#64748b"); } catch (_) {}
+		        const dot = document.createElement("span");
+		        dot.className = "tab-dot";
+		        try { dot.style.background = String((it.color && it.color.fg) ? it.color.fg : "#64748b"); } catch (_) {}
 
 	        const label = document.createElement("span");
 	        label.className = "tab-label";
 	        label.textContent = String(it.label || "");
 
-          const sub = document.createElement("span");
-          sub.className = "tab-sub";
-          try {
-            const base = String(it.fileBase || "");
-            const followFiles = (state && Array.isArray(state.statusFollowFiles)) ? state.statusFollowFiles : [];
-            const suffix = followFiles.length ? (it.followed ? " · 跟随中" : " · 历史") : "";
-            sub.textContent = base ? `${base}${suffix}` : "";
-          } catch (_) { sub.textContent = ""; }
+	          const sub = document.createElement("span");
+	          sub.className = "tab-sub";
+	          try {
+	            const hint = "长按复制对话 JSON 路径";
+	            const followFiles = (state && Array.isArray(state.statusFollowFiles)) ? state.statusFollowFiles : [];
+	            sub.textContent = (followFiles.length && it.followed) ? `跟随中 · ${hint}` : hint;
+	          } catch (_) { sub.textContent = ""; }
 
 	        const input = document.createElement("input");
 	        input.className = "tab-edit";
@@ -690,25 +681,25 @@ export function wireControlEvents(dom, state, helpers) {
 	        renameBtn.title = "重命名";
 	        renameBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="#i-edit"></use></svg>`;
 
-	        const exportBtn = document.createElement("button");
-	        exportBtn.className = "mini-btn";
-	        exportBtn.type = "button";
-	        exportBtn.dataset.action = "export";
-	        try {
-	          const p = getExportPrefsForKey(String(it.key || ""));
-	          exportBtn.classList.toggle("flag-quick", !!p.quick);
-	          exportBtn.classList.toggle("flag-tr", !!p.translate);
-	          exportBtn.setAttribute("aria-label", `导出（${_exportPrefsText(p)}；长按设置）`);
-	          exportBtn.title = `导出（${_exportPrefsText(p)}；长按设置）`;
-	        } catch (_) {
-	          exportBtn.setAttribute("aria-label", "导出（长按设置）");
-	          exportBtn.title = "导出（长按设置）";
-	        }
-	        exportBtn.innerHTML = `
-	          <svg class="ico" aria-hidden="true"><use href="#i-download"></use></svg>
-	          <span class="mini-flag flag-tr" aria-hidden="true"><svg class="ico ico-mini" aria-hidden="true"><use href="#i-globe"></use></svg></span>
-	          <span class="mini-flag flag-quick" aria-hidden="true"><svg class="ico ico-mini" aria-hidden="true"><use href="#i-bolt"></use></svg></span>
-	        `;
+		        const exportBtn = document.createElement("button");
+		        exportBtn.className = "mini-btn";
+		        exportBtn.type = "button";
+		        exportBtn.dataset.action = "export";
+		        try {
+		          const p = getExportPrefsForKey(String(it.key || ""));
+		          exportBtn.classList.toggle("flag-quick", !!p.quick);
+		          exportBtn.classList.toggle("flag-tr", !!p.translate);
+		        } catch (_) {
+		          try { exportBtn.classList.remove("flag-quick"); } catch (_) {}
+		          try { exportBtn.classList.remove("flag-tr"); } catch (_) {}
+		        }
+		        exportBtn.setAttribute("aria-label", "导出（长按设置）");
+		        try { exportBtn.removeAttribute("title"); } catch (_) {}
+		        exportBtn.innerHTML = `
+		          <svg class="ico" aria-hidden="true"><use href="#i-download"></use></svg>
+		          <span class="mini-flag flag-tr" aria-hidden="true"><svg class="ico ico-mini" aria-hidden="true"><use href="#i-globe"></use></svg></span>
+		          <span class="mini-flag flag-quick" aria-hidden="true"><svg class="ico ico-mini" aria-hidden="true"><use href="#i-bolt"></use></svg></span>
+		        `;
 	        try {
 	          let pressT = 0;
 	          let startX = 0;
@@ -790,16 +781,75 @@ export function wireControlEvents(dom, state, helpers) {
 
 	        row.appendChild(dot);
 	        row.appendChild(main);
-	        row.appendChild(actions);
-	        frag.appendChild(row);
-          try {
-            row.addEventListener("mouseenter", () => {
-              const hint = row && row.dataset ? String(row.dataset.hint || "") : "";
-              if (hint) _bmTip(row, hint);
-            });
-          } catch (_) {}
+		        row.appendChild(actions);
+		        frag.appendChild(row);
+	          // Long-press: copy JSON source path (explicit action; no hover hints).
+	          try {
+	            const filePath = String(it.file || "").trim();
+	            if (filePath) {
+	              let pressT = 0;
+	              let pressed = false;
+	              let moved = false;
+	              let longFired = false;
+	              let startX = 0;
+	              let startY = 0;
+	              const LONG_MS = 520;
+	              const MOVE_PX = 8;
 
-		      }
+	              const clear = () => {
+	                pressed = false;
+	                moved = false;
+	                if (pressT) { try { clearTimeout(pressT); } catch (_) {} }
+	                pressT = 0;
+	              };
+
+	              row.addEventListener("pointerdown", (e) => {
+	                try {
+	                  if (e && typeof e.button === "number" && e.button !== 0) return;
+	                } catch (_) {}
+	                try {
+	                  const t = e && e.target;
+	                  if (t && t.closest && t.closest("button")) return;
+	                } catch (_) {}
+	                pressed = true;
+	                moved = false;
+	                longFired = false;
+	                startX = Number(e && e.clientX) || 0;
+	                startY = Number(e && e.clientY) || 0;
+	                if (pressT) { try { clearTimeout(pressT); } catch (_) {} }
+	                pressT = window.setTimeout(() => {
+	                  if (!pressed || moved) return;
+	                  longFired = true;
+	                  try { row.dataset.lp = String(Date.now()); } catch (_) {}
+	                  copyToClipboard(filePath)
+	                    .then((ok) => { _toastFromEl(row, ok ? "已复制对话 JSON 路径" : "复制失败", { durationMs: 1200 }); })
+	                    .catch(() => {});
+	                }, LONG_MS);
+	              });
+	              row.addEventListener("pointermove", (e) => {
+	                if (!pressed) return;
+	                const x = Number(e && e.clientX) || 0;
+	                const y = Number(e && e.clientY) || 0;
+	                const dx = x - startX;
+	                const dy = y - startY;
+	                if ((dx * dx + dy * dy) > (MOVE_PX * MOVE_PX)) {
+	                  moved = true;
+	                  if (pressT) { try { clearTimeout(pressT); } catch (_) {} }
+	                  pressT = 0;
+	                }
+	              });
+	              row.addEventListener("pointerup", clear);
+	              row.addEventListener("pointercancel", clear);
+	              row.addEventListener("pointerleave", clear);
+	              row.addEventListener("click", (e) => {
+	                if (!longFired) return;
+	                longFired = false;
+	                try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+	              });
+	            }
+	          } catch (_) {}
+
+			      }
 
 	      target.appendChild(frag);
 	    };
