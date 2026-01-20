@@ -525,19 +525,31 @@ export function wireControlEvents(dom, state, helpers) {
 	    return p;
 	  };
 
-	  const _openExportPrefsPanel = (key, anchorEl = null) => {
-	    const p = _syncExportPrefsPanel(key, true);
-	    const dlg = dom && dom.exportPrefsDialog ? dom.exportPrefsDialog : null;
-	    const ok = _openPopupNearEl(dlg, anchorEl, { prefer: "left", align: "end", gap: 10, pad: 12 });
-	    if (ok) {
-	      try {
-	        setTimeout(() => {
-	          try { if (dom.exportPrefsQuickBtn && typeof dom.exportPrefsQuickBtn.focus === "function") dom.exportPrefsQuickBtn.focus(); } catch (_) {}
-	        }, 0);
-	      } catch (_) {}
-	    }
-	    return p;
-	  };
+		  const _openExportPrefsPanel = (key, anchorEl = null) => {
+		    const p = _syncExportPrefsPanel(key, true);
+		    const dlg = dom && dom.exportPrefsDialog ? dom.exportPrefsDialog : null;
+		    const ok = _openPopupNearEl(dlg, anchorEl, { prefer: "left", align: "end", gap: 10, pad: 12 });
+		    if (ok) {
+		      // 让“导出设置”弹层的左边框与“会话管理”抽屉左边框对齐，避免视觉别扭。
+		      try {
+		        const drawer = dom && dom.bookmarkDrawer ? dom.bookmarkDrawer : null;
+		        if (drawer && drawer.getBoundingClientRect && drawer.classList && !drawer.classList.contains("hidden")) {
+		          const dr = drawer.getBoundingClientRect();
+		          const pr = dlg.getBoundingClientRect();
+		          const vw = window.innerWidth || 0;
+		          const pad = 12;
+		          const left = _clamp(dr.left, pad, Math.max(pad, vw - pr.width - pad));
+		          try { dlg.style.left = `${left}px`; } catch (_) {}
+		        }
+		      } catch (_) {}
+		      try {
+		        setTimeout(() => {
+		          try { if (dom.exportPrefsQuickBtn && typeof dom.exportPrefsQuickBtn.focus === "function") dom.exportPrefsQuickBtn.focus(); } catch (_) {}
+		        }, 0);
+		      } catch (_) {}
+		    }
+		    return p;
+		  };
 
 	  const _wireExportPrefsPanel = () => {
 	    const quickBtn = dom && dom.exportPrefsQuickBtn ? dom.exportPrefsQuickBtn : null;
