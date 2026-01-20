@@ -115,9 +115,23 @@ export function wireHoldCopy(el, opts) {
     try {
       if (longFired) { longFired = false; e.preventDefault(); e.stopPropagation(); return; }
       if (moved) return;
+      // UX: fast two single-clicks should toggle smoothly even if the browser treats it as a double-click
+      // and creates a selection (which would otherwise block onTap via hasActiveSelection()).
+      const detail = Number(e && e.detail) || 0;
+      if (detail >= 2 && opts && typeof opts.onTap === "function") {
+        let handled = false;
+        try { handled = !!opts.onTap(e); } catch (_) {}
+        if (handled) {
+          try {
+            const sel = window.getSelection && window.getSelection();
+            if (sel && typeof sel.removeAllRanges === "function") sel.removeAllRanges();
+          } catch (_) {}
+          try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+          return;
+        }
+      }
       if (hasActiveSelection()) return;
       if (opts && typeof opts.onTap === "function") opts.onTap(e);
     } catch (_) {}
   });
 }
-
