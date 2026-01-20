@@ -817,20 +817,24 @@ export function wireControlEvents(dom, state, helpers) {
             pressT = 0;
           };
 
-          exportBtn.addEventListener("pointerdown", (e) => {
-            try { if (e && typeof e.button === "number" && e.button !== 0) return; } catch (_) {}
-            moved = false;
-            pressed = true;
-            longFired = false;
-            startX = Number(e && e.clientX) || 0;
-            startY = Number(e && e.clientY) || 0;
-            if (pressT) { try { clearTimeout(pressT); } catch (_) {} }
-	            pressT = window.setTimeout(() => {
-	              if (!pressed || moved) return;
-	              longFired = true;
+	          exportBtn.addEventListener("pointerdown", (e) => {
+	            try { if (e && typeof e.button === "number" && e.button !== 0) return; } catch (_) {}
+	            moved = false;
+	            pressed = true;
+	            longFired = false;
+	            startX = Number(e && e.clientX) || 0;
+	            startY = Number(e && e.clientY) || 0;
+	            if (pressT) { try { clearTimeout(pressT); } catch (_) {} }
+		            pressT = window.setTimeout(() => {
+		              if (!pressed || moved) return;
+		              longFired = true;
+		              try {
+		                const dlg = dom && dom.exportPrefsDialog ? dom.exportPrefsDialog : null;
+		                if (dlg && dlg.open) { try { dlg.close(); } catch (_) {} return; }
+		              } catch (_) {}
 		              try { _openExportPrefsPanel(String(it.key || ""), exportBtn); } catch (_) {}
-		            }, LONG_MS);
-		          });
+			            }, LONG_MS);
+			          });
           exportBtn.addEventListener("pointermove", (e) => {
             if (!pressed) return;
             const x = Number(e && e.clientX) || 0;

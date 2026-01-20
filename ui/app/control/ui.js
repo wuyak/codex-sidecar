@@ -80,6 +80,7 @@ export function closeTranslateDrawer(dom) {
 
 export function closeBookmarkDrawer(dom) {
   try {
+    try { if (dom.exportPrefsDialog && dom.exportPrefsDialog.open) dom.exportPrefsDialog.close(); } catch (_) {}
     if (dom.bookmarkDrawerOverlay) dom.bookmarkDrawerOverlay.classList.add("hidden");
     if (dom.bookmarkDrawer) dom.bookmarkDrawer.classList.add("hidden");
     if (dom.bookmarkDrawerToggleBtn && dom.bookmarkDrawerToggleBtn.classList) dom.bookmarkDrawerToggleBtn.classList.remove("active");
