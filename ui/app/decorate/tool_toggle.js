@@ -1,4 +1,4 @@
-export function toggleToolDetailsFromPre(pre, ev) {
+export function toggleToolDetailsFromPre(pre) {
   try {
     const row = pre && pre.closest ? pre.closest(".row") : null;
     if (!row || !row.querySelector) return false;
@@ -13,16 +13,6 @@ export function toggleToolDetailsFromPre(pre, ev) {
       if (all && all.length === 1) btn = all[0];
     }
     if (!btn) return false;
-    const targetId = btn.getAttribute ? String(btn.getAttribute("data-target") || "") : "";
-    const swapId = btn.getAttribute ? String(btn.getAttribute("data-swap") || "") : "";
-    let targetWrap = null;
-    let swapWrap = null;
-    if (targetId) {
-      try { const el = document.getElementById(targetId); targetWrap = (el && el.closest) ? (el.closest(".pre-wrap") || el) : el; } catch (_) {}
-    }
-    if (swapId) {
-      try { const el = document.getElementById(swapId); swapWrap = (el && el.closest) ? (el.closest(".pre-wrap") || el) : el; } catch (_) {}
-    }
     btn.click();
     return true;
   } catch (_) {
