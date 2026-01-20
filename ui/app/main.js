@@ -15,6 +15,7 @@ import { initTheme } from "./theme.js";
 import { loadClosedThreads, saveClosedThreads } from "./closed_threads.js";
 import { initQuickViewSettings } from "./quick_view_settings.js";
 import { isOfflineKey } from "./offline.js";
+import { loadOfflineShowList } from "./offline_show.js";
 
 export async function initApp() {
   const dom = getDom();
@@ -27,6 +28,7 @@ export async function initApp() {
   try { state.hiddenThreads = loadHiddenThreads(); } catch (_) { state.hiddenThreads = new Set(); }
   try { state.showHiddenThreads = loadShowHiddenFlag(); } catch (_) { state.showHiddenThreads = false; }
   try { state.closedThreads = loadClosedThreads(); } catch (_) { state.closedThreads = new Map(); }
+  try { state.offlineShow = loadOfflineShowList(); } catch (_) { state.offlineShow = []; }
 
   // 用户活跃度：仅把“明确交互”（按键/滚轮/点击）记为活跃，避免程序化滚动误判。
   try {

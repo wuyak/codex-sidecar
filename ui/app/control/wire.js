@@ -17,6 +17,7 @@ import { saveClosedThreads } from "../closed_threads.js";
 import { saveHiddenThreads } from "../sidebar/hidden.js";
 import { getUnreadCount } from "../unread.js";
 import { isOfflineKey, offlineKeyFromRel } from "../offline.js";
+import { removeOfflineShowByKey, removeOfflineShowByRel, saveOfflineShowList, upsertOfflineShow } from "../offline_show.js";
 
 export function wireControlEvents(dom, state, helpers) {
   const h = (helpers && typeof helpers === "object") ? helpers : {};
@@ -654,6 +655,7 @@ export function wireControlEvents(dom, state, helpers) {
     for (const t of arr) {
       const k = String((t && t.key) ? t.key : "");
       if (!k) continue;
+      if (isOfflineKey(k)) continue;
       if (k === ex) continue;
       if (hidden && typeof hidden.has === "function" && hidden.has(k)) continue;
       if (closed && typeof closed.has === "function" && closed.has(k)) continue;
@@ -684,9 +686,10 @@ export function wireControlEvents(dom, state, helpers) {
 	      for (const t of arr) {
 	        const key = String((t && t.key) ? t.key : "");
 	        if (!key) continue;
+	        if (isOfflineKey(key)) continue;
 	        if (closed && typeof closed.has === "function" && closed.has(key)) continue;
 	        const label0 = _threadLabel(t);
-	        const label = isOfflineKey(key) ? `离线 · ${label0}` : label0;
+	        const label = label0;
 	        const file = String((t && t.file) ? t.file : "");
         const fileBase = file ? (String(file).split("/").slice(-1)[0] || file) : "";
         const followed = !!(file && followFiles && followFiles.includes(file));
@@ -1006,12 +1009,15 @@ export function wireControlEvents(dom, state, helpers) {
     _renderList(hiddenHost, hiddenItems, { hiddenList: true });
 
 	    try {
+	      if (dom.bookmarkCount) dom.bookmarkCount.textContent = String(items.length);
 	      if (dom.bookmarkHiddenCount) dom.bookmarkHiddenCount.textContent = String(hiddenItems.length);
 	      if (dom.bookmarkHiddenDetails) {
 	        dom.bookmarkHiddenDetails.style.display = hiddenItems.length ? "" : "none";
 	      }
 	    } catch (_) {}
 
+      // 离线“展示中”（固定列表）
+      try { _renderOfflineShowList(); } catch (_) {}
       // 离线展示名单（最近 rollout 文件）
       try { _renderOfflineDrawerList(); } catch (_) {}
 	  };
@@ -1031,6 +1037,168 @@ export function wireControlEvents(dom, state, helpers) {
     try { el.textContent = String(msg || "").trim(); } catch (_) {}
   };
 
+  const _renderOfflineShowList = () => {
+    const host = dom && dom.offlineShowList ? dom.offlineShowList : null;
+    if (!host) return;
+    // 仅在抽屉打开时渲染
+    if (!_isBookmarkDrawerOpen()) return;
+    if (_isBookmarkDrawerEditing()) return;
+
+    const list = Array.isArray(state && state.offlineShow) ? state.offlineShow : [];
+    try { if (dom && dom.offlineShowCount) dom.offlineShowCount.textContent = String(list.length || 0); } catch (_) {}
+
+    try { host.replaceChildren(); } catch (_) { while (host.firstChild) host.removeChild(host.firstChild); }
+    const frag = document.createDocumentFragment();
+
+    if (!list.length) {
+      const empty = document.createElement("div");
+      empty.className = "meta";
+      empty.style.opacity = "0.7";
+      empty.style.padding = "6px 2px";
+      empty.textContent = "暂无展示会话（从下方“最近文件”加入）";
+      frag.appendChild(empty);
+      host.appendChild(frag);
+      return;
+    }
+
+    for (const it of list) {
+      if (!it || typeof it !== "object") continue;
+      const rel = String(it.rel || "").trim();
+      const key = String(it.key || offlineKeyFromRel(rel)).trim();
+      if (!rel || !key) continue;
+      const file = String(it.file || "").trim();
+      const tid = String(it.thread_id || "").trim();
+
+      const tmeta = { key, thread_id: tid, file: file || rel };
+      const labelText = getCustomLabel(key) || _threadDefaultLabel(tmeta);
+
+      const row = document.createElement("div");
+      row.className = "tab" + (String(state.currentKey || "all") === key ? " active" : "");
+      row.dataset.key = key;
+      row.dataset.rel = rel;
+      row.dataset.file = file;
+      row.dataset.threadId = tid;
+      row.setAttribute("role", "button");
+      row.tabIndex = 0;
+      try { row.removeAttribute("title"); } catch (_) {}
+
+      const dot = document.createElement("span");
+      dot.className = "tab-dot";
+      try { dot.style.background = String(colorForKey(key).fg || "#64748b"); } catch (_) {}
+
+      const label = document.createElement("span");
+      label.className = "tab-label";
+      label.textContent = labelText;
+
+      const sub = document.createElement("span");
+      sub.className = "tab-sub";
+      sub.textContent = rel;
+
+      const main = document.createElement("div");
+      main.className = "tab-main";
+      main.appendChild(label);
+      main.appendChild(sub);
+
+      const actions = document.createElement("div");
+      actions.className = "tab-actions";
+
+      const exportBtn = document.createElement("button");
+      exportBtn.className = "mini-btn";
+      exportBtn.type = "button";
+      exportBtn.dataset.action = "export";
+      try {
+        const p = getExportPrefsForKey(key);
+        exportBtn.classList.toggle("flag-quick", !!p.quick);
+        exportBtn.classList.toggle("flag-tr", !!p.translate);
+      } catch (_) {
+        try { exportBtn.classList.remove("flag-quick"); } catch (_) {}
+        try { exportBtn.classList.remove("flag-tr"); } catch (_) {}
+      }
+      exportBtn.setAttribute("aria-label", "导出（长按设置）");
+      try { exportBtn.removeAttribute("title"); } catch (_) {}
+      exportBtn.innerHTML = `
+        <svg class="ico" aria-hidden="true"><use href="#i-download"></use></svg>
+        <span class="mini-flag flag-tr" aria-hidden="true"><svg class="ico ico-mini" aria-hidden="true"><use href="#i-globe"></use></svg></span>
+        <span class="mini-flag flag-quick" aria-hidden="true"><svg class="ico ico-mini" aria-hidden="true"><use href="#i-bolt"></use></svg></span>
+      `;
+
+      // Long-press: open export prefs panel (same as live list).
+      try {
+        let pressT = 0;
+        let startX = 0;
+        let startY = 0;
+        let moved = false;
+        let pressed = false;
+        let longFired = false;
+        const LONG_MS = 520;
+        const MOVE_PX = 8;
+
+        const clear = () => {
+          pressed = false;
+          if (pressT) { try { clearTimeout(pressT); } catch (_) {} }
+          pressT = 0;
+        };
+
+        exportBtn.addEventListener("pointerdown", (e) => {
+          try { if (e && typeof e.button === "number" && e.button !== 0) return; } catch (_) {}
+          moved = false;
+          pressed = true;
+          longFired = false;
+          startX = Number(e && e.clientX) || 0;
+          startY = Number(e && e.clientY) || 0;
+          if (pressT) { try { clearTimeout(pressT); } catch (_) {} }
+          pressT = window.setTimeout(() => {
+            if (!pressed || moved) return;
+            longFired = true;
+            try {
+              const dlg = dom && dom.exportPrefsDialog ? dom.exportPrefsDialog : null;
+              if (dlg && dlg.open) { try { dlg.close(); } catch (_) {} return; }
+            } catch (_) {}
+            try { _openExportPrefsPanel(key, exportBtn); } catch (_) {}
+          }, LONG_MS);
+        });
+        exportBtn.addEventListener("pointermove", (e) => {
+          if (!pressed) return;
+          const x = Number(e && e.clientX) || 0;
+          const y = Number(e && e.clientY) || 0;
+          const dx = x - startX;
+          const dy = y - startY;
+          if ((dx * dx + dy * dy) > (MOVE_PX * MOVE_PX)) {
+            moved = true;
+            if (pressT) { try { clearTimeout(pressT); } catch (_) {} }
+            pressT = 0;
+          }
+        });
+        exportBtn.addEventListener("pointerup", clear);
+        exportBtn.addEventListener("pointercancel", clear);
+        exportBtn.addEventListener("pointerleave", clear);
+        exportBtn.addEventListener("click", (e) => {
+          if (!longFired) return;
+          longFired = false;
+          try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+        });
+      } catch (_) {}
+
+      const removeBtn = document.createElement("button");
+      removeBtn.className = "mini-btn danger";
+      removeBtn.type = "button";
+      removeBtn.dataset.action = "removeShow";
+      removeBtn.setAttribute("aria-label", "移除展示");
+      try { removeBtn.removeAttribute("title"); } catch (_) {}
+      removeBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="#i-trash"></use></svg>`;
+
+      actions.appendChild(exportBtn);
+      actions.appendChild(removeBtn);
+
+      row.appendChild(dot);
+      row.appendChild(main);
+      row.appendChild(actions);
+      frag.appendChild(row);
+    }
+
+    host.appendChild(frag);
+  };
+
   const _renderOfflineDrawerList = () => {
     const host = dom && dom.offlineList ? dom.offlineList : null;
     if (!host) return;
@@ -1038,7 +1206,6 @@ export function wireControlEvents(dom, state, helpers) {
     if (!_isBookmarkDrawerOpen()) return;
     if (_isBookmarkDrawerEditing()) return;
     const files = Array.isArray(state && state.offlineFiles) ? state.offlineFiles : [];
-    try { if (dom && dom.offlineCount) dom.offlineCount.textContent = String(files.length || 0); } catch (_) {}
 
     try { host.replaceChildren(); } catch (_) { while (host.firstChild) host.removeChild(host.firstChild); }
     const frag = document.createDocumentFragment();
@@ -1085,7 +1252,7 @@ export function wireControlEvents(dom, state, helpers) {
 
       const sub = document.createElement("span");
       sub.className = "tab-sub";
-      sub.textContent = "点击打开";
+      sub.textContent = "点击加入展示";
 
       main.appendChild(label);
       main.appendChild(sub);
@@ -1127,16 +1294,16 @@ export function wireControlEvents(dom, state, helpers) {
   const _openOfflineRel = async (rel, meta = {}) => {
     const rel0 = String(rel || "").trim();
     if (!rel0) return;
-    const key = offlineKeyFromRel(rel0);
     const file = String(meta.file || "").trim();
     const tid = String(meta.thread_id || meta.threadId || "").trim();
     try {
-      const prev = state.threadIndex.get(key) || { key, thread_id: "", file: "", count: 0, last_ts: "", last_seq: 0, kinds: {} };
-      if (file) prev.file = file;
-      if (tid) prev.thread_id = tid;
-      prev.key = key;
-      state.threadIndex.set(key, prev);
+      const next = upsertOfflineShow(state.offlineShow, { rel: rel0, file, thread_id: tid });
+      state.offlineShow = next;
+      saveOfflineShowList(next);
     } catch (_) {}
+    try { renderTabs(); } catch (_) {}
+    try { _renderBookmarkDrawerList(); } catch (_) {}
+    const key = offlineKeyFromRel(rel0);
     await onSelectKey(key);
     closeBookmarkDrawer(dom);
   };
@@ -1499,10 +1666,61 @@ export function wireControlEvents(dom, state, helpers) {
     await _handleBookmarkListClick({ target: row });
   };
 
+  const _handleOfflineShowListClick = async (e) => {
+    const btn = e && e.target && e.target.closest ? e.target.closest("button[data-action]") : null;
+    const row = e && e.target && e.target.closest ? e.target.closest(".tab[data-key]") : null;
+    const key = row && row.dataset ? String(row.dataset.key || "") : "";
+    if (!row || !key) return;
+
+    if (btn && btn.dataset) {
+      const action = String(btn.dataset.action || "");
+      try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+      if (action === "export") {
+        const p = getExportPrefsForKey(key);
+        const mode = p.quick ? "quick" : "full";
+        const reasoningLang = p.translate ? "zh" : "en";
+        const r = await exportThreadMarkdown(state, key, { mode, reasoningLang });
+        _toastFromEl(btn, r && r.ok ? "已导出" : "导出失败");
+        return;
+      }
+      if (action === "removeShow") {
+        const next = removeOfflineShowByKey(state.offlineShow, key);
+        try { state.offlineShow = next; } catch (_) {}
+        try { saveOfflineShowList(next); } catch (_) {}
+        try { renderTabs(); } catch (_) {}
+        _renderBookmarkDrawerList();
+        if (String(state.currentKey || "all") === key) {
+          let pick = "";
+          try { pick = String(next && next[0] && next[0].key ? next[0].key : ""); } catch (_) { pick = ""; }
+          if (!pick) pick = _pickFallbackKey(key);
+          await onSelectKey(pick || "all");
+        }
+        return;
+      }
+      return;
+    }
+
+    await onSelectKey(key);
+    closeBookmarkDrawer(dom);
+  };
+
+  const _handleOfflineShowListKeydown = async (e) => {
+    if (!e) return;
+    const keyName = String(e.key || "");
+    if (keyName !== "Enter" && keyName !== " ") return;
+    const row = e.target && e.target.closest ? e.target.closest(".tab[data-key]") : null;
+    const key = row && row.dataset ? String(row.dataset.key || "") : "";
+    if (!row || !key) return;
+    try { e.preventDefault(); } catch (_) {}
+    await _handleOfflineShowListClick({ target: row });
+  };
+
   if (dom.bookmarkList) dom.bookmarkList.addEventListener("click", async (e) => { try { await _handleBookmarkListClick(e); } catch (_) {} });
   if (dom.bookmarkHiddenList) dom.bookmarkHiddenList.addEventListener("click", async (e) => { try { await _handleBookmarkListClick(e); } catch (_) {} });
   if (dom.bookmarkList) dom.bookmarkList.addEventListener("keydown", async (e) => { try { await _handleBookmarkListKeydown(e); } catch (_) {} });
   if (dom.bookmarkHiddenList) dom.bookmarkHiddenList.addEventListener("keydown", async (e) => { try { await _handleBookmarkListKeydown(e); } catch (_) {} });
+  if (dom.offlineShowList) dom.offlineShowList.addEventListener("click", async (e) => { try { await _handleOfflineShowListClick(e); } catch (_) {} });
+  if (dom.offlineShowList) dom.offlineShowList.addEventListener("keydown", async (e) => { try { await _handleOfflineShowListKeydown(e); } catch (_) {} });
 
   if (dom.offlineRefreshBtn) dom.offlineRefreshBtn.addEventListener("click", async () => { try { await _refreshOfflineFiles(true); } catch (_) {} });
   if (dom.offlineOpenBtn) dom.offlineOpenBtn.addEventListener("click", async () => { try { await _openOfflineRel(_offlineRelFromInput()); } catch (_) {} });
@@ -1527,6 +1745,13 @@ export function wireControlEvents(dom, state, helpers) {
       await _openOfflineRel(String(row.dataset ? row.dataset.rel || "" : ""), { file: String(row.dataset ? row.dataset.file || "" : ""), thread_id: String(row.dataset ? row.dataset.threadId || "" : "") });
     } catch (_) {}
   });
+
+  // offline-show-changed：用于同步“展示中”列表（例如从展示标签栏关闭时）。
+  try {
+    window.addEventListener("offline-show-changed", () => {
+      try { _renderBookmarkDrawerList(); } catch (_) {}
+    });
+  } catch (_) {}
 
   if (dom.openTranslateFromSettingsBtn) dom.openTranslateFromSettingsBtn.addEventListener("click", () => { openTranslatorSettings(dom); });
   if (dom.saveBtn) dom.saveBtn.addEventListener("click", async () => {

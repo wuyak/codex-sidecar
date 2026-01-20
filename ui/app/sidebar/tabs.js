@@ -1,4 +1,6 @@
 import { colorForKey, keyOf, rolloutStampFromFile, shortId } from "../utils.js";
+import { isOfflineKey } from "../offline.js";
+import { removeOfflineShowByKey, saveOfflineShowList } from "../offline_show.js";
 import { getCustomLabel, setCustomLabel } from "./labels.js";
 import { loadHiddenThreads, saveHiddenThreads } from "./hidden.js";
 import { saveClosedThreads } from "../closed_threads.js";
@@ -38,14 +40,15 @@ function _baseName(p) {
   return parts[parts.length - 1] || s;
 }
 
-function threadLabels(t) {
-  const offline = String(t && t.key ? t.key : "").startsWith("offline:");
+function threadLabels(t, opts = {}) {
+  const offline = isOfflineKey(String(t && t.key ? t.key : ""));
   const stampFull = rolloutStampFromFile(t.file || "");
   const stampShort = _stampShort(stampFull);
   const idPart = t.thread_id ? shortId(t.thread_id) : shortId(((t.file || "").split("/").slice(-1)[0]) || (t.key || ""));
   const full0 = (stampFull && idPart) ? `${stampFull} · ${idPart}` : (stampFull || idPart || "unknown");
   const label0 = (stampShort && idPart) ? `${stampShort} · ${idPart}` : (idPart || stampShort || stampFull || "unknown");
-  const pre = offline ? "离线 · " : "";
+  const showOfflinePrefix = !Object.prototype.hasOwnProperty.call(opts || {}, "offlinePrefix") ? true : !!opts.offlinePrefix;
+  const pre = (offline && showOfflinePrefix) ? "离线 · " : "";
   return { label: `${pre}${label0}`, full: `${pre}${full0}` };
 }
 
@@ -67,6 +70,7 @@ function _pickFallbackKey(state, excludeKey = "") {
   for (const t of arr) {
     const k = String((t && t.key) ? t.key : "");
     if (!k) continue;
+    if (isOfflineKey(k)) continue;
     if (k === ex) continue;
     if (hidden && typeof hidden.has === "function" && hidden.has(k)) continue;
     if (closed && typeof closed.has === "function" && closed.has(k)) continue;
@@ -197,7 +201,10 @@ function _wireBookmarkInteractions(btn) {
   };
 
   const tipRename = "长按重命名";
-  const tipClose = "关闭监听";
+  const tipClose = () => {
+    const m = String(btn.dataset && btn.dataset.mode ? btn.dataset.mode : "").trim().toLowerCase();
+    return (m === "offline") ? "移除展示" : "关闭监听";
+  };
 
   let tipT = 0;
   const _clearTipTimer = () => {
@@ -231,7 +238,7 @@ function _wireBookmarkInteractions(btn) {
       closeEl.__bmTipWired = true;
       closeEl.addEventListener("pointerenter", (e) => {
         if (!canHoverTip(e)) return;
-        _scheduleTip(closeEl, tipClose, 120);
+        _scheduleTip(closeEl, tipClose(), 120);
       });
       closeEl.addEventListener("pointerleave", (e) => {
         if (!canHoverTip(e)) return;
@@ -486,34 +493,52 @@ export function upsertThread(state, msg) {
 }
 
 export function renderTabs(dom, state, onSelectKey) {
-  const host = dom.bookmarks;
-  if (!host) return;
+  const hostLive = dom.bookmarks;
+  const hostOffline = dom.offlineBookmarks;
+  if (!hostLive) return;
 
   // Avoid breaking inline rename (focus loss) while SSE updates are streaming in.
   try {
-    const editingBtn = host.querySelector ? host.querySelector("button.bookmark.editing") : null;
-    if (editingBtn) return;
+    const editingLive = hostLive.querySelector ? hostLive.querySelector("button.bookmark.editing") : null;
+    const editingOff = hostOffline && hostOffline.querySelector ? hostOffline.querySelector("button.bookmark.editing") : null;
+    if (editingLive || editingOff) return;
   } catch (_) {}
 
-  // Ensure rail container exists (host stays fixed at right).
-  let rail = null;
-  try {
-    host.classList.add("bm-host");
-    rail = host.querySelector ? host.querySelector(".bm-rail") : null;
-    if (!rail) {
-      rail = document.createElement("div");
-      rail.className = "bm-rail";
-      host.appendChild(rail);
-    }
-    // Back-compat cleanup: older versions had a separate popover list. If present, remove it.
-    const pop = host.querySelector ? host.querySelector(".bm-pop") : null;
-    if (pop && pop.parentNode === host) {
-      try { host.removeChild(pop); } catch (_) {}
-    }
-  } catch (_) {}
+  const _ensureRailHost = (host) => {
+    if (!host) return null;
+    let rail = null;
+    try {
+      host.classList.add("bm-host");
+      rail = host.querySelector ? host.querySelector(".bm-rail") : null;
+      if (!rail) {
+        rail = document.createElement("div");
+        rail.className = "bm-rail";
+        host.appendChild(rail);
+      }
+      // Back-compat cleanup: older versions had a separate popover list. If present, remove it.
+      const pop = host.querySelector ? host.querySelector(".bm-pop") : null;
+      if (pop && pop.parentNode === host) {
+        try { host.removeChild(pop); } catch (_) {}
+      }
+    } catch (_) {}
+    return rail;
+  };
+
+  const railLive = _ensureRailHost(hostLive);
+  const railOffline = hostOffline ? _ensureRailHost(hostOffline) : null;
+  if (!railLive) return;
 
   // Tabs should keep a stable order (browser-like). Do not reorder by activity on every refresh.
-  const items = Array.from(state.threadIndex.values());
+  const itemsAll = Array.from(state.threadIndex.values());
+  const items = itemsAll.filter((t) => !isOfflineKey(String(t && t.key ? t.key : "")));
+  const offlineItems = Array.isArray(state && state.offlineShow) ? state.offlineShow : [];
+
+  try {
+    if (document && document.body && document.body.dataset) {
+      if (offlineItems.length) document.body.dataset.offtabs = "1";
+      else { try { delete document.body.dataset.offtabs; } catch (_) { document.body.dataset.offtabs = "0"; } }
+    }
+  } catch (_) {}
 
   const hidden = (state && state.hiddenThreads && typeof state.hiddenThreads.has === "function")
     ? state.hiddenThreads
@@ -522,9 +547,7 @@ export function renderTabs(dom, state, onSelectKey) {
     ? state.closedThreads
     : new Map();
 
-  // No auto-hints: only show feedback for explicit actions (click/long-press), per requirements.
-  const fragRail = document.createDocumentFragment();
-  const fragPop = document.createDocumentFragment();
+  const host = hostLive;
 
   const _ensureHiddenSet = () => {
     if (!state.hiddenThreads || typeof state.hiddenThreads.add !== "function") state.hiddenThreads = new Set();
@@ -580,9 +603,9 @@ export function renderTabs(dom, state, onSelectKey) {
       const isHidden = !!(hidden && typeof hidden.has === "function" && hidden.has(t.key));
       const u = getUnreadCount(state, t.key);
       const btn = _getOrCreateBookmark(container, existing, t.key, () => document.createElement("button"));
-      btn.dataset.mode = mode;
+      btn.dataset.mode = mode || "live";
       const clr = colorForKey(t.key || "");
-      const labels = threadLabels(t);
+      const labels = threadLabels(t, { offlinePrefix: true });
       const defaultLabel = labels.label;
       const fullLabel = labels.full;
       const custom = getCustomLabel(t.key);
@@ -635,20 +658,107 @@ export function renderTabs(dom, state, onSelectKey) {
 
   const existingRail = new Map();
   try {
-    const btns = rail && rail.querySelectorAll ? rail.querySelectorAll("button.bookmark") : [];
+    const btns = railLive && railLive.querySelectorAll ? railLive.querySelectorAll("button.bookmark") : [];
     for (const b of btns) {
       const k = b && b.dataset ? String(b.dataset.key || "") : "";
       if (k) existingRail.set(k, b);
     }
   } catch (_) {}
 
-  const railFrag = renderList(rail, existingRail, { mode: "rail" });
+  const railFrag = renderList(railLive, existingRail, { mode: "live" });
 
   // Preserve horizontal scroll position to avoid “jumping” when SSE refreshes rerender the rail.
   let prevScrollLeft = 0;
-  try { prevScrollLeft = rail ? Number(rail.scrollLeft) || 0 : 0; } catch (_) {}
+  try { prevScrollLeft = railLive ? Number(railLive.scrollLeft) || 0 : 0; } catch (_) {}
 
-  try { if (rail) rail.replaceChildren(railFrag); } catch (_) { try { while (rail && rail.firstChild) rail.removeChild(rail.firstChild); rail && rail.appendChild(railFrag); } catch (_) {} }
+  try { if (railLive) railLive.replaceChildren(railFrag); } catch (_) { try { while (railLive && railLive.firstChild) railLive.removeChild(railLive.firstChild); railLive && railLive.appendChild(railFrag); } catch (_) {} }
 
-  try { if (rail) rail.scrollLeft = prevScrollLeft; } catch (_) {}
+  try { if (railLive) railLive.scrollLeft = prevScrollLeft; } catch (_) {}
+
+  // Offline “展示标签栏”：不进入 hiddenThreads，不产生未读；关闭=移除展示。
+  if (!railOffline) return;
+
+  const _removeOffline = async (key, labelForToast = "", sourceEl = null) => {
+    const k = String(key || "").trim();
+    if (!k) return;
+    const next = removeOfflineShowByKey(state.offlineShow, k);
+    try { state.offlineShow = next; } catch (_) {}
+    try { saveOfflineShowList(next); } catch (_) {}
+    _toastFromEl(sourceEl || hostOffline || hostLive, `已移除展示：${labelForToast || shortId(k)}`, { durationMs: 1600 });
+
+    const curKey = String(state.currentKey || "all");
+    if (curKey === k) {
+      let pick = "";
+      try { pick = String(next && next[0] && next[0].key ? next[0].key : ""); } catch (_) { pick = ""; }
+      if (!pick) pick = _pickFallbackKey(state, k);
+      await onSelectKey(pick || "all");
+      return;
+    }
+    renderTabs(dom, state, onSelectKey);
+  };
+
+  const existingOff = new Map();
+  try {
+    const btns = railOffline.querySelectorAll ? railOffline.querySelectorAll("button.bookmark") : [];
+    for (const b of btns) {
+      const k = b && b.dataset ? String(b.dataset.key || "") : "";
+      if (k) existingOff.set(k, b);
+    }
+  } catch (_) {}
+
+  const fragOff = document.createDocumentFragment();
+  const currentKey = String(state.currentKey || "all");
+  for (const it of offlineItems) {
+    if (!it || typeof it !== "object") continue;
+    const key = String(it.key || "").trim();
+    const rel = String(it.rel || "").trim();
+    if (!key) continue;
+
+    const t = {
+      key,
+      thread_id: String(it.thread_id || "").trim(),
+      file: String(it.file || "").trim() || rel,
+    };
+
+    const btn = _getOrCreateBookmark(railOffline, existingOff, key, () => document.createElement("button"));
+    btn.dataset.mode = "offline";
+    const clr = colorForKey(key);
+    const labels = threadLabels(t, { offlinePrefix: false });
+    const defaultLabel = labels.label;
+    const custom = getCustomLabel(key);
+    const label = custom || defaultLabel;
+    btn.className = "bookmark" + (currentKey === key ? " active" : "");
+
+    try {
+      btn.style.setProperty("--bm-accent", clr.fg);
+      btn.style.setProperty("--bm-border", clr.border);
+    } catch (_) {}
+    const parts = _ensureBookmarkStructure(btn);
+    if (parts) {
+      try { parts.labelSpan.textContent = label; } catch (_) {}
+      try { parts.labelSpan.removeAttribute("title"); } catch (_) {}
+      try { parts.closeSpan.removeAttribute("title"); } catch (_) {}
+    }
+    try {
+      btn.dataset.label = label;
+      btn.dataset.defaultLabel = defaultLabel;
+    } catch (_) {}
+    try { btn.setAttribute("aria-label", label); } catch (_) {}
+    try { delete btn.dataset.unread; } catch (_) { btn.dataset.unread = ""; }
+    try { btn.removeAttribute("title"); } catch (_) {}
+
+    btn.__bmOnSelect = onSelectKey;
+    btn.__bmOnContext = async (k, el) => { await _removeOffline(k, label, el || btn); };
+    btn.__bmOnDelete = async (el) => { await _removeOffline(key, label, el || btn); };
+    btn.__bmOnClose = async (el) => { await _removeOffline(key, label, el || btn); };
+    btn.__bmOnJumpUnread = null;
+    btn.__bmRender = () => renderTabs(dom, state, onSelectKey);
+    _wireBookmarkInteractions(btn);
+    fragOff.appendChild(btn);
+  }
+
+  let prevScrollLeftOff = 0;
+  try { prevScrollLeftOff = Number(railOffline.scrollLeft) || 0; } catch (_) {}
+  try { railOffline.replaceChildren(fragOff); } catch (_) { try { while (railOffline.firstChild) railOffline.removeChild(railOffline.firstChild); railOffline.appendChild(fragOff); } catch (_) {} }
+  try { railOffline.scrollLeft = prevScrollLeftOff; } catch (_) {}
 }

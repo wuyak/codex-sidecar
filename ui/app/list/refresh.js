@@ -2,6 +2,7 @@ import { inferToolName, parseToolCallText } from "../format.js";
 import { keyOf, safeJsonParse, tsToMs } from "../utils.js";
 import { refreshThreads } from "./threads.js";
 import { isOfflineKey, offlineRelFromKey } from "../offline.js";
+import { saveOfflineShowList, upsertOfflineShow } from "../offline_show.js";
 
 export async function refreshList(dom, state, renderTabs, renderMessage, renderEmpty) {
   const token = (state && typeof state === "object")
@@ -39,19 +40,35 @@ export async function refreshList(dom, state, renderTabs, renderMessage, renderE
     if (token && state && state.refreshToken !== token) return;
     const data = await resp.json();
     const msgs = (data.messages || []);
-    // 离线会话：补齐 threadIndex 元信息（手动输入 rel 时也能显示源文件/ID）。
+    // 离线会话：回填“展示中”元信息（file/thread_id），便于标签与导出（不污染 threadIndex）。
     try {
       if (isOfflineKey(state.currentKey)) {
         const k = String(state.currentKey || "");
-        const prev = state.threadIndex.get(k) || { key: k, thread_id: "", file: "", count: 0, last_ts: "", last_seq: 0 };
+        const rel = offlineRelFromKey(k);
         const fp = String(data && data.file ? data.file : "").trim();
-        if (fp) prev.file = fp;
-        try {
-          const tid = String(msgs && msgs[0] && msgs[0].thread_id ? msgs[0].thread_id : "").trim();
-          if (tid) prev.thread_id = tid;
-        } catch (_) {}
-        prev.key = k;
-        state.threadIndex.set(k, prev);
+        let tid = "";
+        try { tid = String(msgs && msgs[0] && msgs[0].thread_id ? msgs[0].thread_id : "").trim(); } catch (_) { tid = ""; }
+        if (rel && (fp || tid)) {
+          let same = false;
+          try {
+            const cur = Array.isArray(state && state.offlineShow) ? state.offlineShow : [];
+            for (const it of cur) {
+              if (!it || typeof it !== "object") continue;
+              if (String(it.rel || "") !== rel) continue;
+              const f0 = String(it.file || "").trim();
+              const t0 = String(it.thread_id || "").trim();
+              const f1 = String(fp || "").trim();
+              const t1 = String(tid || "").trim();
+              same = (f0 === f1) && (t0 === t1);
+              break;
+            }
+          } catch (_) {}
+          if (!same) {
+            const next = upsertOfflineShow(state.offlineShow, { rel, file: fp, thread_id: tid });
+            state.offlineShow = next;
+            saveOfflineShowList(next);
+          }
+        }
       }
     } catch (_) {}
     // 离线会话：回填本地译文缓存（不依赖后端 SidecarState）。

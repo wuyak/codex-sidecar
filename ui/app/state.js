@@ -81,6 +81,9 @@ export function createState() {
     // 配置镜像（用于离线读取等无需重复 /api/config 的场景）
     replayLastLines: 0,
 
+    // 离线“展示中”会话（来自本机 localStorage），用于展示标签栏与抽屉列表。
+    offlineShow: [],
+
     // 离线译文缓存（mid -> { zh, err }），仅用于 offline:* 会话视图。
     offlineZhById: new Map(),
   };
