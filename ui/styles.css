@@ -1031,7 +1031,7 @@
 			      .mini-btn.flag-tr .mini-flag.flag-tr {
 			        display: flex;
 			        top: -4px;
-			        left: -4px;
+			        right: -4px;
 			      }
 			      .mini-btn.flag-quick .mini-flag.flag-quick {
 			        display: flex;
