@@ -222,6 +222,7 @@ export async function loadControl(dom, state) {
     state.translatorProvider = String(cfg.translator_provider || "openai").trim().toLowerCase() || "openai";
     state.notifySoundAssistant = String(cfg.notify_sound_assistant || "none").trim() || "none";
     state.notifySoundToolGate = String(cfg.notify_sound_tool_gate || "none").trim() || "none";
+    state.replayLastLines = Number(cfg.replay_last_lines) || 0;
   } catch (_) {}
   try { preloadNotifySound(state); } catch (_) {}
   try {

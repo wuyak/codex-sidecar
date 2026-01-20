@@ -65,6 +65,10 @@ export function createState() {
     thinkModeById: new Map(),
     thinkModeOrder: [], // LRU-ish for pruning
     thinkModeMax: 600,
+    // 思考原文缓存（用于离线翻译/导出补齐等，不依赖后端 SidecarState）。
+    thinkTextById: new Map(), // mid -> text
+    thinkTextOrder: [],
+    thinkTextMax: 800,
 
     // 用户活跃度（用于更稳健的“是否已看到新消息”判断）
     userHasInteracted: false,
@@ -73,5 +77,11 @@ export function createState() {
     // 通知去重（避免重复事件导致重复响铃/重复计数）
     notifySeenIds: new Set(),
     notifySeenOrder: [],
+
+    // 配置镜像（用于离线读取等无需重复 /api/config 的场景）
+    replayLastLines: 0,
+
+    // 离线译文缓存（mid -> { zh, err }），仅用于 offline:* 会话视图。
+    offlineZhById: new Map(),
   };
 }

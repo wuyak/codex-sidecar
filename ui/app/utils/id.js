@@ -1,5 +1,9 @@
 export function keyOf(msg) {
-  return (msg.thread_id || msg.file || "unknown");
+  try {
+    const k = (msg && typeof msg.key === "string") ? msg.key : "";
+    if (k) return k;
+  } catch (_) {}
+  return (msg && (msg.thread_id || msg.file)) || "unknown";
 }
 
 export function shortId(s) {
@@ -13,4 +17,3 @@ export function safeDomId(s) {
   if (!raw) return "";
   return raw.replace(/[^a-z0-9_-]/gi, "_");
 }
-

@@ -1,6 +1,7 @@
 import { getCustomLabel } from "./sidebar/labels.js";
 import { extractJsonOutputString, keyOf, safeJsonParse, shortId } from "./utils.js";
 import { getExportPrefsForKey } from "./export_prefs.js";
+import { isOfflineKey, offlineRelFromKey } from "./offline.js";
 import {
   extractExitCode,
   extractOutputBody,
@@ -436,6 +437,61 @@ async function _ensureReasoningTranslated({ messages, threadId, maxN = 6, waitMs
   return { ok: true, queued, filled, waited_ms: Date.now() - start };
 }
 
+async function _ensureReasoningTranslatedOffline({ state, messages, maxN = 12 }) {
+  const arr = Array.isArray(messages) ? messages : [];
+  const needs = arr
+    .filter((m) => {
+      const kind = String(m && m.kind ? m.kind : "");
+      if (kind !== "reasoning_summary") return false;
+      const id = String(m && m.id ? m.id : "").trim();
+      if (!id) return false;
+      const zh = String(m && m.zh ? m.zh : "").trim();
+      return !zh;
+    })
+    .slice(0, Math.max(0, Number(maxN) || 0));
+
+  if (!needs.length) return { ok: true, queued: 0, filled: 0, waited_ms: 0 };
+
+  const start = Date.now();
+  let filled = 0;
+  try {
+    const items = needs.map((m) => ({ id: String(m.id || ""), text: String(m.text || "") }));
+    const resp = await fetch("/api/offline/translate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items }),
+    }).then((x) => x.json()).catch(() => null);
+    const outItems = Array.isArray(resp && resp.items) ? resp.items : [];
+    const byId = new Map(outItems.map((x) => [String(x && x.id ? x.id : ""), x]));
+
+    for (const m of needs) {
+      const id = String(m && m.id ? m.id : "").trim();
+      if (!id) continue;
+      const r = byId.get(id);
+      const zh = String(r && (r.zh || r.text) ? (r.zh || r.text) : "").trimEnd();
+      const err = String(r && r.error ? r.error : "").trim();
+      if (zh) {
+        m.zh = zh;
+        filled += 1;
+        try {
+          if (state && state.offlineZhById && typeof state.offlineZhById.set === "function") {
+            state.offlineZhById.set(id, { zh, err: "" });
+          }
+        } catch (_) {}
+      } else if (err) {
+        try { m.translate_error = err; } catch (_) {}
+        try {
+          if (state && state.offlineZhById && typeof state.offlineZhById.set === "function") {
+            state.offlineZhById.set(id, { zh: "", err });
+          }
+        } catch (_) {}
+      }
+    }
+  } catch (_) {}
+
+  return { ok: true, queued: needs.length, filled, waited_ms: Date.now() - start };
+}
+
 function _renderReasoning(m, opts = {}) {
   const en = String((m && m.text) ? m.text : "").trimEnd();
   const zh = String((m && m.zh) ? m.zh : "").trimEnd();
@@ -497,13 +553,47 @@ export async function exportThreadMarkdown(state, key, opts = {}) {
   const thread = (state && state.threadIndex && typeof state.threadIndex.get === "function")
     ? (state.threadIndex.get(k) || {})
     : {};
-  const threadId = String(thread.thread_id || "");
-  const file = String(thread.file || "");
+  const offline = isOfflineKey(k);
+  let threadId = String(thread.thread_id || "");
+  let file = String(thread.file || "");
 
   try {
-    const url = threadId ? `/api/messages?thread_id=${encodeURIComponent(threadId)}&t=${Date.now()}` : `/api/messages?t=${Date.now()}`;
-    const r = await fetch(url, { cache: "no-store" }).then(r => r.json());
-    messages = Array.isArray(r && r.messages) ? r.messages : [];
+    if (offline) {
+      const rel = offlineRelFromKey(k);
+      const tail = Math.max(0, Number(state && state.replayLastLines) || 0) || 200;
+      const url = `/api/offline/messages?rel=${encodeURIComponent(rel)}&tail_lines=${encodeURIComponent(tail)}&t=${Date.now()}`;
+      const r = await fetch(url, { cache: "no-store" }).then(r => r.json());
+      messages = Array.isArray(r && r.messages) ? r.messages : [];
+      try {
+        const fp = String(r && r.file ? r.file : "").trim();
+        if (fp) file = fp;
+      } catch (_) {}
+      try {
+        if (!threadId) threadId = String(messages && messages[0] && messages[0].thread_id ? messages[0].thread_id : "");
+      } catch (_) {}
+      // 回填本地离线译文缓存（UI 与导出一致）
+      try {
+        if (state && state.offlineZhById && typeof state.offlineZhById.get === "function") {
+          for (const m of messages) {
+            if (!m || typeof m !== "object") continue;
+            if (String(m.kind || "") !== "reasoning_summary") continue;
+            const id = String(m.id || "").trim();
+            if (!id) continue;
+            if (String(m.zh || "").trim()) continue;
+            const cached = state.offlineZhById.get(id);
+            if (!cached || typeof cached !== "object") continue;
+            const zh = String(cached.zh || "").trim();
+            const err = String(cached.err || "").trim();
+            if (zh) m.zh = zh;
+            if (err) m.translate_error = err;
+          }
+        }
+      } catch (_) {}
+    } else {
+      const url = threadId ? `/api/messages?thread_id=${encodeURIComponent(threadId)}&t=${Date.now()}` : `/api/messages?t=${Date.now()}`;
+      const r = await fetch(url, { cache: "no-store" }).then(r => r.json());
+      messages = Array.isArray(r && r.messages) ? r.messages : [];
+    }
   } catch (_) {
     return { ok: false, error: "fetch_failed" };
   }
@@ -541,16 +631,20 @@ export async function exportThreadMarkdown(state, key, opts = {}) {
       const maxN = Math.min(missing, mode === "quick" ? 18 : 48);
       const waitMs = Math.min(20000, 5200 + maxN * 420);
 
-      translateStat = await _ensureReasoningTranslated({ messages: selected, threadId, maxN, waitMs });
-      if (translateStat && translateStat.filled >= 1) {
-        const url = threadId ? `/api/messages?thread_id=${encodeURIComponent(threadId)}&t=${Date.now()}` : `/api/messages?t=${Date.now()}`;
-        const r2 = await fetch(url, { cache: "no-store" }).then(r => r.json()).catch(() => null);
-        const ms2 = Array.isArray(r2 && r2.messages) ? r2.messages : [];
-        messages = ms2;
-        const sel2 = threadId ? messages : messages.filter(m => keyOf(m) === k);
-        sel2.sort((a, b) => (Number(a && a.seq) || 0) - (Number(b && b.seq) || 0));
-        selected.length = 0;
-        for (const x of sel2) selected.push(x);
+      if (offline) {
+        translateStat = await _ensureReasoningTranslatedOffline({ state, messages: selected, maxN });
+      } else {
+        translateStat = await _ensureReasoningTranslated({ messages: selected, threadId, maxN, waitMs });
+        if (translateStat && translateStat.filled >= 1) {
+          const url = threadId ? `/api/messages?thread_id=${encodeURIComponent(threadId)}&t=${Date.now()}` : `/api/messages?t=${Date.now()}`;
+          const r2 = await fetch(url, { cache: "no-store" }).then(r => r.json()).catch(() => null);
+          const ms2 = Array.isArray(r2 && r2.messages) ? r2.messages : [];
+          messages = ms2;
+          const sel2 = threadId ? messages : messages.filter(m => keyOf(m) === k);
+          sel2.sort((a, b) => (Number(a && a.seq) || 0) - (Number(b && b.seq) || 0));
+          selected.length = 0;
+          for (const x of sel2) selected.push(x);
+        }
       }
     }
   } catch (_) {}

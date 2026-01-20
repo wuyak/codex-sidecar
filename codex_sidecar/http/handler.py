@@ -13,6 +13,11 @@ from .state import SidecarState
 from .sfx import list_sfx, read_custom_sfx_bytes
 from .ui_assets import load_ui_text, resolve_ui_path, ui_content_type, ui_dir
 from ..security import redact_sidecar_config
+from ..offline import (
+    build_offline_messages,
+    list_offline_rollout_files,
+    resolve_offline_rollout_path,
+)
 
 
 def _json_bytes(obj: dict) -> bytes:
@@ -195,6 +200,70 @@ class SidecarHandler(BaseHTTPRequestHandler):
             except Exception:
                 pass
             self._send_json(HTTPStatus.OK, payload)
+            return
+
+        if path == "/api/offline/files":
+            try:
+                cfg = self._controller.get_config()
+            except Exception:
+                cfg = {}
+            try:
+                codex_home = Path(str((cfg or {}).get("watch_codex_home") or "")).expanduser()
+            except Exception:
+                codex_home = Path.home() / ".codex"
+            try:
+                limit = int((qs.get("limit") or ["60"])[0])
+            except Exception:
+                limit = 60
+            limit = max(0, min(500, int(limit)))
+            files = list_offline_rollout_files(codex_home, limit=limit)
+            self._send_json(HTTPStatus.OK, {"ok": True, "files": files})
+            return
+
+        if path == "/api/offline/messages":
+            try:
+                cfg = self._controller.get_config()
+            except Exception:
+                cfg = {}
+            try:
+                codex_home = Path(str((cfg or {}).get("watch_codex_home") or "")).expanduser()
+            except Exception:
+                codex_home = Path.home() / ".codex"
+            rel = str((qs.get("rel") or qs.get("path") or [""])[0] or "").strip()
+            if not rel:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "missing_rel"})
+                return
+            try:
+                tail_lines = int((qs.get("tail_lines") or qs.get("tail") or [""])[0] or 0)
+            except Exception:
+                tail_lines = 0
+            if tail_lines <= 0:
+                try:
+                    tail_lines = int((cfg or {}).get("replay_last_lines") or 200)
+                except Exception:
+                    tail_lines = 200
+            tail_lines = max(0, min(50000, int(tail_lines)))
+
+            p = resolve_offline_rollout_path(codex_home, rel)
+            if p is None:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "invalid_path"})
+                return
+
+            rel_norm = str(rel or "").strip().replace("\\", "/")
+            while rel_norm.startswith("/"):
+                rel_norm = rel_norm[1:]
+            offline_key = f"offline:{rel_norm}"
+            msgs = build_offline_messages(rel=rel_norm, file_path=p, tail_lines=tail_lines, offline_key=offline_key)
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "ok": True,
+                    "rel": rel_norm,
+                    "key": offline_key,
+                    "file": str(p),
+                    "messages": msgs,
+                },
+            )
             return
 
         if path == "/ui":
@@ -437,6 +506,37 @@ class SidecarHandler(BaseHTTPRequestHandler):
                     return
 
             threading.Thread(target=_shutdown_later, name="sidecar-shutdown", daemon=True).start()
+            return
+
+        if self.path == "/api/offline/translate":
+            length = int(self.headers.get("Content-Length") or "0")
+            raw = self.rfile.read(length) if length > 0 else b"{}"
+            try:
+                obj = json.loads(raw.decode("utf-8", errors="replace"))
+            except Exception:
+                obj = {}
+            if not isinstance(obj, dict):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "invalid_payload"})
+                return
+
+            items = obj.get("items")
+            if isinstance(items, list):
+                out_items = []
+                for it in items[:24]:
+                    if not isinstance(it, dict):
+                        continue
+                    mid = str(it.get("id") or "").strip()
+                    text = str(it.get("text") or "")
+                    r = self._controller.translate_text(text)
+                    rr = r if isinstance(r, dict) else {"ok": False, "error": "translate_failed"}
+                    rr2 = dict(rr)
+                    rr2["id"] = mid
+                    out_items.append(rr2)
+                self._send_json(HTTPStatus.OK, {"ok": True, "items": out_items})
+                return
+
+            text = str(obj.get("text") or "")
+            self._send_json(HTTPStatus.OK, self._controller.translate_text(text))
             return
 
         if self.path != "/ingest":

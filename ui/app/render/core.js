@@ -120,6 +120,22 @@ export function renderMessage(dom, state, msg, opts = {}) {
       body = `<div class="md">${renderMarkdownCached(state, `md:${mid}:assistant`, txt)}</div>`;
     }
   } else if (isThinking) {
+    // Cache raw EN text for offline translation/export backfill (do not rely on DOM).
+    try {
+      if (mid && state && state.thinkTextById && typeof state.thinkTextById.set === "function") {
+        state.thinkTextById.set(mid, String(msg.text || ""));
+        if (!Array.isArray(state.thinkTextOrder)) state.thinkTextOrder = [];
+        state.thinkTextOrder.push(mid);
+        const max = Number(state.thinkTextMax) || 800;
+        if (state.thinkTextById.size > max) {
+          while (state.thinkTextById.size > max && state.thinkTextOrder.length) {
+            const victim = state.thinkTextOrder.shift();
+            if (!victim) continue;
+            if (state.thinkTextById.has(victim) && state.thinkTextById.size > max) state.thinkTextById.delete(victim);
+          }
+        }
+      }
+    } catch (_) {}
     const zhText = (typeof msg.zh === "string") ? msg.zh : "";
     const translateError = (typeof msg.translate_error === "string") ? msg.translate_error : "";
     const vis = getThinkingVisibility(dom, state, mid, zhText);

@@ -16,6 +16,7 @@ import { getCustomLabel, setCustomLabel } from "../sidebar/labels.js";
 import { saveClosedThreads } from "../closed_threads.js";
 import { saveHiddenThreads } from "../sidebar/hidden.js";
 import { getUnreadCount } from "../unread.js";
+import { isOfflineKey, offlineKeyFromRel } from "../offline.js";
 
 export function wireControlEvents(dom, state, helpers) {
   const h = (helpers && typeof helpers === "object") ? helpers : {};
@@ -684,7 +685,8 @@ export function wireControlEvents(dom, state, helpers) {
 	        const key = String((t && t.key) ? t.key : "");
 	        if (!key) continue;
 	        if (closed && typeof closed.has === "function" && closed.has(key)) continue;
-	        const label = _threadLabel(t);
+	        const label0 = _threadLabel(t);
+	        const label = isOfflineKey(key) ? `离线 · ${label0}` : label0;
 	        const file = String((t && t.file) ? t.file : "");
         const fileBase = file ? (String(file).split("/").slice(-1)[0] || file) : "";
         const followed = !!(file && followFiles && followFiles.includes(file));
@@ -1000,7 +1002,7 @@ export function wireControlEvents(dom, state, helpers) {
 	      target.appendChild(frag);
 	    };
 
-    _renderList(host, items, { hiddenList: false });
+	    _renderList(host, items, { hiddenList: false });
     _renderList(hiddenHost, hiddenItems, { hiddenList: true });
 
 	    try {
@@ -1009,12 +1011,141 @@ export function wireControlEvents(dom, state, helpers) {
 	        dom.bookmarkHiddenDetails.style.display = hiddenItems.length ? "" : "none";
 	      }
 	    } catch (_) {}
+
+      // 离线展示名单（最近 rollout 文件）
+      try { _renderOfflineDrawerList(); } catch (_) {}
 	  };
+
+  const _offlineRelFromInput = () => {
+    try {
+      const el = dom && dom.offlineRel ? dom.offlineRel : null;
+      return el ? String(el.value || "").trim() : "";
+    } catch (_) {
+      return "";
+    }
+  };
+
+  const _setOfflineError = (msg) => {
+    const el = dom && dom.offlineErrorText ? dom.offlineErrorText : null;
+    if (!el) return;
+    try { el.textContent = String(msg || "").trim(); } catch (_) {}
+  };
+
+  const _renderOfflineDrawerList = () => {
+    const host = dom && dom.offlineList ? dom.offlineList : null;
+    if (!host) return;
+    // 仅在抽屉打开时渲染
+    if (!_isBookmarkDrawerOpen()) return;
+    if (_isBookmarkDrawerEditing()) return;
+    const files = Array.isArray(state && state.offlineFiles) ? state.offlineFiles : [];
+    try { if (dom && dom.offlineCount) dom.offlineCount.textContent = String(files.length || 0); } catch (_) {}
+
+    try { host.replaceChildren(); } catch (_) { while (host.firstChild) host.removeChild(host.firstChild); }
+    const frag = document.createDocumentFragment();
+
+    if (!files.length) {
+      const empty = document.createElement("div");
+      empty.className = "meta";
+      empty.style.opacity = "0.7";
+      empty.style.padding = "6px 2px";
+      empty.textContent = "暂无可选文件（检查监视目录或稍等写入）";
+      frag.appendChild(empty);
+      host.appendChild(frag);
+      return;
+    }
+
+    for (const it of files) {
+      const rel = String((it && it.rel) ? it.rel : "").trim();
+      const file = String((it && it.file) ? it.file : "").trim();
+      const tid = String((it && it.thread_id) ? it.thread_id : "").trim();
+      if (!rel) continue;
+      const stamp = rolloutStampFromFile(file || rel);
+      const idPart = tid ? shortId(tid) : shortId((file.split("/").slice(-1)[0]) || rel);
+      const labelText = (stamp && idPart) ? `${stamp} · ${idPart}` : (idPart || stamp || rel);
+
+      const row = document.createElement("div");
+      row.className = "tab";
+      row.dataset.rel = rel;
+      row.dataset.file = file;
+      row.dataset.threadId = tid;
+      row.setAttribute("role", "button");
+      row.tabIndex = 0;
+      try { row.removeAttribute("title"); } catch (_) {}
+
+      const dot = document.createElement("span");
+      dot.className = "tab-dot";
+      try { dot.style.background = String(colorForKey(offlineKeyFromRel(rel)).fg || "#64748b"); } catch (_) {}
+
+      const main = document.createElement("div");
+      main.className = "tab-main";
+
+      const label = document.createElement("span");
+      label.className = "tab-label";
+      label.textContent = labelText;
+
+      const sub = document.createElement("span");
+      sub.className = "tab-sub";
+      sub.textContent = "点击打开";
+
+      main.appendChild(label);
+      main.appendChild(sub);
+
+      row.appendChild(dot);
+      row.appendChild(main);
+      frag.appendChild(row);
+    }
+
+    host.appendChild(frag);
+  };
+
+  let _offlineFetchInFlight = false;
+  const _refreshOfflineFiles = async (force = false) => {
+    if (_offlineFetchInFlight) return;
+    if (!_isBookmarkDrawerOpen()) return;
+    const now = Date.now();
+    const last = Number(state && state.offlineFilesLastSyncMs) || 0;
+    if (!force && last && (now - last) < 5000) return;
+    _offlineFetchInFlight = true;
+    try {
+      _setOfflineError("");
+      const url = `/api/offline/files?limit=120&t=${now}`;
+      const r = await fetch(url, { cache: "no-store" }).then((x) => x.json()).catch(() => null);
+      const files = Array.isArray(r && r.files) ? r.files : [];
+      state.offlineFiles = files;
+      state.offlineFilesLastSyncMs = now;
+      _renderOfflineDrawerList();
+    } catch (e) {
+      state.offlineFiles = [];
+      state.offlineFilesLastSyncMs = now;
+      _setOfflineError("离线文件列表加载失败");
+      _renderOfflineDrawerList();
+    } finally {
+      _offlineFetchInFlight = false;
+    }
+  };
+
+  const _openOfflineRel = async (rel, meta = {}) => {
+    const rel0 = String(rel || "").trim();
+    if (!rel0) return;
+    const key = offlineKeyFromRel(rel0);
+    const file = String(meta.file || "").trim();
+    const tid = String(meta.thread_id || meta.threadId || "").trim();
+    try {
+      const prev = state.threadIndex.get(key) || { key, thread_id: "", file: "", count: 0, last_ts: "", last_seq: 0, kinds: {} };
+      if (file) prev.file = file;
+      if (tid) prev.thread_id = tid;
+      prev.key = key;
+      state.threadIndex.set(key, prev);
+    } catch (_) {}
+    await onSelectKey(key);
+    closeBookmarkDrawer(dom);
+  };
 
   const _openBookmarkDrawer = () => {
     openBookmarkDrawer(dom);
     _syncBookmarkTabsToggle();
     _renderBookmarkDrawerList();
+    _refreshOfflineFiles(false);
   };
 
 	  if (dom.bookmarkDrawerToggleBtn) {
@@ -1372,6 +1503,30 @@ export function wireControlEvents(dom, state, helpers) {
   if (dom.bookmarkHiddenList) dom.bookmarkHiddenList.addEventListener("click", async (e) => { try { await _handleBookmarkListClick(e); } catch (_) {} });
   if (dom.bookmarkList) dom.bookmarkList.addEventListener("keydown", async (e) => { try { await _handleBookmarkListKeydown(e); } catch (_) {} });
   if (dom.bookmarkHiddenList) dom.bookmarkHiddenList.addEventListener("keydown", async (e) => { try { await _handleBookmarkListKeydown(e); } catch (_) {} });
+
+  if (dom.offlineRefreshBtn) dom.offlineRefreshBtn.addEventListener("click", async () => { try { await _refreshOfflineFiles(true); } catch (_) {} });
+  if (dom.offlineOpenBtn) dom.offlineOpenBtn.addEventListener("click", async () => { try { await _openOfflineRel(_offlineRelFromInput()); } catch (_) {} });
+  if (dom.offlineList) dom.offlineList.addEventListener("click", async (e) => {
+    try {
+      const row = e && e.target && e.target.closest ? e.target.closest(".tab[data-rel]") : null;
+      if (!row) return;
+      const rel = row.dataset ? String(row.dataset.rel || "") : "";
+      const file = row.dataset ? String(row.dataset.file || "") : "";
+      const thread_id = row.dataset ? String(row.dataset.threadId || "") : "";
+      if (!rel) return;
+      await _openOfflineRel(rel, { file, thread_id });
+    } catch (_) {}
+  });
+  if (dom.offlineList) dom.offlineList.addEventListener("keydown", async (e) => {
+    try {
+      const keyName = String(e && e.key ? e.key : "");
+      if (keyName !== "Enter" && keyName !== " ") return;
+      const row = e && e.target && e.target.closest ? e.target.closest(".tab[data-rel]") : null;
+      if (!row) return;
+      try { e.preventDefault(); } catch (_) {}
+      await _openOfflineRel(String(row.dataset ? row.dataset.rel || "" : ""), { file: String(row.dataset ? row.dataset.file || "" : ""), thread_id: String(row.dataset ? row.dataset.threadId || "" : "") });
+    } catch (_) {}
+  });
 
   if (dom.openTranslateFromSettingsBtn) dom.openTranslateFromSettingsBtn.addEventListener("click", () => { openTranslatorSettings(dom); });
   if (dom.saveBtn) dom.saveBtn.addEventListener("click", async () => {

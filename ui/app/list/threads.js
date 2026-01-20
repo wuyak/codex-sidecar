@@ -1,4 +1,5 @@
 import { pruneClosedThreads } from "../closed_threads.js";
+import { isOfflineKey } from "../offline.js";
 
 export async function refreshThreads(state, signal) {
   if (!state || typeof state !== "object") return;
@@ -25,6 +26,7 @@ export async function refreshThreads(state, signal) {
         }
       }
       for (const k of Array.from(cur.keys())) {
+        if (isOfflineKey(k)) continue;
         if (!next.has(k)) cur.delete(k);
       }
     }

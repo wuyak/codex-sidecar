@@ -124,6 +124,60 @@ class SidecarController:
             "error": err or ("empty_output" if not out_s else ""),
         }
 
+    def translate_text(self, text: str) -> Dict[str, Any]:
+        """
+        Translate an arbitrary text blob (used by offline viewer / export backfill).
+
+        Notes:
+        - This does not depend on SidecarState, and does not mutate stored messages.
+        - Returned payload is intentionally small and secret-free.
+        """
+        src = str(text or "")
+        if not src.strip():
+            return {"ok": False, "error": "empty_text"}
+        with self._lock:
+            cfg = self._cfg
+        provider = str(getattr(cfg, "translator_provider", "") or "openai").strip().lower() or "openai"
+
+        t0 = time.monotonic()
+        try:
+            tr = build_translator(cfg)
+        except Exception:
+            return {"ok": False, "provider": provider, "error": "build_translator_failed"}
+
+        out = ""
+        try:
+            out = tr.translate(src)
+        except Exception:
+            out = ""
+        ms = (time.monotonic() - t0) * 1000.0
+
+        out_s = str(out or "").strip()
+        err = ""
+        try:
+            err = str(getattr(tr, "last_error", "") or "").strip()
+        except Exception:
+            err = ""
+        if err.startswith("WARN:"):
+            err = err[len("WARN:") :].strip()
+
+        model = ""
+        try:
+            model = str(getattr(tr, "_resolved_model", "") or getattr(tr, "model", "") or "").strip()
+        except Exception:
+            model = ""
+        if not model:
+            model = provider
+
+        return {
+            "ok": bool(out_s),
+            "provider": provider,
+            "model": model,
+            "ms": float(ms),
+            "zh": out_s,
+            "error": err or ("empty_output" if not out_s else ""),
+        }
+
     def get_config(self) -> Dict[str, Any]:
         with self._lock:
             return self._cfg.to_dict()

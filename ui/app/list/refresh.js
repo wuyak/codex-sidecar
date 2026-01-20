@@ -1,6 +1,7 @@
 import { inferToolName, parseToolCallText } from "../format.js";
 import { keyOf, safeJsonParse, tsToMs } from "../utils.js";
 import { refreshThreads } from "./threads.js";
+import { isOfflineKey, offlineRelFromKey } from "../offline.js";
 
 export async function refreshList(dom, state, renderTabs, renderMessage, renderEmpty) {
   const token = (state && typeof state === "object")
@@ -23,15 +24,55 @@ export async function refreshList(dom, state, renderTabs, renderMessage, renderE
     let url = "/api/messages";
     // 当前 key 为 thread_id 时，走服务端过滤；否则退化为前端过滤（例如 key=file/unknown）
     if (state.currentKey !== "all") {
+      if (isOfflineKey(state.currentKey)) {
+        const rel = offlineRelFromKey(state.currentKey);
+        const tail = Math.max(0, Number(state.replayLastLines) || 0) || 200;
+        url = `/api/offline/messages?rel=${encodeURIComponent(rel)}&tail_lines=${encodeURIComponent(tail)}`;
+      } else {
       const t = state.threadIndex.get(state.currentKey);
       if (t && t.thread_id) {
         url = `/api/messages?thread_id=${encodeURIComponent(t.thread_id)}`;
+      }
       }
     }
     const resp = await fetch(url, ac ? { signal: ac.signal } : undefined);
     if (token && state && state.refreshToken !== token) return;
     const data = await resp.json();
     const msgs = (data.messages || []);
+    // 离线会话：补齐 threadIndex 元信息（手动输入 rel 时也能显示源文件/ID）。
+    try {
+      if (isOfflineKey(state.currentKey)) {
+        const k = String(state.currentKey || "");
+        const prev = state.threadIndex.get(k) || { key: k, thread_id: "", file: "", count: 0, last_ts: "", last_seq: 0 };
+        const fp = String(data && data.file ? data.file : "").trim();
+        if (fp) prev.file = fp;
+        try {
+          const tid = String(msgs && msgs[0] && msgs[0].thread_id ? msgs[0].thread_id : "").trim();
+          if (tid) prev.thread_id = tid;
+        } catch (_) {}
+        prev.key = k;
+        state.threadIndex.set(k, prev);
+      }
+    } catch (_) {}
+    // 离线会话：回填本地译文缓存（不依赖后端 SidecarState）。
+    try {
+      if (isOfflineKey(state.currentKey) && state.offlineZhById && typeof state.offlineZhById.get === "function") {
+        for (const m of msgs) {
+          if (!m || typeof m !== "object") continue;
+          if (String(m.kind || "") !== "reasoning_summary") continue;
+          const mid = String(m.id || "").trim();
+          if (!mid) continue;
+          const curZh = String(m.zh || "").trim();
+          if (curZh) continue;
+          const cached = state.offlineZhById.get(mid);
+          if (!cached || typeof cached !== "object") continue;
+          const zh = String(cached.zh || "").trim();
+          const err = String(cached.err || "").trim();
+          if (zh) m.zh = zh;
+          if (err) m.translate_error = err;
+        }
+      }
+    } catch (_) {}
     state.callIndex.clear();
     if (state.rowIndex) state.rowIndex.clear();
     if (state.timeline && Array.isArray(state.timeline)) state.timeline.length = 0;
@@ -119,4 +160,3 @@ export async function refreshList(dom, state, renderTabs, renderMessage, renderE
   }
   renderTabs(dom, state);
 }
-

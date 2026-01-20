@@ -14,6 +14,7 @@ import { updateUnreadButton } from "./unread.js";
 import { initTheme } from "./theme.js";
 import { loadClosedThreads, saveClosedThreads } from "./closed_threads.js";
 import { initQuickViewSettings } from "./quick_view_settings.js";
+import { isOfflineKey } from "./offline.js";
 
 export async function initApp() {
   const dom = getDom();
@@ -40,6 +41,8 @@ export async function initApp() {
 
   const applyFollowPolicy = async (key) => {
     try {
+      // 离线会话：仅展示/导出，不影响实时监听的 follow 选择。
+      if (isOfflineKey(key)) return;
       let pinOnSelect = true;
       try { pinOnSelect = localStorage.getItem("codex_sidecar_pin_on_select") !== "0"; } catch (_) { pinOnSelect = true; }
 

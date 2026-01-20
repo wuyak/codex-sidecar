@@ -39,12 +39,14 @@ function _baseName(p) {
 }
 
 function threadLabels(t) {
+  const offline = String(t && t.key ? t.key : "").startsWith("offline:");
   const stampFull = rolloutStampFromFile(t.file || "");
   const stampShort = _stampShort(stampFull);
   const idPart = t.thread_id ? shortId(t.thread_id) : shortId(((t.file || "").split("/").slice(-1)[0]) || (t.key || ""));
-  const full = (stampFull && idPart) ? `${stampFull} · ${idPart}` : (stampFull || idPart || "unknown");
-  const label = (stampShort && idPart) ? `${stampShort} · ${idPart}` : (idPart || stampShort || stampFull || "unknown");
-  return { label, full };
+  const full0 = (stampFull && idPart) ? `${stampFull} · ${idPart}` : (stampFull || idPart || "unknown");
+  const label0 = (stampShort && idPart) ? `${stampShort} · ${idPart}` : (idPart || stampShort || stampFull || "unknown");
+  const pre = offline ? "离线 · " : "";
+  return { label: `${pre}${label0}`, full: `${pre}${full0}` };
 }
 
 function _pickFallbackKey(state, excludeKey = "") {

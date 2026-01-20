@@ -1,6 +1,8 @@
 import { flashToastAt } from "../utils/toast.js";
 import { stabilizeToggleNoDrift } from "../utils/anchor.js";
 import { buildThinkingMetaRight } from "../thinking/meta.js";
+import { renderMarkdownCached } from "../render/md_cache.js";
+import { isOfflineKey } from "../offline.js";
 
 function _defaultThinkMode(hasZh) {
   return hasZh ? "zh" : "en";
@@ -101,12 +103,69 @@ async function _postRetranslate(mid) {
   }
 }
 
+async function _postOfflineTranslate(text) {
+  const src = String(text || "").trim();
+  if (!src) return { ok: false, error: "empty_text", zh: "" };
+  try {
+    const resp = await fetch("/api/offline/translate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: src }),
+    });
+    let obj = null;
+    try { obj = await resp.json(); } catch (_) { obj = null; }
+    const zh = String((obj && (obj.zh || obj.text)) ? (obj.zh || obj.text) : "").trimEnd();
+    const ok = !!(resp && resp.ok && obj && obj.ok !== false && zh);
+    const err = String((obj && obj.error) ? obj.error : (resp && !resp.ok ? `http_status=${resp.status}` : "") || "").trim();
+    return { ok, error: err, zh };
+  } catch (_) {
+    return { ok: false, error: "request_failed", zh: "" };
+  }
+}
+
+function _getCachedThinkText(state, mid) {
+  const id = String(mid || "").trim();
+  if (!id) return "";
+  try {
+    const m = (state && state.thinkTextById && typeof state.thinkTextById.get === "function") ? state.thinkTextById : null;
+    if (!m) return "";
+    return String(m.get(id) || "");
+  } catch (_) {
+    return "";
+  }
+}
+
+function _applyOfflineZh(state, row, mid, zh, err) {
+  const id = String(mid || "").trim();
+  if (!id) return;
+  try {
+    if (state && state.offlineZhById && typeof state.offlineZhById.set === "function") {
+      state.offlineZhById.set(id, { zh: String(zh || "").trimEnd(), err: String(err || "").trim() });
+    }
+  } catch (_) {}
+  try { if (row && row.dataset) row.dataset.translateError = String(err || "").trim(); } catch (_) {}
+  try {
+    const zhEl = row && row.querySelector ? row.querySelector(".think-zh") : null;
+    if (zhEl) zhEl.innerHTML = String(renderMarkdownCached(state, `md:${id}:think_zh`, String(zh || "")) || "");
+  } catch (_) {}
+  // Default behavior: when ZH becomes available, show ZH.
+  _setThinkModeOverride(state, id, "zh", true);
+  stabilizeToggleNoDrift(row, () => {
+    try {
+      row.classList.remove("think-mode-en", "think-mode-zh", "think-mode-both");
+      row.classList.add("think-mode-zh");
+    } catch (_) {}
+    _updateThinkingMetaRight(state, row, id);
+  });
+}
+
 export function wireThinkingRowActions(dom, state) {
   const host = state && state.listHost ? state.listHost : (dom && dom.list ? dom.list : null);
   if (!host || !host.addEventListener) return;
 
   host.addEventListener("click", async (e) => {
     if (!e || !e.target) return;
+    const offline = isOfflineKey(String(state && state.currentKey ? state.currentKey : ""));
 
     // Do not hijack link clicks inside markdown.
     try { if (e.target.closest && e.target.closest("a")) return; } catch (_) {}
@@ -130,20 +189,39 @@ export function wireThinkingRowActions(dom, state) {
         }
       } catch (_) {}
       _updateThinkingMetaRight(state, row, mid);
-      const r = await _postRetranslate(mid);
-      if (!r.ok) {
-        const err = String(r.error || "unknown_error");
-        try { if (addedInFlight) state.translateInFlight.delete(mid); } catch (_) {}
-        try { if (row && row.dataset) row.dataset.translateError = err; } catch (_) {}
-        _updateThinkingMetaRight(state, row, mid);
-        flashToastAt(Number(e.clientX) || 0, Number(e.clientY) || 0, `重译失败：${err}`, { isLight: true });
+      if (offline) {
+        const enText = _getCachedThinkText(state, mid);
+        const r = await _postOfflineTranslate(enText);
+        if (!r.ok) {
+          const err = String(r.error || "unknown_error");
+          try { if (addedInFlight) state.translateInFlight.delete(mid); } catch (_) {}
+          try { if (row && row.dataset) row.dataset.translateError = err; } catch (_) {}
+          _updateThinkingMetaRight(state, row, mid);
+          flashToastAt(Number(e.clientX) || 0, Number(e.clientY) || 0, `重译失败：${err}`, { isLight: true });
+        } else {
+          try { if (addedInFlight) state.translateInFlight.delete(mid); } catch (_) {}
+          _applyOfflineZh(state, row, mid, r.zh, "");
+          // 离线：即时反馈一次即可
+          if (hadZh && oldZh && String(oldZh || "").trim() !== String(r.zh || "").trim()) {
+            flashToastAt(Number(e.clientX) || 0, Number(e.clientY) || 0, "已重译", { isLight: true });
+          }
+        }
       } else {
-        // “重译完成”提示：仅在用户点击过“重译”且该条已有译文时触发（避免首次翻译刷屏）。
-        if (hadZh) {
-          try {
-            if (!state.retranslatePending || typeof state.retranslatePending.set !== "function") state.retranslatePending = new Map();
-            state.retranslatePending.set(mid, { oldZh, x: Number(e.clientX) || 0, y: Number(e.clientY) || 0 });
-          } catch (_) {}
+        const r = await _postRetranslate(mid);
+        if (!r.ok) {
+          const err = String(r.error || "unknown_error");
+          try { if (addedInFlight) state.translateInFlight.delete(mid); } catch (_) {}
+          try { if (row && row.dataset) row.dataset.translateError = err; } catch (_) {}
+          _updateThinkingMetaRight(state, row, mid);
+          flashToastAt(Number(e.clientX) || 0, Number(e.clientY) || 0, `重译失败：${err}`, { isLight: true });
+        } else {
+          // “重译完成”提示：仅在用户点击过“重译”且该条已有译文时触发（避免首次翻译刷屏）。
+          if (hadZh) {
+            try {
+              if (!state.retranslatePending || typeof state.retranslatePending.set !== "function") state.retranslatePending = new Map();
+              state.retranslatePending.set(mid, { oldZh, x: Number(e.clientX) || 0, y: Number(e.clientY) || 0 });
+            } catch (_) {}
+          }
         }
       }
       return;
@@ -165,7 +243,7 @@ export function wireThinkingRowActions(dom, state) {
     const hasZh = _hasZhReady(row);
     if (!hasZh) {
       const tmode = (String(state.translateMode || "").toLowerCase() === "manual") ? "manual" : "auto";
-      if (tmode !== "manual") {
+      if (!offline && tmode !== "manual") {
         const err = String((row.dataset && row.dataset.translateError) ? row.dataset.translateError : "").trim();
         flashToastAt(
           Number(e.clientX) || 0,
@@ -185,13 +263,28 @@ export function wireThinkingRowActions(dom, state) {
         state.translateInFlight.add(mid);
       } catch (_) {}
       _updateThinkingMetaRight(state, row, mid);
-      const r = await _postRetranslate(mid);
-      if (!r.ok) {
-        const err = String(r.error || "unknown_error");
-        try { state.translateInFlight.delete(mid); } catch (_) {}
-        try { if (row && row.dataset) row.dataset.translateError = err; } catch (_) {}
-        _updateThinkingMetaRight(state, row, mid);
-        flashToastAt(Number(e.clientX) || 0, Number(e.clientY) || 0, `翻译失败：${err}`, { isLight: true });
+      if (offline) {
+        const enText = _getCachedThinkText(state, mid);
+        const r = await _postOfflineTranslate(enText);
+        if (!r.ok) {
+          const err = String(r.error || "unknown_error");
+          try { state.translateInFlight.delete(mid); } catch (_) {}
+          try { if (row && row.dataset) row.dataset.translateError = err; } catch (_) {}
+          _updateThinkingMetaRight(state, row, mid);
+          flashToastAt(Number(e.clientX) || 0, Number(e.clientY) || 0, `翻译失败：${err}`, { isLight: true });
+        } else {
+          try { state.translateInFlight.delete(mid); } catch (_) {}
+          _applyOfflineZh(state, row, mid, r.zh, "");
+        }
+      } else {
+        const r = await _postRetranslate(mid);
+        if (!r.ok) {
+          const err = String(r.error || "unknown_error");
+          try { state.translateInFlight.delete(mid); } catch (_) {}
+          try { if (row && row.dataset) row.dataset.translateError = err; } catch (_) {}
+          _updateThinkingMetaRight(state, row, mid);
+          flashToastAt(Number(e.clientX) || 0, Number(e.clientY) || 0, `翻译失败：${err}`, { isLight: true });
+        }
       }
       return;
     }
