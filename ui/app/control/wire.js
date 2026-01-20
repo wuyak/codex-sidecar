@@ -992,11 +992,68 @@ export function wireControlEvents(dom, state, helpers) {
 
 	  if (dom.bookmarkDrawerToggleBtn) {
 	    const btn = dom.bookmarkDrawerToggleBtn;
-	    btn.addEventListener("click", () => {
+	    let pressT = 0;
+	    let pressed = false;
+	    let moved = false;
+	    let longFired = false;
+	    let startX = 0;
+	    let startY = 0;
+	    const LONG_MS = 520;
+	    const MOVE_PX = 8;
+
+	    const clearPress = () => {
+	      pressed = false;
+	      moved = false;
+	      if (pressT) { try { clearTimeout(pressT); } catch (_) {} }
+	      pressT = 0;
+	    };
+
+	    const toggleDrawer = () => {
 	      try {
 	        if (_isBookmarkDrawerOpen()) closeBookmarkDrawer(dom);
 	        else _openBookmarkDrawer();
 	      } catch (_) { _openBookmarkDrawer(); }
+	    };
+
+	    btn.addEventListener("pointerdown", (e) => {
+	      try {
+	        if (e && typeof e.button === "number" && e.button !== 0) return;
+	      } catch (_) {}
+	      pressed = true;
+	      moved = false;
+	      longFired = false;
+	      startX = Number(e && e.clientX) || 0;
+	      startY = Number(e && e.clientY) || 0;
+	      if (pressT) { try { clearTimeout(pressT); } catch (_) {} }
+	      pressT = window.setTimeout(() => {
+	        if (!pressed || moved) return;
+	        longFired = true;
+	        toggleDrawer();
+	      }, LONG_MS);
+	    });
+	    btn.addEventListener("pointermove", (e) => {
+	      if (!pressed) return;
+	      const x = Number(e && e.clientX) || 0;
+	      const y = Number(e && e.clientY) || 0;
+	      const dx = x - startX;
+	      const dy = y - startY;
+	      if ((dx * dx + dy * dy) > (MOVE_PX * MOVE_PX)) {
+	        moved = true;
+	        if (pressT) { try { clearTimeout(pressT); } catch (_) {} }
+	        pressT = 0;
+	      }
+	    });
+	    btn.addEventListener("pointerup", clearPress);
+	    btn.addEventListener("pointercancel", clearPress);
+	    btn.addEventListener("pointerleave", clearPress);
+
+	    btn.addEventListener("click", (e) => {
+	      if (longFired) {
+	        longFired = false;
+	        try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+	        return;
+	      }
+	      toggleDrawer();
 	    });
 	  }
 	  if (dom.bookmarkTabsToggleBtn) {
