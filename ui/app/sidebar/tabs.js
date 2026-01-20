@@ -526,7 +526,6 @@ export function renderTabs(dom, state, onSelectKey) {
     if (s.has(k)) return;
     s.add(k);
     saveHiddenThreads(s);
-    _toastFromEl(sourceEl || host, `监听：已关闭（可在“会话管理→已关闭监听”恢复）`, { durationMs: 1800 });
     if (String(state.currentKey || "all") === k) await onSelectKey(_pickFallbackKey(state, k));
     else renderTabs(dom, state, onSelectKey);
   };
