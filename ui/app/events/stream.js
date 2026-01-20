@@ -17,6 +17,68 @@ function _toolGateReleased(text) {
   return s.includes("已确认") || s.toLowerCase().includes("tool gate released");
 }
 
+function _isReplay(msg) {
+  try {
+    if (!msg || typeof msg !== "object") return false;
+    if (msg.replay === true) return true;
+    // Back-compat: tolerate alternative field names if any.
+    if (msg.is_replay === true) return true;
+    if (msg.isReplay === true) return true;
+  } catch (_) {}
+  return false;
+}
+
+function _isAtBottom(pad = 80) {
+  try {
+    const p = Number.isFinite(Number(pad)) ? Number(pad) : 80;
+    return (window.innerHeight + window.scrollY) >= (document.body.scrollHeight - p);
+  } catch (_) {
+    return false;
+  }
+}
+
+function _isUserActive(state) {
+  try {
+    const s = (state && typeof state === "object") ? state : {};
+    const had = !!s.userHasInteracted;
+    const last = Number(s.userLastActiveMs) || 0;
+    if (!had || !last) return false;
+    const visible = (typeof document !== "undefined") ? (document.visibilityState === "visible") : true;
+    const focused = (typeof document !== "undefined" && typeof document.hasFocus === "function") ? document.hasFocus() : true;
+    if (!visible || !focused) return false;
+    const now = Date.now();
+    const IDLE_MS = 5_000;
+    return (now - last) <= IDLE_MS;
+  } catch (_) {
+    return false;
+  }
+}
+
+function _ensureNotifyDedup(state) {
+  if (!state || typeof state !== "object") return { set: null, order: null };
+  if (!(state.notifySeenIds instanceof Set)) state.notifySeenIds = new Set();
+  if (!Array.isArray(state.notifySeenOrder)) state.notifySeenOrder = [];
+  return { set: state.notifySeenIds, order: state.notifySeenOrder };
+}
+
+function _shouldRingForId(state, msgId) {
+  const mid = String(msgId || "").trim();
+  if (!mid) return true;
+  const { set, order } = _ensureNotifyDedup(state);
+  if (!set || !order) return true;
+  if (set.has(mid)) return false;
+  set.add(mid);
+  order.push(mid);
+  const MAX = 2400;
+  if (order.length > MAX) {
+    const drop = order.splice(0, order.length - MAX);
+    for (const x of drop) {
+      try { if (x) set.delete(x); } catch (_) {}
+    }
+  }
+  return true;
+}
+
 function _summarizeToolGate(text) {
   const lines = String(text || "").split("\n");
   let tool = "";
@@ -132,6 +194,8 @@ export function connectEventStream(dom, state, upsertThread, renderTabs, renderM
 
       const k = keyOf(msg);
       const shouldRender = (state.currentKey === "all" || state.currentKey === k);
+      const isReplay = _isReplay(msg);
+      const atBottom = shouldRender ? _isAtBottom(80) : false;
 
       // 右下角提醒（不依赖当前会话可见性：通过“未读”汇总，避免错过多会话输出）
       try {
@@ -140,9 +204,13 @@ export function connectEventStream(dom, state, upsertThread, renderTabs, renderM
           const txt = String(msg.text || "");
           if (_toolGateWaiting(txt)) {
             notifyCorner("tool_gate", "终端等待确认", _summarizeToolGate(txt) || "请回到终端完成确认/授权后继续。", { level: "warn", sticky: true });
-            try { markUnread(state, msg); } catch (_) {}
-            updateUnreadButton(dom, state);
-            try { maybePlayNotifySound(dom, state, { kind: "tool_gate" }); } catch (_) {}
+            // tool_gate 属于“显式通知”：无论当前是否在对应会话，都应提示；但回放/历史补齐不应响铃。
+            if (!isReplay) {
+              const mid = String((msg && msg.id) ? msg.id : "").trim();
+              if (_shouldRingForId(state, mid)) {
+                try { maybePlayNotifySound(dom, state, { kind: "tool_gate" }); } catch (_) {}
+              }
+            }
           } else if (_toolGateReleased(txt)) {
             notifyCorner("tool_gate", "终端已确认", _summarizeToolGate(txt) || "tool gate 已解除。", { level: "success", ttlMs: 1600 });
           }
@@ -150,9 +218,21 @@ export function connectEventStream(dom, state, upsertThread, renderTabs, renderM
         // “未读”仅对用户关心的类型：回答输出 / 审批提示。
         // tool_call/tool_output（如 apply_patch）噪音较高，不计入未读/不响铃。
         if (op !== "update" && kind === "assistant_message") {
-          markUnread(state, msg);
-          updateUnreadButton(dom, state);
-          try { maybePlayNotifySound(dom, state, { kind: "assistant" }); } catch (_) {}
+          // 只有“新通知”才响铃：历史回放/补齐不算。
+          // 当前视图在底部也不一定“已读”（可能挂机）；仅当用户在近 5s 有明确交互且页面可见/聚焦时，才视为已看到。
+          const userActive = _isUserActive(state);
+          const shouldNotify = (!isReplay) && (!shouldRender || !atBottom || !userActive);
+          if (shouldNotify) {
+            const mid = String((msg && msg.id) ? msg.id : "").trim();
+            // “响铃/未读”都以“新通知”去重：重复事件不重复计数，也不重复响铃。
+            if (_shouldRingForId(state, mid)) {
+              const r = markUnread(state, msg, { queue: true });
+              if (r && r.added) {
+                updateUnreadButton(dom, state);
+                try { maybePlayNotifySound(dom, state, { kind: "assistant" }); } catch (_) {}
+              }
+            }
+          }
         }
       } catch (_) {}
 

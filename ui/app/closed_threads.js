@@ -1,5 +1,6 @@
 const _LS_CLOSED = "codex_sidecar_closed_threads_v1";
-const _LS_CLOSED_PID = "codex_sidecar_closed_threads_pid_v1";
+// NOTE: used to store PID only; now stores a process boot key (boot_id or fallback pid).
+const _LS_CLOSED_BOOT = "codex_sidecar_closed_threads_pid_v1";
 const _MAX_ITEMS = 200;
 const _MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7d
 const _DIALOG_KINDS = ["assistant_message", "user_message", "reasoning_summary"];
@@ -87,13 +88,13 @@ export function saveClosedThreads(map) {
 }
 
 export function resetClosedThreadsOnProcessChange(state, pid) {
-  const curPid = String(pid == null ? "" : pid).trim();
-  if (!curPid) return { ok: false, changed: false, reason: "no_pid" };
+  const curBoot = String(pid == null ? "" : pid).trim();
+  if (!curBoot) return { ok: false, changed: false, reason: "no_boot" };
 
-  let prevPid = "";
-  try { prevPid = String(localStorage.getItem(_LS_CLOSED_PID) || "").trim(); } catch (_) { prevPid = ""; }
+  let prevBoot = "";
+  try { prevBoot = String(localStorage.getItem(_LS_CLOSED_BOOT) || "").trim(); } catch (_) { prevBoot = ""; }
 
-  const changed = !!(prevPid && prevPid !== curPid);
+  const changed = !!(prevBoot && prevBoot !== curBoot);
   if (changed) {
     try {
       const m = (state && state.closedThreads && typeof state.closedThreads.clear === "function")
@@ -103,7 +104,7 @@ export function resetClosedThreadsOnProcessChange(state, pid) {
     } catch (_) {}
     try { saveClosedThreads(new Map()); } catch (_) {}
   }
-  try { localStorage.setItem(_LS_CLOSED_PID, curPid); } catch (_) {}
+  try { localStorage.setItem(_LS_CLOSED_BOOT, curBoot); } catch (_) {}
   return { ok: true, changed };
 }
 

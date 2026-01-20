@@ -26,6 +26,9 @@ class SidecarController:
         self._process_stop_event: Optional[threading.Event] = None
         self._process_restart_event: Optional[threading.Event] = None
         self._last_error: str = ""
+        # Stable identifier for the lifetime of this process instance.
+        # Note: process restart may be in-place (execv, PID unchanged), so PID alone is not enough.
+        self._boot_id: str = f"{os.getpid()}@{time.time():.6f}"
         self._started_at: float = 0.0
         # Follow selection (UI runtime state; NOT persisted to config.json).
         self._selection_mode: str = "auto"  # auto|pin
@@ -460,6 +463,7 @@ class SidecarController:
         return {
             "ok": True,
             "pid": os.getpid(),
+            "boot_id": self._boot_id,
             "running": running,
             "started_at": started_at,
             "last_error": last_error or ws.get("last_error") or "",

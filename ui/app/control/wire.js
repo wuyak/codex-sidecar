@@ -914,14 +914,14 @@ export function wireControlEvents(dom, state, helpers) {
 		        frag.appendChild(row);
 	          // Hover hint (only when hovering the left area; hovering the action buttons should not trigger).
 		          try {
-		            const filePath = String(it.file || "").trim();
-		            if (filePath) {
+		              const filePath = String(it.file || "").trim();
+		              if (filePath) {
 		              let tracking = false;
-		              const hintText = "长按可复制源 JSON 路径";
+		              const hintText = "长按复制源json路径";
 		              const update = (e) => {
 		                if (!tracking) return;
 		                if (row.classList && row.classList.contains("editing")) return;
-		                _showUiHoverTip(main, hintText, { insetX: 8, gap: 6, pad: 10, prefer: "below" });
+		                _showUiHoverTip(row, hintText, { insetX: 10, gap: 6, pad: 10, prefer: "below" });
 		              };
 		              main.addEventListener("pointerenter", (e) => { if (!canHoverTip(e)) return; tracking = true; update(e); });
 		              main.addEventListener("pointermove", update);
@@ -966,8 +966,9 @@ export function wireControlEvents(dom, state, helpers) {
 	                  if (!pressed || moved) return;
 	                  longFired = true;
 	                  try { row.dataset.lp = String(Date.now()); } catch (_) {}
+	                  try { _hideUiHoverTip(); } catch (_) {}
 	                  copyToClipboard(filePath)
-	                    .then((ok) => { _toastFromEl(row, ok ? "已复制对话 JSON 路径" : "复制失败", { durationMs: 1200 }); })
+	                    .then(() => {})
 	                    .catch(() => {});
 	                }, LONG_MS);
 	              });

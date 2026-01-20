@@ -97,15 +97,39 @@ class FollowPicker:
             )
 
         tid = _parse_thread_id_from_filename(cand)
+        # Even in pinned mode, try to detect Codex process-follow targets so the watcher
+        # can fill "parallel sessions" from the *current* process (avoids zombie tabs).
+        codex_detected = False
+        codex_pids: List[int] = []
+        process_file: Optional[Path] = None
+        process_files: List[Path] = []
+        candidate_pids: List[int] = []
+        follow_mode = "pinned"
+
+        if self._follow_codex_process and self._codex_process_re is not None:
+            pids = self._detect_codex_processes()
+            candidate_pids = list(pids)
+            codex_detected = bool(pids)
+            if codex_detected:
+                tree = self._collect_process_tree(pids)
+                opened, openers = self._find_rollout_opened_by_pids(tree, limit=12)
+                if opened:
+                    process_file = opened[0]
+                    process_files = opened
+                    codex_pids = openers
+                    follow_mode = "pinned_process"
+                else:
+                    follow_mode = "pinned_wait_rollout"
+
         return FollowPick(
             picked=cand,
             thread_id=tid,
-            follow_mode="pinned",
-            codex_detected=False,
-            codex_pids=[],
-            process_file=None,
-            process_files=[],
-            candidate_pids=[],
+            follow_mode=follow_mode,
+            codex_detected=codex_detected,
+            codex_pids=codex_pids,
+            process_file=process_file,
+            process_files=process_files,
+            candidate_pids=candidate_pids,
         )
 
     def _pick_auto(self) -> FollowPick:

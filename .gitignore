@@ -44,3 +44,6 @@ config/sidecar/*.bak-*
 old/.npm-cache/
 old/.codex-home/
 old/.codex-thinking-sidecar/
+
+# Local notes
+修改意见整理/

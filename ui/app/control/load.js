@@ -254,7 +254,9 @@ export async function loadControl(dom, state) {
     // “清除会话”是 UI 级别的临时清理：进程重启后应恢复可见，避免跨进程永久隐藏。
     try {
       const pid = (st && typeof st === "object") ? (st.pid ?? "") : "";
-      const r = resetClosedThreadsOnProcessChange(state, pid);
+      const bootId = (st && typeof st === "object") ? (st.boot_id ?? "") : "";
+      const bootKey = String(bootId || pid || "").trim();
+      const r = resetClosedThreadsOnProcessChange(state, bootKey);
       if (r && r.changed) {
         try { if (state) state.threadsDirty = true; } catch (_) {}
       }

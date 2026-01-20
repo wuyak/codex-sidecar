@@ -10,7 +10,7 @@ import { wireThinkingRowActions } from "./interactions/thinking_rows.js";
 import { initViewMode } from "./view_mode.js";
 import { activateView, initViews } from "./views.js";
 import { initSound } from "./sound.js";
-import { clearUnreadForKey } from "./unread.js";
+import { updateUnreadButton } from "./unread.js";
 import { initTheme } from "./theme.js";
 import { loadClosedThreads, saveClosedThreads } from "./closed_threads.js";
 import { initQuickViewSettings } from "./quick_view_settings.js";
@@ -26,6 +26,17 @@ export async function initApp() {
   try { state.hiddenThreads = loadHiddenThreads(); } catch (_) { state.hiddenThreads = new Set(); }
   try { state.showHiddenThreads = loadShowHiddenFlag(); } catch (_) { state.showHiddenThreads = false; }
   try { state.closedThreads = loadClosedThreads(); } catch (_) { state.closedThreads = new Map(); }
+
+  // 用户活跃度：仅把“明确交互”（按键/滚轮/点击）记为活跃，避免程序化滚动误判。
+  try {
+    const touch = () => {
+      try { state.userHasInteracted = true; } catch (_) {}
+      try { state.userLastActiveMs = Date.now(); } catch (_) {}
+    };
+    window.addEventListener("pointerdown", touch, { passive: true });
+    window.addEventListener("keydown", touch, { passive: true });
+    window.addEventListener("wheel", touch, { passive: true });
+  } catch (_) {}
 
   const applyFollowPolicy = async (key) => {
     try {
@@ -62,8 +73,7 @@ export async function initApp() {
   wireThinkingRowActions(dom, state);
 
   const onSelectKey = async (key) => {
-    // Selecting a session implies "read it": clear unread badge on that bookmark.
-    try { if (key && key !== "all") clearUnreadForKey(state, key); } catch (_) {}
+    // 切换会话不等于“已读”：保留未读队列，交由“未读跳转”逐条消化。
     try {
       if (key && key !== "all" && state.closedThreads && typeof state.closedThreads.delete === "function") {
         const had = state.closedThreads.delete(key);
@@ -71,6 +81,7 @@ export async function initApp() {
       }
     } catch (_) {}
     state.currentKey = key;
+    try { updateUnreadButton(dom, state); } catch (_) {}
     const { needsRefresh } = activateView(dom, state, key);
     // 快速 UI 反馈：先更新选中态，再异步拉取/重绘消息列表。
     try { renderTabsWrapper(dom, state); } catch (_) {}

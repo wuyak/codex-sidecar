@@ -156,6 +156,30 @@ function _safeCodeFence(text, lang = "text") {
   return `${fence}${info ? info : ""}\n${src}\n${fence}`;
 }
 
+function _unescapeHtml(text) {
+  const s = String(text ?? "");
+  // Order matters: decode &amp; first so "&amp;lt;" becomes "&lt;" then "<".
+  return s
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, " ");
+}
+
+function _convertKnownHtmlCodeBlocksToFences(md) {
+  const src = String(md ?? "");
+  if (!src || !src.includes("<pre")) return src;
+  // Some environments may persist UI-rendered blocks (e.g. <pre class="code">...</pre>).
+  // Export target is Markdown: convert back to fenced code blocks for portability.
+  return src.replace(/<pre\s+class=(["'])code\1\s*>([\s\S]*?)<\/pre>/gi, (_m, _q, body) => {
+    const raw = String(body ?? "").replace(/<br\s*\/?>/gi, "\n");
+    const decoded = _unescapeHtml(raw).replace(/\r\n/g, "\n").replace(/\r/g, "\n").trimEnd();
+    return _safeCodeFence(decoded, "text");
+  });
+}
+
 const _LS_QUICK_VIEW_BLOCKS = "codex_sidecar_quick_view_blocks_v1";
 const _KNOWN_QUICK_BLOCKS = new Set(["user_message", "assistant_message", "reasoning_summary", "tool_gate", "tool_call", "tool_output", "update_plan"]);
 const _DEFAULT_QUICK_BLOCKS = new Set(["user_message", "assistant_message", "reasoning_summary", "tool_gate", "update_plan"]);
@@ -625,7 +649,7 @@ export async function exportThreadMarkdown(state, key, opts = {}) {
       }
     } else {
       const raw = String((m && m.text) ? m.text : "").trimEnd();
-      text = _balanceFences(raw);
+      text = _balanceFences(_convertKnownHtmlCodeBlocksToFences(raw));
     }
     idx += 1;
     const head = `## ${idx}. ${kindName}${tsLocal ? ` · ${tsLocal}` : ""}`;

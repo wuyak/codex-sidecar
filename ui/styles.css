@@ -351,17 +351,18 @@
 		      .bookmark.active { background: rgba(2,132,199,.10); border-color: rgba(14,165,233,.55); }
 		      body[data-bm-skin="dark"] .bookmark.active { background: rgba(56,189,248,.18); border-color: rgba(56,189,248,.35); }
 		      .bookmark.tab-hidden { opacity: .55; filter: saturate(.8); }
-		      .bookmark.has-unread::after {
-		        content: attr(data-unread);
-		        position: absolute;
-		        top: 6px;
-		        right: 8px;
-		        transform: none;
-		        min-width: 18px;
-		        height: 18px;
-		        padding: 0 6px;
-		        border-radius: 999px;
-		        background: rgba(239, 68, 68, .96);
+			      .bookmark.has-unread::after {
+			        content: attr(data-unread);
+			        position: absolute;
+			        top: 6px;
+			        right: 8px;
+			        transform: none;
+			        pointer-events: none;
+			        min-width: 18px;
+			        height: 18px;
+			        padding: 0 6px;
+			        border-radius: 999px;
+			        background: rgba(239, 68, 68, .96);
 		        color: #fff;
 		        font-size: 11px;
 		        line-height: 18px;
@@ -419,7 +420,7 @@
 		      #bookmarks .bm-rail .bookmark.active .bm-close { opacity: .9; }
 		      #bookmarks .bm-rail .bookmark .bm-close:hover { background: var(--c-soft); border-color: var(--c-border); color: var(--c-text); }
 		      #bookmarks .bm-rail .bookmark.editing .bm-close { display: none; }
-		      #bookmarks .bm-rail .bookmark.has-unread .bm-label { padding-right: 16px; }
+		      #bookmarks .bm-rail .bookmark.has-unread .bm-label { padding-right: 20px; }
 		      #bookmarks .bm-rail .bookmark.has-unread::after { right: 26px; top: -6px; }
 		      #bookmarks .bm-rail .bookmark[data-key="all"].has-unread::after { right: 6px; top: -6px; }
 
@@ -518,16 +519,17 @@
 		      .tab.editing .tab-label { display:none; }
 		      .tab.editing .tab-edit { display:block; }
 	      .tab-actions { margin-left: auto; display:flex; gap:6px; align-items:center; }
-	      .tab.has-unread::after {
-	        content: attr(data-unread);
-	        position: absolute;
-	        top: -6px;
-	        right: -6px;
-	        min-width: 18px;
-	        height: 18px;
-	        padding: 0 5px;
-	        border-radius: 999px;
-	        background: rgba(239, 68, 68, .96);
+		      .tab.has-unread::after {
+		        content: attr(data-unread);
+		        position: absolute;
+		        top: -6px;
+		        right: -6px;
+		        pointer-events: none;
+		        min-width: 18px;
+		        height: 18px;
+		        padding: 0 5px;
+		        border-radius: 999px;
+		        background: rgba(239, 68, 68, .96);
 	        color: #fff;
 	        font-size: 11px;
 	        line-height: 18px;
@@ -705,58 +707,15 @@
 			      .float-nav { position: fixed; right: var(--rightbar-right); left: auto; bottom: calc(16px + var(--safe-bottom)); display:flex; flex-direction:column; gap: var(--rightbar-gap); z-index: var(--z-float-nav); }
 			      .float-nav button { width: var(--rightbar-w); height: var(--rightbar-w); padding: 0; border-radius: 999px; box-shadow: var(--shadow-sm); border: 1px solid var(--c-border); background: var(--c-surface); color: var(--c-text); display:flex; align-items:center; justify-content:center; cursor:pointer; position: relative; }
 				      .float-nav button:hover { background: var(--c-soft-2); }
-			      .float-nav button[aria-label]::before {
-			        content: attr(aria-label);
-			        position: absolute;
-			        right: calc(100% + 10px);
-			        top: 50%;
-			        transform: translateY(-50%) translateX(4px);
-			        padding: 6px 10px;
-			        border-radius: 999px;
-			        border: 1px solid rgba(148,163,184,.35);
-			        background: rgba(255,255,255,.96);
-			        color: var(--c-text);
-			        font-size: clamp(11px, calc(var(--ui-font-size, 14px) - 2px), 16px);
-			        white-space: nowrap;
-			        box-shadow: var(--shadow-sm);
-			        opacity: 0;
-			        pointer-events: none;
-			        transition: opacity .12s ease, transform .12s ease;
-			        z-index: calc(var(--z-float-nav) + 5);
-			      }
-			      body[data-bm-skin="dark"] .float-nav button[aria-label]::before {
-			        background: rgba(15,23,42,.92);
-			        color: rgba(226,232,240,.98);
-			        border-color: rgba(148,163,184,.22);
-			      }
-				      .float-nav button:hover::before,
-				      .float-nav button:focus-visible::before { opacity: 1; transform: translateY(-50%) translateX(0); }
-					      /* 会话管理按钮：提示移到左上方且向左偏移，避免遮挡按钮与底部标签 */
-					      #bookmarkDrawerToggleBtn[aria-label]::before {
-					        right: calc(100% + 10px);
-					        top: auto;
-					        bottom: calc(100% + 10px);
-					        transform: translateX(4px) translateY(4px);
-					      }
-					      #bookmarkDrawerToggleBtn:hover::before,
-					      #bookmarkDrawerToggleBtn:focus-visible::before { transform: translateX(0) translateY(0); }
-		      #scrollBottomBtn.has-unread { position: relative; }
-	      #scrollBottomBtn.has-unread::after {
-	        content: attr(data-unread);
-	        position: absolute;
-	        top: -6px;
-	        right: -6px;
-	        min-width: 18px;
-	        height: 18px;
-	        padding: 0 5px;
-	        border-radius: 999px;
-	        background: rgba(239, 68, 68, .96);
-	        color: #fff;
-	        font-size: 11px;
-	        line-height: 18px;
-	        text-align: center;
-	        border: 1px solid rgba(255,255,255,.92);
-	        box-shadow: 0 10px 24px rgba(0,0,0,.14);
+				      /* 说明提示（tooltip）：已移除。
+				       *
+				       * 原先用 aria-label 生成 hover tooltip，容易造成“提示跑到按钮上”的误解。
+				       * aria-label 仍保留用于无障碍读屏。
+				       */
+	      /* 未读跳转：落点高亮（避免“跳了但不知道跳到哪”）；不使用动画，保持克制。 */
+	      .row.notify-jump {
+	        outline: 2px solid rgba(59,130,246,.70);
+	        border-radius: 10px;
 	      }
 				      .drawer-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.18); z-index: var(--z-drawer-overlay); }
 				      .drawer { position: fixed; top: calc(16px + var(--safe-top)); right: var(--rightbar-right); bottom: auto; width: 380px; max-width: calc(100vw - 32px - var(--safe-left) - var(--safe-right)); max-height: calc(100vh - 32px - var(--safe-top) - var(--safe-bottom)); background: var(--c-surface); border: none; border-radius: 12px; padding: 10px; overflow-x: hidden; overflow-y: auto; z-index: var(--z-drawer); box-shadow: var(--shadow-md); }

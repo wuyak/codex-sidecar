@@ -2,7 +2,7 @@ import { colorForKey, keyOf, rolloutStampFromFile, shortId } from "../utils.js";
 import { getCustomLabel, setCustomLabel } from "./labels.js";
 import { loadHiddenThreads, saveHiddenThreads } from "./hidden.js";
 import { saveClosedThreads } from "../closed_threads.js";
-import { getUnreadCount } from "../unread.js";
+import { getUnreadCount, jumpToNextUnread } from "../unread.js";
 import { flashToastAt } from "../utils/toast.js";
 
 function _toastFromEl(el, text, opts = {}) {
@@ -194,16 +194,31 @@ function _wireBookmarkInteractions(btn) {
     return true;
   };
 
-  const tipRename = "鼠标左键长按进行重命名";
+  const tipRename = "长按重命名";
   const tipClose = "关闭监听";
+
+  let tipT = 0;
+  const _clearTipTimer = () => {
+    if (tipT) { try { clearTimeout(tipT); } catch (_) {} }
+    tipT = 0;
+  };
+  const _scheduleTip = (anchorEl, text, delayMs = 260) => {
+    _clearTipTimer();
+    const d = Math.max(0, Number(delayMs) || 0);
+    tipT = setTimeout(() => {
+      tipT = 0;
+      try { _showBmHoverTip(anchorEl || btn, text); } catch (_) {}
+    }, d);
+  };
 
   btn.addEventListener("pointerenter", (e) => {
     if (!canHoverTip(e)) return;
     if (btn.classList && btn.classList.contains("editing")) return;
-    _showBmHoverTip(btn, tipRename);
+    _scheduleTip(btn, tipRename);
   });
   btn.addEventListener("pointerleave", (e) => {
     if (!canHoverTip(e)) return;
+    _clearTipTimer();
     _hideBmHoverTip();
   });
 
@@ -214,12 +229,13 @@ function _wireBookmarkInteractions(btn) {
       closeEl.__bmTipWired = true;
       closeEl.addEventListener("pointerenter", (e) => {
         if (!canHoverTip(e)) return;
-        _showBmHoverTip(btn, tipClose);
+        _scheduleTip(closeEl, tipClose, 120);
       });
       closeEl.addEventListener("pointerleave", (e) => {
         if (!canHoverTip(e)) return;
+        _clearTipTimer();
         try {
-          if (btn.matches && btn.matches(":hover")) _showBmHoverTip(btn, tipRename);
+          if (btn.matches && btn.matches(":hover")) _scheduleTip(btn, tipRename, 260);
           else _hideBmHoverTip();
         } catch (_) {
           _hideBmHoverTip();
@@ -345,7 +361,30 @@ function _wireBookmarkInteractions(btn) {
     if (btn.classList && btn.classList.contains("editing")) return;
     const k = String(btn.dataset && btn.dataset.key ? btn.dataset.key : "").trim();
     const onSelect = btn.__bmOnSelect;
+    const onJump = btn.__bmOnJumpUnread;
+    const rerender = btn.__bmRender;
+
+    const hadUnread = !!(btn.classList && btn.classList.contains("has-unread"));
+    const isActive = !!(btn.classList && btn.classList.contains("active"));
+
+    // Same tab: click cycles through unread (earliest -> latest) instead of reselecting.
+    if (hadUnread && isActive && typeof onJump === "function") {
+      try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+      const r = await onJump();
+      if (r && r.ok) {
+        if (typeof rerender === "function") rerender();
+        return;
+      }
+      // Fallback: if jump fails, continue with normal select behavior.
+    }
+
     if (typeof onSelect === "function" && k) await onSelect(k);
+
+    // After selecting an unread tab, jump to the first unread once (user can click again to continue).
+    if (hadUnread && typeof onJump === "function") {
+      const r = await onJump();
+      if (r && r.ok && typeof rerender === "function") rerender();
+    }
   });
 
   btn.addEventListener("contextmenu", async (e) => {
@@ -572,6 +611,9 @@ export function renderTabs(dom, state, onSelectKey) {
       btn.__bmOnContext = async (k, el) => { await _toggleHiddenKey(k, label, el || btn); };
       btn.__bmOnDelete = async (el) => { await _hideKey(t.key, label, el || btn); };
       btn.__bmOnClose = async (el) => { await _closeKey(t.key, label, el || btn); };
+      btn.__bmOnJumpUnread = async () => {
+        try { return jumpToNextUnread(dom, state, { key: t.key }); } catch (_) { return { ok: false, reason: "jump_failed" }; }
+      };
       btn.__bmRender = () => renderTabs(dom, state, onSelectKey);
       _wireBookmarkInteractions(btn);
       return btn;

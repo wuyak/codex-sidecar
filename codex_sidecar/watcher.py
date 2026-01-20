@@ -541,20 +541,32 @@ class RolloutWatcher:
             if picked is not None:
                 targets.append(picked)
             if len(targets) < n:
-                try:
-                    # 进程跟随模式下，只跟随“进程正在写入的 rollout 文件”，不再扫描 sessions 补齐 N 个会话。
-                    # 否则重启/空窗期会误跟到历史会话（例如旧的 how 会话）。
-                    cands = []
-                    if self._follow_mode != "process":
-                        cands = _latest_rollout_files(self._codex_home, limit=max(n * 3, n))
-                except Exception:
-                    cands = []
-                for p in cands:
-                    if len(targets) >= n:
-                        break
-                    if p in targets:
-                        continue
-                    targets.append(p)
+                # Pin mode: never backfill from sessions/** by mtime (prevents zombie sessions).
+                if sel == "pin":
+                    try:
+                        for p in list(self._process_files or []):
+                            if len(targets) >= n:
+                                break
+                            if p in targets:
+                                continue
+                            targets.append(p)
+                    except Exception:
+                        pass
+                else:
+                    try:
+                        # 进程跟随模式下，只跟随“进程正在写入的 rollout 文件”，不再扫描 sessions 补齐 N 个会话。
+                        # 否则重启/空窗期会误跟到历史会话（例如旧的 how 会话）。
+                        cands = []
+                        if self._follow_mode != "process":
+                            cands = _latest_rollout_files(self._codex_home, limit=max(n * 3, n))
+                    except Exception:
+                        cands = []
+                    for p in cands:
+                        if len(targets) >= n:
+                            break
+                        if p in targets:
+                            continue
+                        targets.append(p)
 
         changed = force or (targets != self._follow_files)
         if not changed:
@@ -743,6 +755,7 @@ class RolloutWatcher:
                 "kind": kind,
                 "text": text,
                 "zh": "",
+                "replay": bool(is_replay),
                 "thread_id": str(thread_id or ""),
                 "file": str(file_path),
                 "line": line_no,
@@ -762,6 +775,7 @@ class RolloutWatcher:
                                     "kind": "tool_gate",
                                     "text": hint,
                                     "zh": "",
+                                    "replay": bool(is_replay),
                                     "thread_id": str(thread_id or ""),
                                     "file": str(file_path),
                                     "line": line_no,

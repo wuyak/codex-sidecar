@@ -65,5 +65,13 @@ export function createState() {
     thinkModeById: new Map(),
     thinkModeOrder: [], // LRU-ish for pruning
     thinkModeMax: 600,
+
+    // 用户活跃度（用于更稳健的“是否已看到新消息”判断）
+    userHasInteracted: false,
+    userLastActiveMs: 0,
+
+    // 通知去重（避免重复事件导致重复响铃/重复计数）
+    notifySeenIds: new Set(),
+    notifySeenOrder: [],
   };
 }
