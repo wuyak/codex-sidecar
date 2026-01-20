@@ -154,13 +154,43 @@ function _safeCodeFence(text, lang = "text") {
   return `${fence}${info ? info : ""}\n${src}\n${fence}`;
 }
 
+const _LS_QUICK_VIEW_BLOCKS = "codex_sidecar_quick_view_blocks_v1";
+const _KNOWN_QUICK_BLOCKS = new Set(["user_message", "assistant_message", "reasoning_summary", "tool_gate", "tool_call", "tool_output", "update_plan"]);
 const _DEFAULT_QUICK_BLOCKS = new Set(["user_message", "assistant_message", "reasoning_summary", "tool_gate", "update_plan"]);
+
+function _sanitizeQuickBlocks(raw) {
+  const src = raw instanceof Set ? Array.from(raw) : (Array.isArray(raw) ? raw : []);
+  const out = new Set();
+  for (const x of src) {
+    const k = String(x || "").trim();
+    if (!k) continue;
+    if (!_KNOWN_QUICK_BLOCKS.has(k)) continue;
+    out.add(k);
+  }
+  return out.size > 0 ? out : null;
+}
+
+function _loadQuickBlocksFromLocalStorage() {
+  try {
+    if (typeof localStorage === "undefined") return null;
+    const raw = String(localStorage.getItem(_LS_QUICK_VIEW_BLOCKS) || "").trim();
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    if (Array.isArray(obj)) return _sanitizeQuickBlocks(obj);
+    if (obj && typeof obj === "object" && Array.isArray(obj.enabled)) return _sanitizeQuickBlocks(obj.enabled);
+  } catch (_) {}
+  return null;
+}
 
 function _getQuickBlocks(state) {
   try {
     const raw = state && state.quickViewBlocks ? state.quickViewBlocks : null;
-    if (raw instanceof Set && raw.size > 0) return new Set(raw);
-    if (Array.isArray(raw) && raw.length > 0) return new Set(raw.map((x) => String(x || "").trim()).filter(Boolean));
+    const fromState = _sanitizeQuickBlocks(raw);
+    if (fromState) return fromState;
+  } catch (_) {}
+  try {
+    const fromLs = _loadQuickBlocksFromLocalStorage();
+    if (fromLs) return fromLs;
   } catch (_) {}
   return new Set(_DEFAULT_QUICK_BLOCKS);
 }
@@ -468,12 +498,26 @@ export async function exportThreadMarkdown(state, key, opts = {}) {
   }
 
   // If user asked for translated thinking but we don't have zh yet, try to translate on export.
-  // This makes “翻译”导出选项真正有差异（而不是取决于你之前是否点过某条思考）。
+  // This makes “译文”导出选项真正有差异（而不是取决于你之前是否点过某条思考）。
   let translateStat = null;
   try {
     const needThinking = (mode === "full") || (quickBlocks && quickBlocks.has("reasoning_summary"));
     if (needThinking && reasoningLang !== "en") {
-      translateStat = await _ensureReasoningTranslated({ messages: selected, threadId, maxN: 6, waitMs: 4500 });
+      const missing = selected.filter((m) => {
+        const kind = String(m && m.kind ? m.kind : "");
+        if (kind !== "reasoning_summary") return false;
+        const id = String(m && m.id ? m.id : "").trim();
+        if (!id) return false;
+        const zh = String(m && m.zh ? m.zh : "").trim();
+        return !zh;
+      }).length;
+
+      // Export is a “one-shot”: be more aggressive than normal UI translation so the output
+      // actually reflects the user's choice (译文/原文).
+      const maxN = Math.min(missing, mode === "quick" ? 18 : 48);
+      const waitMs = Math.min(20000, 5200 + maxN * 420);
+
+      translateStat = await _ensureReasoningTranslated({ messages: selected, threadId, maxN, waitMs });
       if (translateStat && translateStat.filled >= 1) {
         const url = threadId ? `/api/messages?thread_id=${encodeURIComponent(threadId)}&t=${Date.now()}` : `/api/messages?t=${Date.now()}`;
         const r2 = await fetch(url, { cache: "no-store" }).then(r => r.json()).catch(() => null);
