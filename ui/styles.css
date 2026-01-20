@@ -1071,31 +1071,6 @@
 			        background: rgba(15,23,42,.92);
 			        color: rgba(226,232,240,.98);
 			      }
-			      .mini-btn[aria-label]:not([title])::after {
-			        content: attr(aria-label);
-			        position: absolute;
-			        left: 50%;
-			        top: calc(100% + 6px);
-		        transform: translateX(-50%) translateY(-2px);
-		        padding: 6px 10px;
-		        border-radius: 999px;
-		        border: 1px solid rgba(148,163,184,.35);
-		        background: rgba(255,255,255,.96);
-		        color: var(--c-text);
-		        font-size: clamp(11px, calc(var(--ui-font-size, 14px) - 2px), 16px);
-		        white-space: nowrap;
-		        box-shadow: var(--shadow-sm);
-		        opacity: 0;
-		        pointer-events: none;
-			        transition: opacity .12s ease, transform .12s ease;
-			        z-index: calc(var(--z-drawer) + 5);
-			      }
-			      body[data-bm-skin="dark"] .mini-btn[aria-label]:not([title])::after {
-			        background: rgba(15,23,42,.92);
-			        color: rgba(226,232,240,.98);
-			        border-color: rgba(148,163,184,.22);
-			      }
-			      .mini-btn:hover::after,
-			      .mini-btn:focus-visible::after { opacity: 1; transform: translateX(-50%) translateY(0); }
+				      /* mini-btn 的提示统一走 JS 的 .ui-hover-tip（避免 drawer overflow 截断与双重提示）。 */
 	      .tab.tab-hidden { opacity: .55; filter: saturate(.8); }
 	      .ico { width: var(--ui-ico-size, 18px); height: var(--ui-ico-size, 18px); display:block; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; pointer-events:none; }
