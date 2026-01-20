@@ -3,6 +3,7 @@ import { keyOf, safeJsonParse, tsToMs } from "../utils.js";
 import { refreshThreads } from "./threads.js";
 import { isOfflineKey, offlineRelFromKey } from "../offline.js";
 import { saveOfflineShowList, upsertOfflineShow } from "../offline_show.js";
+import { loadOfflineZhMap } from "../offline_zh.js";
 
 export async function refreshList(dom, state, renderTabs, renderMessage, renderEmpty) {
   const token = (state && typeof state === "object")
@@ -71,9 +72,12 @@ export async function refreshList(dom, state, renderTabs, renderMessage, renderE
         }
       }
     } catch (_) {}
-    // 离线会话：回填本地译文缓存（不依赖后端 SidecarState）。
+    // 离线会话：回填本地译文缓存（localStorage offlineZh:${rel} + 内存 Map），不依赖后端 SidecarState。
     try {
-      if (isOfflineKey(state.currentKey) && state.offlineZhById && typeof state.offlineZhById.get === "function") {
+      if (isOfflineKey(state.currentKey)) {
+        const rel = offlineRelFromKey(state.currentKey);
+        const fromLs = rel ? loadOfflineZhMap(rel) : {};
+        if (!state.offlineZhById || typeof state.offlineZhById.get !== "function") state.offlineZhById = new Map();
         for (const m of msgs) {
           if (!m || typeof m !== "object") continue;
           if (String(m.kind || "") !== "reasoning_summary") continue;
@@ -81,12 +85,21 @@ export async function refreshList(dom, state, renderTabs, renderMessage, renderE
           if (!mid) continue;
           const curZh = String(m.zh || "").trim();
           if (curZh) continue;
-          const cached = state.offlineZhById.get(mid);
-          if (!cached || typeof cached !== "object") continue;
-          const zh = String(cached.zh || "").trim();
-          const err = String(cached.err || "").trim();
-          if (zh) m.zh = zh;
-          if (err) m.translate_error = err;
+
+          let zh = "";
+          try { zh = String(fromLs && fromLs[mid] ? fromLs[mid] : "").trim(); } catch (_) { zh = ""; }
+          if (!zh) {
+            const cached = state.offlineZhById.get(mid);
+            if (cached && typeof cached === "object") {
+              zh = String(cached.zh || "").trim();
+              const err = String(cached.err || "").trim();
+              if (err) m.translate_error = err;
+            }
+          }
+          if (zh) {
+            m.zh = zh;
+            try { state.offlineZhById.set(mid, { zh, err: "" }); } catch (_) {}
+          }
         }
       }
     } catch (_) {}

@@ -451,7 +451,7 @@ class SidecarHandler(BaseHTTPRequestHandler):
             items = obj.get("items")
             if isinstance(items, list):
                 out_items = []
-                for it in items[:24]:
+                for it in items[:64]:
                     if not isinstance(it, dict):
                         continue
                     mid = str(it.get("id") or "").strip()
@@ -554,7 +554,7 @@ class SidecarHandler(BaseHTTPRequestHandler):
             items = obj.get("items")
             if isinstance(items, list):
                 out_items = []
-                for it in items[:24]:
+                for it in items[:64]:
                     if not isinstance(it, dict):
                         continue
                     mid = str(it.get("id") or "").strip()

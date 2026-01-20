@@ -2,7 +2,8 @@ import { flashToastAt } from "../utils/toast.js";
 import { stabilizeToggleNoDrift } from "../utils/anchor.js";
 import { buildThinkingMetaRight } from "../thinking/meta.js";
 import { renderMarkdownCached } from "../render/md_cache.js";
-import { isOfflineKey } from "../offline.js";
+import { isOfflineKey, offlineRelFromKey } from "../offline.js";
+import { upsertOfflineZh } from "../offline_zh.js";
 
 function _defaultThinkMode(hasZh) {
   return hasZh ? "zh" : "en";
@@ -106,8 +107,8 @@ async function _postRetranslate(mid) {
 async function _postOfflineTranslate(text) {
   const src = String(text || "").trim();
   if (!src) return { ok: false, error: "empty_text", zh: "" };
-  try {
-    const resp = await fetch("/api/offline/translate", {
+  const _postText = async (url) => {
+    const resp = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text: src }),
@@ -118,8 +119,18 @@ async function _postOfflineTranslate(text) {
     const ok = !!(resp && resp.ok && obj && obj.ok !== false && zh);
     const err = String((obj && obj.error) ? obj.error : (resp && !resp.ok ? `http_status=${resp.status}` : "") || "").trim();
     return { ok, error: err, zh };
+  };
+
+  try {
+    const r = await _postText("/api/control/translate_text");
+    if (r.ok) return r;
+    // Back-compat: older servers might not expose /api/control/translate_text.
+    if (String(r.error || "").includes("http_status=404")) {
+      try { return await _postText("/api/offline/translate"); } catch (_) { return r; }
+    }
+    return r;
   } catch (_) {
-    return { ok: false, error: "request_failed", zh: "" };
+    try { return await _postText("/api/offline/translate"); } catch (_) { return { ok: false, error: "request_failed", zh: "" }; }
   }
 }
 
@@ -201,6 +212,7 @@ export function wireThinkingRowActions(dom, state) {
         } else {
           try { if (addedInFlight) state.translateInFlight.delete(mid); } catch (_) {}
           _applyOfflineZh(state, row, mid, r.zh, "");
+          try { upsertOfflineZh(offlineRelFromKey(String(state && state.currentKey ? state.currentKey : "")), mid, r.zh); } catch (_) {}
           // 离线：即时反馈一次即可
           if (hadZh && oldZh && String(oldZh || "").trim() !== String(r.zh || "").trim()) {
             flashToastAt(Number(e.clientX) || 0, Number(e.clientY) || 0, "已重译", { isLight: true });
@@ -275,6 +287,7 @@ export function wireThinkingRowActions(dom, state) {
         } else {
           try { state.translateInFlight.delete(mid); } catch (_) {}
           _applyOfflineZh(state, row, mid, r.zh, "");
+          try { upsertOfflineZh(offlineRelFromKey(String(state && state.currentKey ? state.currentKey : "")), mid, r.zh); } catch (_) {}
         }
       } else {
         const r = await _postRetranslate(mid);

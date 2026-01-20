@@ -2,6 +2,7 @@ import { getCustomLabel } from "./sidebar/labels.js";
 import { extractJsonOutputString, keyOf, safeJsonParse, shortId } from "./utils.js";
 import { getExportPrefsForKey } from "./export_prefs.js";
 import { isOfflineKey, offlineRelFromKey } from "./offline.js";
+import { loadOfflineZhMap, upsertOfflineZhBatch } from "./offline_zh.js";
 import {
   extractExitCode,
   extractOutputBody,
@@ -437,8 +438,9 @@ async function _ensureReasoningTranslated({ messages, threadId, maxN = 6, waitMs
   return { ok: true, queued, filled, waited_ms: Date.now() - start };
 }
 
-async function _ensureReasoningTranslatedOffline({ state, messages, maxN = 12 }) {
+async function _ensureReasoningTranslatedOffline({ state, rel, messages, maxN = 12 }) {
   const arr = Array.isArray(messages) ? messages : [];
+  const rel0 = String(rel || "").trim();
   const needs = arr
     .filter((m) => {
       const kind = String(m && m.kind ? m.kind : "");
@@ -454,14 +456,35 @@ async function _ensureReasoningTranslatedOffline({ state, messages, maxN = 12 })
 
   const start = Date.now();
   let filled = 0;
+  const persist = {};
   try {
+    if (!state.offlineZhById || typeof state.offlineZhById.set !== "function") state.offlineZhById = new Map();
     const items = needs.map((m) => ({ id: String(m.id || ""), text: String(m.text || "") }));
-    const resp = await fetch("/api/offline/translate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ items }),
-    }).then((x) => x.json()).catch(() => null);
-    const outItems = Array.isArray(resp && resp.items) ? resp.items : [];
+
+    const _postItems = async (url) => {
+      const r = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+      });
+      const resp = await r.json().catch(() => null);
+      const outItems = Array.isArray(resp && resp.items) ? resp.items : [];
+      return { ok: !!(r && r.ok && resp && resp.ok !== false), status: Number(r && r.status) || 0, outItems };
+    };
+
+    let outItems = [];
+    try {
+      const r1 = await _postItems("/api/control/translate_text");
+      outItems = r1.outItems;
+      if (!r1.ok && r1.status === 404) {
+        const r2 = await _postItems("/api/offline/translate");
+        outItems = r2.outItems;
+      }
+    } catch (_) {
+      const r2 = await _postItems("/api/offline/translate");
+      outItems = r2.outItems;
+    }
+
     const byId = new Map(outItems.map((x) => [String(x && x.id ? x.id : ""), x]));
 
     for (const m of needs) {
@@ -473,22 +496,16 @@ async function _ensureReasoningTranslatedOffline({ state, messages, maxN = 12 })
       if (zh) {
         m.zh = zh;
         filled += 1;
-        try {
-          if (state && state.offlineZhById && typeof state.offlineZhById.set === "function") {
-            state.offlineZhById.set(id, { zh, err: "" });
-          }
-        } catch (_) {}
+        try { persist[id] = zh; } catch (_) {}
+        try { state.offlineZhById.set(id, { zh, err: "" }); } catch (_) {}
       } else if (err) {
         try { m.translate_error = err; } catch (_) {}
-        try {
-          if (state && state.offlineZhById && typeof state.offlineZhById.set === "function") {
-            state.offlineZhById.set(id, { zh: "", err });
-          }
-        } catch (_) {}
+        try { state.offlineZhById.set(id, { zh: "", err }); } catch (_) {}
       }
     }
   } catch (_) {}
 
+  try { if (rel0 && Object.keys(persist).length) upsertOfflineZhBatch(rel0, persist); } catch (_) {}
   return { ok: true, queued: needs.length, filled, waited_ms: Date.now() - start };
 }
 
@@ -554,12 +571,13 @@ export async function exportThreadMarkdown(state, key, opts = {}) {
     ? (state.threadIndex.get(k) || {})
     : {};
   const offline = isOfflineKey(k);
+  let rel = "";
   let threadId = String(thread.thread_id || "");
   let file = String(thread.file || "");
 
   try {
     if (offline) {
-      const rel = offlineRelFromKey(k);
+      rel = offlineRelFromKey(k);
       const tail = Math.max(0, Number(state && state.replayLastLines) || 0) || 200;
       const url = `/api/offline/messages?rel=${encodeURIComponent(rel)}&tail_lines=${encodeURIComponent(tail)}&t=${Date.now()}`;
       const r = await fetch(url, { cache: "no-store" }).then(r => r.json());
@@ -571,8 +589,10 @@ export async function exportThreadMarkdown(state, key, opts = {}) {
       try {
         if (!threadId) threadId = String(messages && messages[0] && messages[0].thread_id ? messages[0].thread_id : "");
       } catch (_) {}
-      // 回填本地离线译文缓存（UI 与导出一致）
+      // 回填本地离线译文缓存（localStorage + 内存 Map；UI 与导出一致）
       try {
+        const ls = rel ? loadOfflineZhMap(rel) : {};
+        if (!state.offlineZhById || typeof state.offlineZhById.get !== "function") state.offlineZhById = new Map();
         if (state && state.offlineZhById && typeof state.offlineZhById.get === "function") {
           for (const m of messages) {
             if (!m || typeof m !== "object") continue;
@@ -580,12 +600,19 @@ export async function exportThreadMarkdown(state, key, opts = {}) {
             const id = String(m.id || "").trim();
             if (!id) continue;
             if (String(m.zh || "").trim()) continue;
-            const cached = state.offlineZhById.get(id);
-            if (!cached || typeof cached !== "object") continue;
-            const zh = String(cached.zh || "").trim();
-            const err = String(cached.err || "").trim();
-            if (zh) m.zh = zh;
-            if (err) m.translate_error = err;
+            let zh = "";
+            try { zh = String(ls && ls[id] ? ls[id] : "").trim(); } catch (_) { zh = ""; }
+            if (!zh) {
+              const cached = state.offlineZhById.get(id);
+              if (!cached || typeof cached !== "object") continue;
+              zh = String(cached.zh || "").trim();
+              const err = String(cached.err || "").trim();
+              if (err) m.translate_error = err;
+            }
+            if (zh) {
+              m.zh = zh;
+              try { state.offlineZhById.set(id, { zh, err: "" }); } catch (_) {}
+            }
           }
         }
       } catch (_) {}
@@ -632,7 +659,7 @@ export async function exportThreadMarkdown(state, key, opts = {}) {
       const waitMs = Math.min(20000, 5200 + maxN * 420);
 
       if (offline) {
-        translateStat = await _ensureReasoningTranslatedOffline({ state, messages: selected, maxN });
+        translateStat = await _ensureReasoningTranslatedOffline({ state, rel, messages: selected, maxN });
       } else {
         translateStat = await _ensureReasoningTranslated({ messages: selected, threadId, maxN, waitMs });
         if (translateStat && translateStat.filled >= 1) {
