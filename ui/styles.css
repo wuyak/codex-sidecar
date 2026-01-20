@@ -885,7 +885,7 @@
 				      .qk-row[aria-pressed="false"] .qk-dot::before { content: "（ ）"; }
 
 				      /* 导出设置弹层（小菜单风格）。 */
-				      #exportPrefsDialog { width: min(280px, calc(100vw - 24px - var(--safe-left) - var(--safe-right))); }
+				      #exportPrefsDialog { width: min(240px, calc(100vw - 24px - var(--safe-left) - var(--safe-right))); }
 				      .pref-menu { border: 1px solid var(--c-border); border-radius: 12px; overflow: hidden; background: var(--c-surface); }
 				      .pref-row { width: 100%; display:flex; align-items:center; gap: 10px; padding: 10px 12px; border: none; background: transparent; color: var(--c-text); cursor: pointer; text-align: left; }
 				      .pref-row + .pref-row { border-top: 1px solid var(--c-border); }
