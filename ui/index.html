@@ -314,13 +314,13 @@
 							    <div id="bookmarkDrawer" class="drawer hidden" role="dialog" aria-modal="true" aria-label="会话管理">
 							      <div class="drawer-head">
 							        <div class="title">会话管理</div>
-							        <button id="bookmarkDrawerCloseBtn" class="drawer-close" type="button" aria-label="关闭">×</button>
+							        <div class="drawer-head-tools">
+							          <span class="meta">标签页栏</span>
+							          <button id="bookmarkTabsToggleBtn" class="ui-switch" type="button" role="switch" aria-checked="true" aria-label="标签页栏"></button>
+							          <button id="bookmarkDrawerCloseBtn" class="drawer-close" type="button" aria-label="关闭">×</button>
+							        </div>
 							      </div>
 							      <div class="drawer-sec">
-								        <div class="drawer-subhead" style="display:flex; align-items:center; gap:10px; margin-top:4px;">
-								          <span class="meta">标签页栏</span>
-								          <button id="bookmarkTabsToggleBtn" class="pill pill-btn" type="button" aria-pressed="false" style="margin-left:auto;">已展开</button>
-								        </div>
 								        <div id="bookmarkList" class="tabs" style="margin-top:10px;"></div>
 								        <details id="bookmarkHiddenDetails" class="drawer-details" style="margin-top:10px;">
 								          <summary class="meta">已关闭监听 <span id="bookmarkHiddenCount" class="pill">0</span></summary>

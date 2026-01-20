@@ -470,22 +470,21 @@ export function wireControlEvents(dom, state, helpers) {
       if (e && String(e.key || "") === "Enter") { try { e.preventDefault(); } catch (_) {} try { dom.uiFontSize.blur(); } catch (_) {} }
     });
   }
-	  if (dom.uiBtnSize) {
-	    dom.uiBtnSize.addEventListener("input", () => _applyUiBtnDraft());
-	    dom.uiBtnSize.addEventListener("change", () => _applyUiBtnInput(false));
-	    dom.uiBtnSize.addEventListener("keydown", (e) => {
-	      if (e && String(e.key || "") === "Enter") { try { e.preventDefault(); } catch (_) {} try { dom.uiBtnSize.blur(); } catch (_) {} }
-	    });
-	  }
+  if (dom.uiBtnSize) {
+    dom.uiBtnSize.addEventListener("input", () => _applyUiBtnDraft());
+    dom.uiBtnSize.addEventListener("change", () => _applyUiBtnInput(false));
+    dom.uiBtnSize.addEventListener("keydown", (e) => {
+      if (e && String(e.key || "") === "Enter") { try { e.preventDefault(); } catch (_) {} try { dom.uiBtnSize.blur(); } catch (_) {} }
+    });
+  }
 
-	  const _syncBookmarkTabsToggle = () => {
-	    const btn = dom && dom.bookmarkTabsToggleBtn ? dom.bookmarkTabsToggleBtn : null;
-	    if (!btn) return;
-	    const collapsed = _readSavedBool(_LS_TABS_COLLAPSED, false);
-	    const expanded = !collapsed;
-	    try { btn.setAttribute("aria-pressed", expanded ? "true" : "false"); } catch (_) {}
-	    try { btn.textContent = expanded ? "已展开" : "已收起"; } catch (_) {}
-	  };
+  const _syncBookmarkTabsToggle = () => {
+    const btn = dom && dom.bookmarkTabsToggleBtn ? dom.bookmarkTabsToggleBtn : null;
+    if (!btn) return;
+    const collapsed = _readSavedBool(_LS_TABS_COLLAPSED, false);
+    const expanded = !collapsed;
+    try { btn.setAttribute("aria-checked", expanded ? "true" : "false"); } catch (_) {}
+  };
 
 	  // 标签页栏收起状态（由会话管理内开关切换）
 	  _applyTabsCollapsedLocal(_readSavedBool(_LS_TABS_COLLAPSED, false));
@@ -987,6 +986,7 @@ export function wireControlEvents(dom, state, helpers) {
 
   const _openBookmarkDrawer = () => {
     openBookmarkDrawer(dom);
+    _syncBookmarkTabsToggle();
     _renderBookmarkDrawerList();
   };
 
@@ -1055,17 +1055,98 @@ export function wireControlEvents(dom, state, helpers) {
 	      }
 	      toggleDrawer();
 	    });
-	  }
-	  if (dom.bookmarkTabsToggleBtn) {
-	    const btn = dom.bookmarkTabsToggleBtn;
-	    btn.addEventListener("click", () => {
-	      const cur = _readSavedBool(_LS_TABS_COLLAPSED, false);
-	      const next = !cur;
-	      try { localStorage.setItem(_LS_TABS_COLLAPSED, next ? "1" : "0"); } catch (_) {}
-	      _applyTabsCollapsedLocal(next);
-	      _syncBookmarkTabsToggle();
-	    });
-	  }
+  }
+  if (dom.bookmarkTabsToggleBtn) {
+    const btn = dom.bookmarkTabsToggleBtn;
+    let pressed = false;
+    let moved = false;
+    let skipClick = false;
+    let capturedPid = null;
+    let startX = 0;
+    let startY = 0;
+    const MOVE_PX = 6;
+
+    const setCollapsed = (collapsed) => {
+      const on = !!collapsed;
+      try { localStorage.setItem(_LS_TABS_COLLAPSED, on ? "1" : "0"); } catch (_) {}
+      _applyTabsCollapsedLocal(on);
+      _syncBookmarkTabsToggle();
+    };
+
+    const releaseCapture = () => {
+      try {
+        if (capturedPid != null && typeof btn.releasePointerCapture === "function") btn.releasePointerCapture(capturedPid);
+      } catch (_) {}
+      capturedPid = null;
+    };
+
+    const calcCheckedFromPointer = (e) => {
+      try {
+        const r = btn.getBoundingClientRect();
+        const x = Number(e && e.clientX) || 0;
+        return x >= (r.left + r.width / 2);
+      } catch (_) {}
+      return String(btn.getAttribute("aria-checked") || "") === "true";
+    };
+
+    btn.addEventListener("pointerdown", (e) => {
+      try {
+        if (e && typeof e.button === "number" && e.button !== 0) return;
+      } catch (_) {}
+      pressed = true;
+      moved = false;
+      skipClick = false;
+      startX = Number(e && e.clientX) || 0;
+      startY = Number(e && e.clientY) || 0;
+      try {
+        if (e && typeof e.pointerId === "number" && typeof btn.setPointerCapture === "function") {
+          btn.setPointerCapture(e.pointerId);
+          capturedPid = e.pointerId;
+        }
+      } catch (_) {}
+    });
+    btn.addEventListener("pointermove", (e) => {
+      if (!pressed) return;
+      const x = Number(e && e.clientX) || 0;
+      const y = Number(e && e.clientY) || 0;
+      const dx = x - startX;
+      const dy = y - startY;
+      if (!moved && (dx * dx + dy * dy) > (MOVE_PX * MOVE_PX)) moved = true;
+      if (!moved) return;
+      const checked = calcCheckedFromPointer(e);
+      try { btn.setAttribute("aria-checked", checked ? "true" : "false"); } catch (_) {}
+    });
+    btn.addEventListener("pointerup", (e) => {
+      if (!pressed) return;
+      pressed = false;
+      releaseCapture();
+      if (!moved) return;
+      skipClick = true;
+      const checked = calcCheckedFromPointer(e);
+      setCollapsed(!checked);
+    });
+    btn.addEventListener("pointercancel", () => {
+      pressed = false;
+      moved = false;
+      releaseCapture();
+      _syncBookmarkTabsToggle();
+    });
+    btn.addEventListener("pointerleave", () => {
+      if (capturedPid != null) return;
+      pressed = false;
+      moved = false;
+      _syncBookmarkTabsToggle();
+    });
+    btn.addEventListener("click", (e) => {
+      if (skipClick) {
+        skipClick = false;
+        try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+        return;
+      }
+      const cur = _readSavedBool(_LS_TABS_COLLAPSED, false);
+      setCollapsed(!cur);
+    });
+  }
   if (dom.bookmarkDrawerOverlay) dom.bookmarkDrawerOverlay.addEventListener("click", () => { closeBookmarkDrawer(dom); });
   if (dom.bookmarkDrawerCloseBtn) dom.bookmarkDrawerCloseBtn.addEventListener("click", () => { closeBookmarkDrawer(dom); });
 
