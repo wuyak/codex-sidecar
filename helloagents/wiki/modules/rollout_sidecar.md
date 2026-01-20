@@ -12,7 +12,20 @@
   - `GET /api/threads`：按 `thread_id/file` 聚合的会话列表（用于 UI 标签切换）
   - `GET /api/offline/files`：列出可选的历史 `rollout-*.jsonl`（严格限制在 `CODEX_HOME/sessions/**`）
   - `GET /api/offline/messages`：按 `rel` 只读解析离线文件并返回与 `/api/messages` 相同 schema（不进入实时 state，不触发未读/提示音）
-  - `POST /api/offline/translate`：离线翻译（不依赖 SidecarState / watcher）
+  - `POST /api/control/translate_text`：通用文本翻译（不依赖 SidecarState / watcher，Live/Offline 共用；支持单条 `text` 或批量 `items`）
+  - `POST /api/offline/translate`：兼容入口（内部同样走 `translate_text`）
+
+## 离线展示（展示中）
+离线能力用于“只读回看/归档/导出”，不进入 watcher 的跟随集合，不产生未读/提示音，也不会触发 `/api/control/follow`。
+
+- UI 结构
+  - 底部双标签栏：上方为“展示标签栏”（离线），下方为“会话标签栏”（实时监听）
+  - 会话管理抽屉：`监听中` / `展示中` / `关闭监听` 三列表分区
+- 关键标识与本机缓存
+  - 离线 key：`offline:${encodeURIComponent(rel)}`（服务端与前端一致）
+  - 离线消息 id：`off:${key}:${sha1(rawLine)}`
+  - 展示中列表：`localStorage offlineShow:1`（持久化保存 `rel`）
+  - 离线译文缓存：`localStorage offlineZh:${rel}`（`{ [msg_id]: zh }`）
 
 ## 时间戳说明
 - `rollout-*.jsonl` 里的 `timestamp` 通常是 UTC（形如 `...Z`）。
