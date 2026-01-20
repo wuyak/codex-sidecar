@@ -94,6 +94,69 @@ export function wireControlEvents(dom, state, helpers) {
     } catch (_) {}
   };
 
+  let _uiHoverTipEl = null;
+  const _ensureUiHoverTipEl = () => {
+    try {
+      if (_uiHoverTipEl && document.body && document.body.contains(_uiHoverTipEl)) return _uiHoverTipEl;
+    } catch (_) {}
+    try {
+      const el = document.createElement("div");
+      el.className = "ui-hover-tip";
+      el.setAttribute("aria-hidden", "true");
+      document.body.appendChild(el);
+      _uiHoverTipEl = el;
+      return el;
+    } catch (_) {
+      _uiHoverTipEl = null;
+      return null;
+    }
+  };
+
+  const _hideUiHoverTip = () => {
+    const el = _ensureUiHoverTipEl();
+    if (!el) return;
+    try { el.classList.remove("show"); } catch (_) {}
+  };
+
+  const _placeUiHoverTip = (el, anchorEl, opts = {}) => {
+    const anchor = anchorEl && typeof anchorEl.getBoundingClientRect === "function" ? anchorEl : null;
+    if (!el || !anchor) return;
+    const pad = Number.isFinite(Number(opts.pad)) ? Number(opts.pad) : 10;
+    const gap = Number.isFinite(Number(opts.gap)) ? Number(opts.gap) : 6;
+    const insetX = Number.isFinite(Number(opts.insetX)) ? Number(opts.insetX) : 12;
+    const prefer = String(opts.prefer || "below").trim().toLowerCase(); // below|above
+
+    const r = anchor.getBoundingClientRect();
+    const tr = el.getBoundingClientRect();
+    const vw = window.innerWidth || 0;
+    const vh = window.innerHeight || 0;
+
+    let left = r.left + insetX;
+    left = _clamp(left, pad, Math.max(pad, vw - pad - tr.width));
+
+    const below = r.bottom + gap;
+    const above = r.top - gap - tr.height;
+    let top = below;
+    if (prefer === "above" || (below + tr.height) > (vh - pad)) top = above;
+    top = _clamp(top, pad, Math.max(pad, vh - pad - tr.height));
+
+    try { el.style.left = `${left}px`; } catch (_) {}
+    try { el.style.top = `${top}px`; } catch (_) {}
+  };
+
+  const _showUiHoverTip = (anchorEl, text, opts = {}) => {
+    const msg = String(text || "").trim();
+    if (!msg) return;
+    const el = _ensureUiHoverTipEl();
+    if (!el) return;
+    try { el.textContent = msg; } catch (_) {}
+    try { el.style.left = "0px"; el.style.top = "0px"; el.style.visibility = "hidden"; } catch (_) {}
+    try { el.classList.add("show"); } catch (_) {}
+    try { _placeUiHoverTip(el, anchorEl, opts); } catch (_) {}
+    try { el.style.visibility = ""; } catch (_) {}
+    try { el.classList.add("show"); } catch (_) {}
+  };
+
   const _clamp = (n, a, b) => {
     const x = Number(n);
     if (!Number.isFinite(x)) return a;
@@ -644,10 +707,6 @@ export function wireControlEvents(dom, state, helpers) {
 			        row.tabIndex = 0;
 	          try { row.removeAttribute("title"); } catch (_) {}
 	          try { row.dataset.file = String(it.file || ""); } catch (_) {}
-	          try {
-	            const fp = String(it.file || "").trim();
-	            row.dataset.hint = fp ? "长按可复制源 JSON 路径" : "";
-	          } catch (_) {}
 
 		        const dot = document.createElement("span");
 		        dot.className = "tab-dot";
@@ -678,7 +737,7 @@ export function wireControlEvents(dom, state, helpers) {
 	        renameBtn.type = "button";
 	        renameBtn.dataset.action = "rename";
 	        renameBtn.setAttribute("aria-label", "重命名");
-	        renameBtn.title = "重命名";
+	        try { renameBtn.removeAttribute("title"); } catch (_) {}
 	        renameBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="#i-edit"></use></svg>`;
 
 		        const exportBtn = document.createElement("button");
@@ -694,7 +753,7 @@ export function wireControlEvents(dom, state, helpers) {
 		          try { exportBtn.classList.remove("flag-tr"); } catch (_) {}
 		        }
 		        exportBtn.setAttribute("aria-label", "导出（长按设置导出模式）");
-		        exportBtn.title = "导出（长按设置导出模式）";
+		        try { exportBtn.removeAttribute("title"); } catch (_) {}
 		        exportBtn.innerHTML = `
 		          <svg class="ico" aria-hidden="true"><use href="#i-download"></use></svg>
 		          <span class="mini-flag flag-tr" aria-hidden="true"><svg class="ico ico-mini" aria-hidden="true"><use href="#i-globe"></use></svg></span>
@@ -757,7 +816,7 @@ export function wireControlEvents(dom, state, helpers) {
 	        toggleBtn.type = "button";
 	        toggleBtn.dataset.action = isHiddenList ? "listenOn" : "listenOff";
 	        toggleBtn.setAttribute("aria-label", isHiddenList ? "开启监听" : "关闭监听");
-	        toggleBtn.title = isHiddenList ? "开启监听" : "关闭监听";
+	        try { toggleBtn.removeAttribute("title"); } catch (_) {}
 	        toggleBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="${isHiddenList ? "#i-eye" : "#i-eye-closed"}"></use></svg>`;
 	
 	        const delBtn = document.createElement("button");
@@ -765,7 +824,7 @@ export function wireControlEvents(dom, state, helpers) {
 	        delBtn.type = "button";
 	        delBtn.dataset.action = "delete";
 	        delBtn.setAttribute("aria-label", "清除对话");
-	        delBtn.title = "清除对话";
+	        try { delBtn.removeAttribute("title"); } catch (_) {}
 	        delBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="#i-trash"></use></svg>`;
 
 		        actions.appendChild(renameBtn);
@@ -783,6 +842,35 @@ export function wireControlEvents(dom, state, helpers) {
 	        row.appendChild(main);
 		        row.appendChild(actions);
 		        frag.appendChild(row);
+	          // Hover hint (only when hovering the left area; hovering the action buttons should not trigger).
+	          try {
+	            const filePath = String(it.file || "").trim();
+	            if (filePath) {
+	              let tracking = false;
+	              const canHover = (e) => {
+	                try {
+	                  const pt = e && e.pointerType ? String(e.pointerType) : "";
+	                  if (pt && pt !== "mouse") return false;
+	                } catch (_) {}
+	                try {
+	                  if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) return false;
+	                } catch (_) {}
+	                return true;
+	              };
+	              const hintText = "长按可复制源 JSON 路径";
+	              const update = (e) => {
+	                if (!tracking) return;
+	                if (row.classList && row.classList.contains("editing")) return;
+	                const x = Number(e && e.clientX) || 0;
+	                const ar = actions && typeof actions.getBoundingClientRect === "function" ? actions.getBoundingClientRect() : null;
+	                if (ar && x >= (ar.left - 2)) { _hideUiHoverTip(); return; }
+	                _showUiHoverTip(row, hintText, { insetX: 12, gap: 6, pad: 10, prefer: "below" });
+	              };
+	              row.addEventListener("pointerenter", (e) => { if (!canHover(e)) return; tracking = true; update(e); });
+	              row.addEventListener("pointermove", update);
+	              row.addEventListener("pointerleave", (e) => { if (!canHover(e)) return; tracking = false; _hideUiHoverTip(); });
+	            }
+	          } catch (_) {}
 	          // Long-press: copy JSON source path (explicit action; no hover hints).
 	          try {
 	            const filePath = String(it.file || "").trim();
