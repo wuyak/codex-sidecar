@@ -530,17 +530,28 @@ export function wireControlEvents(dom, state, helpers) {
 		    const dlg = dom && dom.exportPrefsDialog ? dom.exportPrefsDialog : null;
 		    const ok = _openPopupNearEl(dlg, anchorEl, { prefer: "left", align: "end", gap: 10, pad: 12 });
 		    if (ok) {
-		      // 让“导出设置”弹层的左边框与“会话管理”抽屉左边框对齐，避免视觉别扭。
+		      // 让“导出设置”弹层与会话管理抽屉对齐，同时避免遮挡导出按钮：
+		      // - 默认左边框对齐抽屉左边框；
+		      // - 若会遮挡导出按钮，则改为右边框对齐导出按钮左边缘。
 		      try {
 		        const drawer = dom && dom.bookmarkDrawer ? dom.bookmarkDrawer : null;
-		        if (drawer && drawer.getBoundingClientRect && drawer.classList && !drawer.classList.contains("hidden")) {
-		          const dr = drawer.getBoundingClientRect();
-		          const pr = dlg.getBoundingClientRect();
-		          const vw = window.innerWidth || 0;
-		          const pad = 12;
-		          const left = _clamp(dr.left, pad, Math.max(pad, vw - pr.width - pad));
-		          try { dlg.style.left = `${left}px`; } catch (_) {}
-		        }
+		        const anchor = anchorEl && anchorEl.getBoundingClientRect ? anchorEl : null;
+		        if (!anchor) throw new Error("no_anchor");
+		        const ar = anchor.getBoundingClientRect();
+		        const pr = dlg.getBoundingClientRect();
+		        const vw = window.innerWidth || 0;
+		        const pad = 12;
+		        let left = Number.isFinite(ar.left) ? (ar.left - pr.width) : 0;
+		        try {
+		          if (drawer && drawer.getBoundingClientRect && drawer.classList && !drawer.classList.contains("hidden")) {
+		            const dr = drawer.getBoundingClientRect();
+		            // Prefer drawer-left alignment when it won't cover the export button.
+		            const drawerLeft = Number.isFinite(dr.left) ? dr.left : left;
+		            if ((drawerLeft + pr.width) <= ar.left) left = drawerLeft;
+		          }
+		        } catch (_) {}
+		        left = _clamp(left, pad, Math.max(pad, vw - pr.width - pad));
+		        try { dlg.style.left = `${left}px`; } catch (_) {}
 		      } catch (_) {}
 		      try {
 		        setTimeout(() => {
