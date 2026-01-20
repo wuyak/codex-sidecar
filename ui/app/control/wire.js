@@ -644,6 +644,10 @@ export function wireControlEvents(dom, state, helpers) {
 			        row.tabIndex = 0;
 	          try { row.removeAttribute("title"); } catch (_) {}
 	          try { row.dataset.file = String(it.file || ""); } catch (_) {}
+	          try {
+	            const fp = String(it.file || "").trim();
+	            row.dataset.hint = fp ? "长按可复制源 JSON 路径" : "";
+	          } catch (_) {}
 
 		        const dot = document.createElement("span");
 		        dot.className = "tab-dot";
@@ -656,7 +660,7 @@ export function wireControlEvents(dom, state, helpers) {
 	          const sub = document.createElement("span");
 	          sub.className = "tab-sub";
 	          try {
-	            sub.textContent = "长按可复制源 JSON 路径";
+	            sub.textContent = "";
 	          } catch (_) { sub.textContent = ""; }
 
 	        const input = document.createElement("input");
@@ -674,7 +678,7 @@ export function wireControlEvents(dom, state, helpers) {
 	        renameBtn.type = "button";
 	        renameBtn.dataset.action = "rename";
 	        renameBtn.setAttribute("aria-label", "重命名");
-	        try { renameBtn.removeAttribute("title"); } catch (_) {}
+	        renameBtn.title = "重命名";
 	        renameBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="#i-edit"></use></svg>`;
 
 		        const exportBtn = document.createElement("button");
@@ -690,7 +694,7 @@ export function wireControlEvents(dom, state, helpers) {
 		          try { exportBtn.classList.remove("flag-tr"); } catch (_) {}
 		        }
 		        exportBtn.setAttribute("aria-label", "导出（长按设置导出模式）");
-		        try { exportBtn.removeAttribute("title"); } catch (_) {}
+		        exportBtn.title = "导出（长按设置导出模式）";
 		        exportBtn.innerHTML = `
 		          <svg class="ico" aria-hidden="true"><use href="#i-download"></use></svg>
 		          <span class="mini-flag flag-tr" aria-hidden="true"><svg class="ico ico-mini" aria-hidden="true"><use href="#i-globe"></use></svg></span>
@@ -753,7 +757,7 @@ export function wireControlEvents(dom, state, helpers) {
 	        toggleBtn.type = "button";
 	        toggleBtn.dataset.action = isHiddenList ? "listenOn" : "listenOff";
 	        toggleBtn.setAttribute("aria-label", isHiddenList ? "开启监听" : "关闭监听");
-	        try { toggleBtn.removeAttribute("title"); } catch (_) {}
+	        toggleBtn.title = isHiddenList ? "开启监听" : "关闭监听";
 	        toggleBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="${isHiddenList ? "#i-eye" : "#i-eye-closed"}"></use></svg>`;
 	
 	        const delBtn = document.createElement("button");
@@ -761,7 +765,7 @@ export function wireControlEvents(dom, state, helpers) {
 	        delBtn.type = "button";
 	        delBtn.dataset.action = "delete";
 	        delBtn.setAttribute("aria-label", "清除对话");
-	        try { delBtn.removeAttribute("title"); } catch (_) {}
+	        delBtn.title = "清除对话";
 	        delBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="#i-trash"></use></svg>`;
 
 		        actions.appendChild(renameBtn);
