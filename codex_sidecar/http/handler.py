@@ -15,6 +15,7 @@ from .ui_assets import load_ui_text, resolve_ui_path, ui_content_type, ui_dir
 from ..security import redact_sidecar_config
 from ..offline import (
     build_offline_messages,
+    offline_key_from_rel,
     list_offline_rollout_files,
     resolve_offline_rollout_path,
 )
@@ -252,7 +253,7 @@ class SidecarHandler(BaseHTTPRequestHandler):
             rel_norm = str(rel or "").strip().replace("\\", "/")
             while rel_norm.startswith("/"):
                 rel_norm = rel_norm[1:]
-            offline_key = f"offline:{rel_norm}"
+            offline_key = offline_key_from_rel(rel_norm)
             msgs = build_offline_messages(rel=rel_norm, file_path=p, tail_lines=tail_lines, offline_key=offline_key)
             self._send_json(
                 HTTPStatus.OK,
@@ -434,6 +435,37 @@ class SidecarHandler(BaseHTTPRequestHandler):
                 return
             mid = str(obj.get("id") or obj.get("mid") or obj.get("msg_id") or "")
             self._send_json(HTTPStatus.OK, self._controller.retranslate(mid))
+            return
+
+        if self.path == "/api/control/translate_text":
+            length = int(self.headers.get("Content-Length") or "0")
+            raw = self.rfile.read(length) if length > 0 else b"{}"
+            try:
+                obj = json.loads(raw.decode("utf-8", errors="replace"))
+            except Exception:
+                obj = {}
+            if not isinstance(obj, dict):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "invalid_payload"})
+                return
+
+            items = obj.get("items")
+            if isinstance(items, list):
+                out_items = []
+                for it in items[:24]:
+                    if not isinstance(it, dict):
+                        continue
+                    mid = str(it.get("id") or "").strip()
+                    text = str(it.get("text") or "")
+                    r = self._controller.translate_text(text)
+                    rr = r if isinstance(r, dict) else {"ok": False, "error": "translate_failed"}
+                    rr2 = dict(rr)
+                    rr2["id"] = mid
+                    out_items.append(rr2)
+                self._send_json(HTTPStatus.OK, {"ok": True, "items": out_items})
+                return
+
+            text = str(obj.get("text") or "")
+            self._send_json(HTTPStatus.OK, self._controller.translate_text(text))
             return
 
         if self.path == "/api/control/translate_probe":

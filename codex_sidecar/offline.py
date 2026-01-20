@@ -2,6 +2,7 @@ import hashlib
 import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from urllib.parse import quote
 
 from .watch.rollout_extract import extract_rollout_items
 from .watch.rollout_paths import _ROLLOUT_RE, _latest_rollout_files, _parse_thread_id_from_filename
@@ -10,6 +11,12 @@ from .watch.rollout_paths import _ROLLOUT_RE, _latest_rollout_files, _parse_thre
 def _sha1_hex(s: str) -> str:
     return hashlib.sha1(s.encode("utf-8", errors="replace")).hexdigest()
 
+def _sha1_hex_bytes(b: bytes) -> str:
+    try:
+        return hashlib.sha1(b).hexdigest()
+    except Exception:
+        return hashlib.sha1(str(b or b"").encode("utf-8", errors="replace")).hexdigest()
+
 
 def _norm_rel(rel: str) -> str:
     s = str(rel or "").strip().replace("\\", "/")
@@ -17,6 +24,17 @@ def _norm_rel(rel: str) -> str:
     while s.startswith("/"):
         s = s[1:]
     return s
+
+
+def offline_key_from_rel(rel: str) -> str:
+    """
+    Build a stable offline key compatible with JS encodeURIComponent(rel).
+
+    JS encodeURIComponent leaves: A-Z a-z 0-9 - _ . ! ~ * ' ( )
+    """
+    rel_s = _norm_rel(rel)
+    enc = quote(rel_s, safe="-_.!~*'()")
+    return f"offline:{enc}"
 
 
 def resolve_offline_rollout_path(codex_home: Path, rel: str) -> Optional[Path]:
@@ -164,6 +182,7 @@ def build_offline_messages(
     Parse rollout-*.jsonl into the same message schema as /api/messages.
     """
     rel_s = _norm_rel(rel)
+    off_key = str(offline_key or "").strip() or offline_key_from_rel(rel_s)
     try:
         tid = str(_parse_thread_id_from_filename(file_path) or "")
     except Exception:
@@ -187,8 +206,11 @@ def build_offline_messages(
                 text = str(item.get("text") or "")
             except Exception:
                 continue
-            hid = _sha1_hex(f"offline:{rel_s}:{kind}:{ts}:{text}")
-            mid = hid[:16]
+            # Stable offline id: off:${key}:${sha1(rawLine)}
+            # - Avoid collision with live 16-hex ids (DOM ids / caches / exports).
+            # - Raw-line hash is resilient to insertions that shift line numbers.
+            raw_hex = _sha1_hex_bytes(bline)
+            mid = f"off:{off_key}:{raw_hex}"
             msgs.append(
                 {
                     "id": mid,
@@ -199,7 +221,7 @@ def build_offline_messages(
                     "zh": "",
                     "translate_error": "",
                     "replay": True,
-                    "key": str(offline_key or ""),
+                    "key": str(off_key),
                     "thread_id": tid,
                     "file": str(file_path),
                     "line": int(line_no),
