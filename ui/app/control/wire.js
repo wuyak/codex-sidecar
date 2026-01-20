@@ -543,28 +543,27 @@ export function wireControlEvents(dom, state, helpers) {
 	    const quickBtn = dom && dom.exportPrefsQuickBtn ? dom.exportPrefsQuickBtn : null;
 	    const trBtn = dom && dom.exportPrefsTranslateBtn ? dom.exportPrefsTranslateBtn : null;
 	    if (!quickBtn && !trBtn) return;
-	    const apply = (next, sourceEl) => {
-	      const k = _sanitizeExportPrefsKey(_exportPrefsKey) || _sanitizeExportPrefsKey(state.currentKey);
-	      if (!k) return;
-	      const p = setExportPrefsForKey(k, next);
-	      _syncExportPrefsPanel(k, true);
-	      try { _renderBookmarkDrawerList(); } catch (_) {}
-	      try { if (sourceEl) _toastFromEl(sourceEl, `导出：${_exportPrefsText(p)}`, { durationMs: 1400 }); } catch (_) {}
-	    };
-	    try {
-	      if (quickBtn) quickBtn.addEventListener("click", () => {
-	        const k = _sanitizeExportPrefsKey(_exportPrefsKey) || _sanitizeExportPrefsKey(state.currentKey);
-	        const cur = getExportPrefsForKey(k);
-	        apply({ quick: !cur.quick, translate: !!cur.translate }, quickBtn);
-	      });
-	    } catch (_) {}
-	    try {
-	      if (trBtn) trBtn.addEventListener("click", () => {
-	        const k = _sanitizeExportPrefsKey(_exportPrefsKey) || _sanitizeExportPrefsKey(state.currentKey);
-	        const cur = getExportPrefsForKey(k);
-	        apply({ quick: !!cur.quick, translate: !cur.translate }, trBtn);
-	      });
-	    } catch (_) {}
+		    const apply = (next) => {
+		      const k = _sanitizeExportPrefsKey(_exportPrefsKey) || _sanitizeExportPrefsKey(state.currentKey);
+		      if (!k) return;
+		      setExportPrefsForKey(k, next);
+		      _syncExportPrefsPanel(k, true);
+		      try { _renderBookmarkDrawerList(); } catch (_) {}
+		    };
+		    try {
+		      if (quickBtn) quickBtn.addEventListener("click", () => {
+		        const k = _sanitizeExportPrefsKey(_exportPrefsKey) || _sanitizeExportPrefsKey(state.currentKey);
+		        const cur = getExportPrefsForKey(k);
+		        apply({ quick: !cur.quick, translate: !!cur.translate });
+		      });
+		    } catch (_) {}
+		    try {
+		      if (trBtn) trBtn.addEventListener("click", () => {
+		        const k = _sanitizeExportPrefsKey(_exportPrefsKey) || _sanitizeExportPrefsKey(state.currentKey);
+		        const cur = getExportPrefsForKey(k);
+		        apply({ quick: !!cur.quick, translate: !cur.translate });
+		      });
+		    } catch (_) {}
 
 	    try { _syncExportPrefsPanel(state.currentKey, true); } catch (_) {}
 	  };
@@ -1285,44 +1284,40 @@ export function wireControlEvents(dom, state, helpers) {
 		        const hidden = _ensureHiddenSet();
 		        if (!hidden.has(key)) hidden.add(key);
 		        saveHiddenThreads(hidden);
-	        _toastFromEl(btn, "监听：已关闭（已隐藏）");
-	        try { renderTabs(); } catch (_) {}
-	        _renderBookmarkDrawerList();
-	        if (String(state.currentKey || "all") === key) {
-	          await onSelectKey(_pickFallbackKey(key));
+		        try { renderTabs(); } catch (_) {}
+		        _renderBookmarkDrawerList();
+		        if (String(state.currentKey || "all") === key) {
+		          await onSelectKey(_pickFallbackKey(key));
 	        }
 	        return;
 	      }
-	      if (action === "listenOn") {
-	        const hidden = _ensureHiddenSet();
-	        if (hidden.has(key)) hidden.delete(key);
-	        saveHiddenThreads(hidden);
-	        _toastFromEl(btn, "监听：已开启（已恢复）");
-	        try { renderTabs(); } catch (_) {}
-	        _renderBookmarkDrawerList();
-	        return;
-	      }
+		      if (action === "listenOn") {
+		        const hidden = _ensureHiddenSet();
+		        if (hidden.has(key)) hidden.delete(key);
+		        saveHiddenThreads(hidden);
+		        try { renderTabs(); } catch (_) {}
+		        _renderBookmarkDrawerList();
+		        return;
+		      }
 	      if (action === "remove") {
 	        const hidden = _ensureHiddenSet();
 	        if (!hidden.has(key)) hidden.add(key);
 	        saveHiddenThreads(hidden);
-        _toastFromEl(btn, "已从标签栏移除");
-        try { renderTabs(); } catch (_) {}
-        _renderBookmarkDrawerList();
-        if (String(state.currentKey || "all") === key) {
-          await onSelectKey(_pickFallbackKey(key));
+	        try { renderTabs(); } catch (_) {}
+	        _renderBookmarkDrawerList();
+	        if (String(state.currentKey || "all") === key) {
+	          await onSelectKey(_pickFallbackKey(key));
         }
         return;
       }
-      if (action === "restore") {
-        const hidden = _ensureHiddenSet();
-        if (hidden.has(key)) hidden.delete(key);
-        saveHiddenThreads(hidden);
-        _toastFromEl(btn, "已恢复到标签栏");
-        try { renderTabs(); } catch (_) {}
-        _renderBookmarkDrawerList();
-        return;
-      }
+	      if (action === "restore") {
+	        const hidden = _ensureHiddenSet();
+	        if (hidden.has(key)) hidden.delete(key);
+	        saveHiddenThreads(hidden);
+	        try { renderTabs(); } catch (_) {}
+	        _renderBookmarkDrawerList();
+	        return;
+	      }
       return;
     }
 
