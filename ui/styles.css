@@ -729,8 +729,17 @@
 			        color: rgba(226,232,240,.98);
 			        border-color: rgba(148,163,184,.22);
 			      }
-			      .float-nav button:hover::before,
-			      .float-nav button:focus-visible::before { opacity: 1; transform: translateY(-50%) translateX(0); }
+				      .float-nav button:hover::before,
+				      .float-nav button:focus-visible::before { opacity: 1; transform: translateY(-50%) translateX(0); }
+				      /* 会话管理按钮：提示移到左上方，避免遮挡底部标签栏 */
+				      #bookmarkDrawerToggleBtn[aria-label]::before {
+				        right: 0;
+				        top: auto;
+				        bottom: calc(100% + 10px);
+				        transform: translateY(4px);
+				      }
+				      #bookmarkDrawerToggleBtn:hover::before,
+				      #bookmarkDrawerToggleBtn:focus-visible::before { transform: translateY(0); }
 		      #scrollBottomBtn.has-unread { position: relative; }
 	      #scrollBottomBtn.has-unread::after {
 	        content: attr(data-unread);

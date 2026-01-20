@@ -310,20 +310,24 @@
 					        <div id="translateErrorText" class="meta form-error" style="margin-top:6px;"></div>
 					      </div>
 						    </div>
-						    <div id="bookmarkDrawerOverlay" class="drawer-overlay hidden"></div>
-						    <div id="bookmarkDrawer" class="drawer hidden" role="dialog" aria-modal="true" aria-label="会话管理">
-						      <div class="drawer-head">
-						        <div class="title">会话管理</div>
-						        <button id="bookmarkDrawerCloseBtn" class="drawer-close" type="button" aria-label="关闭">×</button>
-						      </div>
-						      <div class="drawer-sec">
-							        <div id="bookmarkList" class="tabs" style="margin-top:10px;"></div>
-							        <details id="bookmarkHiddenDetails" class="drawer-details" style="margin-top:10px;">
-							          <summary class="meta">已关闭监听 <span id="bookmarkHiddenCount" class="pill">0</span></summary>
-							          <div id="bookmarkHiddenList" class="tabs" style="margin-top:10px;"></div>
-							        </details>
-						      </div>
-						    </div>
+							    <div id="bookmarkDrawerOverlay" class="drawer-overlay hidden"></div>
+							    <div id="bookmarkDrawer" class="drawer hidden" role="dialog" aria-modal="true" aria-label="会话管理">
+							      <div class="drawer-head">
+							        <div class="title">会话管理</div>
+							        <button id="bookmarkDrawerCloseBtn" class="drawer-close" type="button" aria-label="关闭">×</button>
+							      </div>
+							      <div class="drawer-sec">
+								        <div class="drawer-subhead" style="display:flex; align-items:center; gap:10px; margin-top:4px;">
+								          <span class="meta">标签页栏</span>
+								          <button id="bookmarkTabsToggleBtn" class="pill pill-btn" type="button" aria-pressed="false" style="margin-left:auto;">已展开</button>
+								        </div>
+								        <div id="bookmarkList" class="tabs" style="margin-top:10px;"></div>
+								        <details id="bookmarkHiddenDetails" class="drawer-details" style="margin-top:10px;">
+								          <summary class="meta">已关闭监听 <span id="bookmarkHiddenCount" class="pill">0</span></summary>
+								          <div id="bookmarkHiddenList" class="tabs" style="margin-top:10px;"></div>
+								        </details>
+							      </div>
+							    </div>
 						    <dialog id="quickViewDialog" class="popup-dialog" role="dialog" aria-label="精简显示">
 						      <div class="popup-dialog-form">
 						        <div class="popup-head">
@@ -372,11 +376,11 @@
 						        </div>
 						      </form>
 						    </dialog>
-						    <div class="float-nav" aria-label="scroll">
-						      <button id="scrollTopBtn" type="button" aria-label="回到页面顶部"><svg class="ico" aria-hidden="true"><use href="#i-arrow-up"></use></svg></button>
-						      <button id="scrollBottomBtn" type="button" aria-label="回到页面底部"><svg class="ico" aria-hidden="true"><use href="#i-arrow-down"></use></svg></button>
-								      <button id="bookmarkDrawerToggleBtn" class="bm-menu-btn" type="button" aria-label="会话管理（长按可显示标签页）"><svg class="ico" aria-hidden="true"><use href="#i-menu"></use></svg></button>
-							    </div>
+							    <div class="float-nav" aria-label="scroll">
+							      <button id="scrollTopBtn" type="button" aria-label="回到页面顶部"><svg class="ico" aria-hidden="true"><use href="#i-arrow-up"></use></svg></button>
+							      <button id="scrollBottomBtn" type="button" aria-label="回到页面底部"><svg class="ico" aria-hidden="true"><use href="#i-arrow-down"></use></svg></button>
+									      <button id="bookmarkDrawerToggleBtn" class="bm-menu-btn" type="button" aria-label="会话管理"><svg class="ico" aria-hidden="true"><use href="#i-menu"></use></svg></button>
+								    </div>
 		    <script defer src="/ui/vendor/katex/katex.min.js"></script>
 		    <script defer src="/ui/vendor/katex/auto-render.min.js"></script>
 		    <script type="module" src="/ui/app.js"></script>

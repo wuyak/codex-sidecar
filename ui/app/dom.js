@@ -9,6 +9,7 @@ export function getDom() {
     bookmarkDrawerOverlay: byId("bookmarkDrawerOverlay"),
     bookmarkDrawer: byId("bookmarkDrawer"),
     bookmarkDrawerCloseBtn: byId("bookmarkDrawerCloseBtn"),
+    bookmarkTabsToggleBtn: byId("bookmarkTabsToggleBtn"),
     bookmarkList: byId("bookmarkList"),
     bookmarkHiddenDetails: byId("bookmarkHiddenDetails"),
     bookmarkHiddenCount: byId("bookmarkHiddenCount"),
