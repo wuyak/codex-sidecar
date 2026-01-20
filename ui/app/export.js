@@ -284,6 +284,35 @@ function _details(summary, body) {
   return ["<details>", `<summary>${s}</summary>`, "", b, "", "</details>"].join("\n").trimEnd();
 }
 
+function _escapeHtml(s) {
+  try {
+    return String(s ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;");
+  } catch (_) {
+    const raw = String(s ?? "");
+    return raw
+      .split("&").join("&amp;")
+      .split("<").join("&lt;")
+      .split(">").join("&gt;");
+  }
+}
+
+function _sanitizeLangClass(lang) {
+  const s = String(lang || "").trim().toLowerCase();
+  if (!s) return "";
+  return s.replace(/[^a-z0-9_-]/g, "");
+}
+
+function _htmlCodeBlock(text, lang = "") {
+  const src = String(text ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").trimEnd();
+  if (!src) return "";
+  const cls = _sanitizeLangClass(lang);
+  const klass = cls ? ` class="language-${cls}"` : "";
+  return `<pre><code${klass}>${_escapeHtml(src)}</code></pre>`;
+}
+
 function _isSuppressedToolCallTool(toolName) {
   const t = String(toolName || "").trim();
   return t === "shell_command" || t === "apply_patch" || t === "view_image";
@@ -316,9 +345,10 @@ function _renderToolOutputMd(outputRaw, meta) {
     const blocks = [];
     if (runShort) blocks.push(_safeCodeFence(runShort, "text"));
     const detailParts = [];
-    if (runLong && runLong !== runShort) detailParts.push(_safeCodeFence(runLong, "text"));
-    if (patchText) detailParts.push(_safeCodeFence(patchText, "diff"));
-    if (detailParts.length) blocks.push(_details("详情", detailParts.join("\n\n")));
+    // Use pure HTML for foldable details so Typora can actually collapse it (markdown fences inside <details> are unreliable).
+    if (runLong && runLong !== runShort) detailParts.push(_htmlCodeBlock(runLong, "text"));
+    if (patchText) detailParts.push(_htmlCodeBlock(patchText, "diff"));
+    if (detailParts.length) blocks.push(_details("详情", detailParts.join("\n")));
     return blocks.join("\n\n").trimEnd();
   }
 
@@ -329,9 +359,9 @@ function _renderToolOutputMd(outputRaw, meta) {
     const blocks = [];
     if (runShort) blocks.push(_safeCodeFence(runShort, "text"));
     const detailParts = [];
-    if (runLong && runLong !== runShort) detailParts.push(_safeCodeFence(runLong, "text"));
-    if (patchText) detailParts.push(_safeCodeFence(patchText, "diff"));
-    if (detailParts.length) blocks.push(_details("详情", detailParts.join("\n\n")));
+    if (runLong && runLong !== runShort) detailParts.push(_htmlCodeBlock(runLong, "text"));
+    if (patchText) detailParts.push(_htmlCodeBlock(patchText, "diff"));
+    if (detailParts.length) blocks.push(_details("详情", detailParts.join("\n")));
     return blocks.join("\n\n").trimEnd();
   }
 
@@ -350,7 +380,7 @@ function _renderToolOutputMd(outputRaw, meta) {
   const runLong = formatOutputTree(header, lines, 120);
   const blocks = [];
   if (runShort) blocks.push(_safeCodeFence(runShort, "text"));
-  if (runLong && runLong !== runShort) blocks.push(_details("详情", _safeCodeFence(runLong, "text")));
+  if (runLong && runLong !== runShort) blocks.push(_details("详情", _htmlCodeBlock(runLong, "text")));
   return blocks.join("\n\n").trimEnd();
 }
 
