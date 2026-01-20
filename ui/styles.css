@@ -1052,16 +1052,20 @@
 			        height: 11px;
 			        stroke-width: 2.2;
 			      }
-			      .mini-btn.flag-tr .mini-flag.flag-tr {
-			        display: flex;
-			        top: -4px;
-			        right: -4px;
-			      }
-			      .mini-btn.flag-quick .mini-flag.flag-quick {
-			        display: flex;
-			        right: -4px;
-			        bottom: -4px;
-			      }
+				      .mini-btn.flag-tr .mini-flag.flag-tr {
+				        display: flex;
+				        top: -4px;
+				        bottom: auto;
+				        left: auto;
+				        right: -4px;
+				      }
+				      .mini-btn.flag-quick .mini-flag.flag-quick {
+				        display: flex;
+				        right: -4px;
+				        left: auto;
+				        top: auto;
+				        bottom: -4px;
+				      }
 			      body[data-bm-skin="dark"] .mini-btn .mini-flag {
 			        border-color: rgba(148,163,184,.22);
 			        background: rgba(15,23,42,.92);

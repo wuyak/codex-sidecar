@@ -389,6 +389,16 @@ export function upsertThread(state, msg) {
   const kind = String(msg && msg.kind ? msg.kind : "");
   const isGate = kind === "tool_gate";
 
+  // Keep stable identifiers: some events may omit fields; fill them in when available.
+  try {
+    const fp = String(msg && msg.file ? msg.file : "").trim();
+    if (fp && (!prev.file || String(prev.file || "").trim() !== fp)) prev.file = fp;
+  } catch (_) {}
+  try {
+    const tid = String(msg && msg.thread_id ? msg.thread_id : "").trim();
+    if (tid && (!prev.thread_id || String(prev.thread_id || "").trim() !== tid)) prev.thread_id = tid;
+  } catch (_) {}
+
   // Keep kinds for closed-thread baseline comparisons (avoid waking closed sessions on gate noise).
   try {
     if (!prev.kinds || typeof prev.kinds !== "object") prev.kinds = {};
@@ -405,16 +415,28 @@ export function upsertThread(state, msg) {
   }
   state.threadIndex.set(key, prev);
   try {
-    // “关闭监听”仅是临时 UI 行为：如果该会话有新输出，自动回到标签栏。
+    // “清除对话”是临时 UI 行为：该会话有新输出后自动回到列表。
     const closed = (state && state.closedThreads && typeof state.closedThreads.get === "function") ? state.closedThreads : null;
     if (closed && closed.has(key)) {
       const info = closed.get(key) || {};
-      const atKinds = (info.at_kinds && typeof info.at_kinds === "object") ? info.at_kinds : {};
-      const curKinds = (prev.kinds && typeof prev.kinds === "object") ? prev.kinds : {};
-      const hasNewDialog = (Number(curKinds.assistant_message) || 0) > (Number(atKinds.assistant_message) || 0)
-        || (Number(curKinds.user_message) || 0) > (Number(atKinds.user_message) || 0)
-        || (Number(curKinds.reasoning_summary) || 0) > (Number(atKinds.reasoning_summary) || 0);
-      if (hasNewDialog) {
+      const atSeq = Number(info.at_seq) || 0;
+      const atCount = Number(info.at_count) || 0;
+      const atTs = String(info.at_ts || "");
+      const curSeq = Number(prev.last_seq) || 0;
+      const curCount = Number(prev.count) || 0;
+      const curTs = String(prev.last_ts || "");
+      let hasNew = false;
+      if (curSeq && curSeq > atSeq) hasNew = true;
+      else if (curCount && curCount > atCount) hasNew = true;
+      else if (curTs && atTs && curTs > atTs) hasNew = true;
+      else {
+        const atKinds = (info.at_kinds && typeof info.at_kinds === "object") ? info.at_kinds : {};
+        const curKinds = (prev.kinds && typeof prev.kinds === "object") ? prev.kinds : {};
+        hasNew = (Number(curKinds.assistant_message) || 0) > (Number(atKinds.assistant_message) || 0)
+          || (Number(curKinds.user_message) || 0) > (Number(atKinds.user_message) || 0)
+          || (Number(curKinds.reasoning_summary) || 0) > (Number(atKinds.reasoning_summary) || 0);
+      }
+      if (hasNew) {
         closed.delete(key);
         try { saveClosedThreads(closed); } catch (_) {}
       }
@@ -497,30 +519,14 @@ export function renderTabs(dom, state, onSelectKey) {
     else renderTabs(dom, state, onSelectKey);
   };
 
-  const _ensureClosedMap = () => {
-    if (!state.closedThreads || typeof state.closedThreads.set !== "function") state.closedThreads = new Map();
-    return state.closedThreads;
-  };
-
   const _closeKey = async (key, labelForToast = "", sourceEl = null) => {
     const k = String(key || "").trim();
     if (!k || k === "all") return;
-    const t = state.threadIndex.get(k) || { last_seq: 0 };
-    const atSeq = Number(t && t.last_seq) || 0;
-    const kk = (t && t.kinds && typeof t.kinds === "object") ? t.kinds : {};
-    const m = _ensureClosedMap();
-    m.set(k, {
-      at_seq: atSeq,
-      at_count: Number(t && t.count) || 0,
-      at_ts: String((t && t.last_ts) ? t.last_ts : ""),
-      at_kinds: {
-        assistant_message: Number(kk.assistant_message) || 0,
-        user_message: Number(kk.user_message) || 0,
-        reasoning_summary: Number(kk.reasoning_summary) || 0,
-      },
-    });
-    try { saveClosedThreads(m); } catch (_) {}
-    _toastFromEl(sourceEl || host, "已临时关闭（有新输出会自动回来）", { durationMs: 1600 });
+    const s = _ensureHiddenSet();
+    if (s.has(k)) return;
+    s.add(k);
+    saveHiddenThreads(s);
+    _toastFromEl(sourceEl || host, `监听：已关闭（可在“会话管理→已关闭监听”恢复）`, { durationMs: 1800 });
     if (String(state.currentKey || "all") === k) await onSelectKey(_pickFallbackKey(state, k));
     else renderTabs(dom, state, onSelectKey);
   };

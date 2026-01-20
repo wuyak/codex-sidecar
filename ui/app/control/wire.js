@@ -857,20 +857,27 @@ export function wireControlEvents(dom, state, helpers) {
 	                } catch (_) {}
 	                return true;
 	              };
-	              const hintText = "长按可复制源 JSON 路径";
-	              const update = (e) => {
-	                if (!tracking) return;
-	                if (row.classList && row.classList.contains("editing")) return;
-	                const x = Number(e && e.clientX) || 0;
-	                const ar = actions && typeof actions.getBoundingClientRect === "function" ? actions.getBoundingClientRect() : null;
-	                if (ar && x >= (ar.left - 2)) { _hideUiHoverTip(); return; }
-	                _showUiHoverTip(row, hintText, { insetX: 12, gap: 6, pad: 10, prefer: "below" });
-	              };
-	              row.addEventListener("pointerenter", (e) => { if (!canHover(e)) return; tracking = true; update(e); });
-	              row.addEventListener("pointermove", update);
-	              row.addEventListener("pointerleave", (e) => { if (!canHover(e)) return; tracking = false; _hideUiHoverTip(); });
-	            }
-	          } catch (_) {}
+		              const hintText = "长按可复制源 JSON 路径";
+		              const update = (e) => {
+		                if (!tracking) return;
+		                if (row.classList && row.classList.contains("editing")) return;
+		                try {
+		                  const t = e && e.target;
+		                  if (t && t.closest && t.closest(".tab-actions")) { _hideUiHoverTip(); return; }
+		                } catch (_) {}
+		                const x = Number(e && e.clientX) || 0;
+		                const ar = actions && typeof actions.getBoundingClientRect === "function" ? actions.getBoundingClientRect() : null;
+		                if (ar && x >= (ar.left - 2)) { _hideUiHoverTip(); return; }
+		                _showUiHoverTip(row, hintText, { insetX: 12, gap: 6, pad: 10, prefer: "below" });
+		              };
+		              row.addEventListener("pointerenter", (e) => { if (!canHover(e)) return; tracking = true; update(e); });
+		              row.addEventListener("pointermove", update);
+		              row.addEventListener("pointerleave", (e) => { if (!canHover(e)) return; tracking = false; _hideUiHoverTip(); });
+		              try {
+		                actions.addEventListener("pointerenter", (e) => { if (!canHover(e)) return; _hideUiHoverTip(); });
+		              } catch (_) {}
+		            }
+		          } catch (_) {}
 	          // Long-press: copy JSON source path (explicit action; no hover hints).
 	          try {
 	            const filePath = String(it.file || "").trim();
@@ -1115,39 +1122,48 @@ export function wireControlEvents(dom, state, helpers) {
 			        _toastFromEl(btn, r && r.ok ? "已导出" : "导出失败");
 			        return;
 			      }
-		      if (action === "delete") {
-		        const labelText = row && row.dataset ? String(row.dataset.label || "") : "";
-		        const ok = await confirmDialog(dom, {
-		          title: "清除该会话？",
-		          desc: `将从会话列表清除：${labelText || key}\n（不会删除原始会话文件；有新输出会自动回来）`,
-		          confirmText: "清除",
-		          cancelText: "取消",
-		          danger: true,
-		        });
-		        if (!ok) return;
-		        const t0 = state.threadIndex.get(key) || { last_seq: 0 };
-		        const atSeq = Number(t0 && t0.last_seq) || 0;
-		        const kk = (t0 && t0.kinds && typeof t0.kinds === "object") ? t0.kinds : {};
-		        const m = (state.closedThreads && typeof state.closedThreads.set === "function") ? state.closedThreads : (state.closedThreads = new Map());
-		        m.set(key, {
-		          at_seq: atSeq,
-		          at_count: Number(t0 && t0.count) || 0,
-		          at_ts: String((t0 && t0.last_ts) ? t0.last_ts : ""),
-		          at_kinds: {
-		            assistant_message: Number(kk.assistant_message) || 0,
-		            user_message: Number(kk.user_message) || 0,
-		            reasoning_summary: Number(kk.reasoning_summary) || 0,
-		          },
-		        });
-		        try { saveClosedThreads(m); } catch (_) {}
-		        _toastFromEl(btn, "已清除（有新输出会自动回来）");
-		        try { renderTabs(); } catch (_) {}
-		        _renderBookmarkDrawerList();
-		        if (String(state.currentKey || "all") === key) {
-		          await onSelectKey(_pickFallbackKey(key));
-		        }
-		        return;
-		      }
+			      if (action === "delete") {
+			        const labelText = row && row.dataset ? String(row.dataset.label || "") : "";
+			        const ok = await confirmDialog(dom, {
+			          title: "清除该会话？",
+			          desc: `将从会话列表清除：${labelText || key}\n（不会删除原始会话文件；有新输出会自动回来）`,
+			          confirmText: "清除",
+			          cancelText: "取消",
+			          danger: true,
+			        });
+			        if (!ok) return;
+			        // “清除对话”仅用于清理僵尸会话：不应永久落入“已关闭监听”。
+			        try {
+			          const hidden = _ensureHiddenSet();
+			          if (hidden && typeof hidden.delete === "function" && hidden.has(key)) {
+			            hidden.delete(key);
+			            saveHiddenThreads(hidden);
+			          }
+			        } catch (_) {}
+			        const t0 = state.threadIndex.get(key) || { last_seq: 0 };
+			        const atSeq = Number(t0 && t0.last_seq) || 0;
+			        const kk = (t0 && t0.kinds && typeof t0.kinds === "object") ? t0.kinds : {};
+			        const m = (state.closedThreads && typeof state.closedThreads.set === "function") ? state.closedThreads : (state.closedThreads = new Map());
+			        m.set(key, {
+			          at_seq: atSeq,
+			          at_count: Number(t0 && t0.count) || 0,
+			          at_ts: String((t0 && t0.last_ts) ? t0.last_ts : ""),
+			          at_ms: Date.now(),
+			          at_kinds: {
+			            assistant_message: Number(kk.assistant_message) || 0,
+			            user_message: Number(kk.user_message) || 0,
+			            reasoning_summary: Number(kk.reasoning_summary) || 0,
+			          },
+			        });
+			        try { saveClosedThreads(m); } catch (_) {}
+			        _toastFromEl(btn, "已清除（有新输出会自动回来）");
+			        try { renderTabs(); } catch (_) {}
+			        _renderBookmarkDrawerList();
+			        if (String(state.currentKey || "all") === key) {
+			          await onSelectKey("all");
+			        }
+			        return;
+			      }
 		      if (action === "listenOff") {
 		        const hidden = _ensureHiddenSet();
 		        if (!hidden.has(key)) hidden.add(key);

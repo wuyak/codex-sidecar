@@ -121,9 +121,17 @@ export function pruneClosedThreads(state) {
         continue;
       }
 
-      // Unclose only when dialog kinds advance beyond the baseline.
-      // This avoids “tool_gate/终端确认” noise waking closed sessions.
-      if (_hasNewDialogKinds(curKinds, info.at_kinds)) {
+      // Unclose when any meaningful content advances beyond the baseline.
+      // Note: tool_gate does not bump last_seq/count in upsertThread, so it won't wake cleared sessions.
+      const curSeq = Math.max(0, Number(t && t.last_seq) || 0);
+      const curCount = Math.max(0, Number(t && t.count) || 0);
+      const atSeq = Math.max(0, Number(info.at_seq) || 0);
+      const atCount = Math.max(0, Number(info.at_count) || 0);
+      const hasNew = (curSeq > atSeq)
+        || (curCount > atCount)
+        || (lastTs && atTs && lastTs > atTs)
+        || _hasNewDialogKinds(curKinds, info.at_kinds);
+      if (hasNew) {
         try { closed.delete(k0); } catch (_) {}
         changed = true;
       } else if (!info.at_ms) {
