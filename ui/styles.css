@@ -40,8 +40,8 @@
 
 						        /* z-index 量表（避免“随手拉大”导致层级失控） */
 						        --z-rightbar: 40;
-						        --z-float-nav: 45;
 						        --z-bookmarks: 50;
+						        --z-float-nav: 52;
 						        --z-bookmark-drawer-overlay: 60;
 						        --z-bookmark-drawer: 61;
 						        --z-drawer-overlay: 70;
