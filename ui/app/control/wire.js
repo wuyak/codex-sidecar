@@ -656,9 +656,7 @@ export function wireControlEvents(dom, state, helpers) {
 	          const sub = document.createElement("span");
 	          sub.className = "tab-sub";
 	          try {
-	            const hint = "长按复制对话 JSON 路径";
-	            const followFiles = (state && Array.isArray(state.statusFollowFiles)) ? state.statusFollowFiles : [];
-	            sub.textContent = (followFiles.length && it.followed) ? `跟随中 · ${hint}` : hint;
+	            sub.textContent = "长按可复制源 JSON 路径";
 	          } catch (_) { sub.textContent = ""; }
 
 	        const input = document.createElement("input");
@@ -671,12 +669,12 @@ export function wireControlEvents(dom, state, helpers) {
         const actions = document.createElement("div");
         actions.className = "tab-actions";
 
-        const renameBtn = document.createElement("button");
+	        const renameBtn = document.createElement("button");
 	        renameBtn.className = "mini-btn";
 	        renameBtn.type = "button";
 	        renameBtn.dataset.action = "rename";
 	        renameBtn.setAttribute("aria-label", "重命名");
-	        renameBtn.title = "重命名";
+	        try { renameBtn.removeAttribute("title"); } catch (_) {}
 	        renameBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="#i-edit"></use></svg>`;
 
 		        const exportBtn = document.createElement("button");
@@ -691,7 +689,7 @@ export function wireControlEvents(dom, state, helpers) {
 		          try { exportBtn.classList.remove("flag-quick"); } catch (_) {}
 		          try { exportBtn.classList.remove("flag-tr"); } catch (_) {}
 		        }
-		        exportBtn.setAttribute("aria-label", "导出（长按设置）");
+		        exportBtn.setAttribute("aria-label", "导出（长按设置导出模式）");
 		        try { exportBtn.removeAttribute("title"); } catch (_) {}
 		        exportBtn.innerHTML = `
 		          <svg class="ico" aria-hidden="true"><use href="#i-download"></use></svg>
@@ -750,20 +748,20 @@ export function wireControlEvents(dom, state, helpers) {
           });
         } catch (_) {}
 
-        const toggleBtn = document.createElement("button");
+	        const toggleBtn = document.createElement("button");
 	        toggleBtn.className = "mini-btn";
 	        toggleBtn.type = "button";
 	        toggleBtn.dataset.action = isHiddenList ? "listenOn" : "listenOff";
 	        toggleBtn.setAttribute("aria-label", isHiddenList ? "开启监听" : "关闭监听");
-	        toggleBtn.title = isHiddenList ? "开启监听" : "关闭监听";
+	        try { toggleBtn.removeAttribute("title"); } catch (_) {}
 	        toggleBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="${isHiddenList ? "#i-eye" : "#i-eye-closed"}"></use></svg>`;
 	
 	        const delBtn = document.createElement("button");
 	        delBtn.className = "mini-btn danger";
 	        delBtn.type = "button";
 	        delBtn.dataset.action = "delete";
-	        delBtn.setAttribute("aria-label", "清除会话");
-	        delBtn.title = "清除会话";
+	        delBtn.setAttribute("aria-label", "清除对话");
+	        try { delBtn.removeAttribute("title"); } catch (_) {}
 	        delBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="#i-trash"></use></svg>`;
 
 		        actions.appendChild(renameBtn);
