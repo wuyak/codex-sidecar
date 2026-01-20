@@ -16,6 +16,8 @@ import {
   statusIcon,
 } from "./format.js";
 
+const _EXPORT_ENGINE_TAG = "md_fence_v2_20260120_1650";
+
 function _extractUuid(s) {
   const raw = String(s || "");
   if (!raw) return "";
@@ -281,36 +283,8 @@ function _extractApplyPatchFromShellCommand(cmdFull) {
 function _details(summary, body) {
   const s = String(summary || "详情").trim() || "详情";
   const b = String(body || "").trimEnd();
-  return ["<details>", `<summary>${s}</summary>`, "", b, "", "</details>"].join("\n").trimEnd();
-}
-
-function _escapeHtml(s) {
-  try {
-    return String(s ?? "")
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;");
-  } catch (_) {
-    const raw = String(s ?? "");
-    return raw
-      .split("&").join("&amp;")
-      .split("<").join("&lt;")
-      .split(">").join("&gt;");
-  }
-}
-
-function _sanitizeLangClass(lang) {
-  const s = String(lang || "").trim().toLowerCase();
-  if (!s) return "";
-  return s.replace(/[^a-z0-9_-]/g, "");
-}
-
-function _htmlCodeBlock(text, lang = "") {
-  const src = String(text ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").trimEnd();
-  if (!src) return "";
-  const cls = _sanitizeLangClass(lang);
-  const klass = cls ? ` class="language-${cls}"` : "";
-  return `<pre><code${klass}>${_escapeHtml(src)}</code></pre>`;
+  // Export target is Markdown: avoid HTML <details>/<summary> for better portability across renderers.
+  return [`**${s}**`, "", b].join("\n").trimEnd();
 }
 
 function _isSuppressedToolCallTool(toolName) {
@@ -345,10 +319,9 @@ function _renderToolOutputMd(outputRaw, meta) {
     const blocks = [];
     if (runShort) blocks.push(_safeCodeFence(runShort, "text"));
     const detailParts = [];
-    // Use pure HTML for foldable details so Typora can actually collapse it (markdown fences inside <details> are unreliable).
-    if (runLong && runLong !== runShort) detailParts.push(_htmlCodeBlock(runLong, "text"));
-    if (patchText) detailParts.push(_htmlCodeBlock(patchText, "diff"));
-    if (detailParts.length) blocks.push(_details("详情", detailParts.join("\n")));
+    if (runLong && runLong !== runShort) detailParts.push(_safeCodeFence(runLong, "text"));
+    if (patchText) detailParts.push(_safeCodeFence(patchText, "diff"));
+    if (detailParts.length) blocks.push(_details("详情", detailParts.join("\n\n")));
     return blocks.join("\n\n").trimEnd();
   }
 
@@ -359,9 +332,9 @@ function _renderToolOutputMd(outputRaw, meta) {
     const blocks = [];
     if (runShort) blocks.push(_safeCodeFence(runShort, "text"));
     const detailParts = [];
-    if (runLong && runLong !== runShort) detailParts.push(_htmlCodeBlock(runLong, "text"));
-    if (patchText) detailParts.push(_htmlCodeBlock(patchText, "diff"));
-    if (detailParts.length) blocks.push(_details("详情", detailParts.join("\n")));
+    if (runLong && runLong !== runShort) detailParts.push(_safeCodeFence(runLong, "text"));
+    if (patchText) detailParts.push(_safeCodeFence(patchText, "diff"));
+    if (detailParts.length) blocks.push(_details("详情", detailParts.join("\n\n")));
     return blocks.join("\n\n").trimEnd();
   }
 
@@ -380,7 +353,7 @@ function _renderToolOutputMd(outputRaw, meta) {
   const runLong = formatOutputTree(header, lines, 120);
   const blocks = [];
   if (runShort) blocks.push(_safeCodeFence(runShort, "text"));
-  if (runLong && runLong !== runShort) blocks.push(_details("详情", _htmlCodeBlock(runLong, "text")));
+  if (runLong && runLong !== runShort) blocks.push(_details("详情", _safeCodeFence(runLong, "text")));
   return blocks.join("\n\n").trimEnd();
 }
 
@@ -455,12 +428,9 @@ function _renderReasoning(m, opts = {}) {
     if (zh) parts.push(zh.trimEnd());
     if (en) {
       parts.push("");
-      parts.push("<details>");
-      parts.push("<summary>English</summary>");
+      parts.push("**English**");
       parts.push("");
       parts.push(en.trimEnd());
-      parts.push("");
-      parts.push("</details>");
     }
     return _balanceFences(parts.join("\n").trimEnd());
   }
@@ -585,6 +555,7 @@ export async function exportThreadMarkdown(state, key, opts = {}) {
   lines.push(`| 导出时间 | ${_fmtLocal(now)} |`);
   lines.push(`| 导出模式 | ${modeLabel} |`);
   lines.push(`| 思考语言 | ${thinkMode} |`);
+  lines.push(`| 导出引擎 | \`${_EXPORT_ENGINE_TAG}\` |`);
   try {
     if (translateStat && translateStat.queued) {
       lines.push(`| 导出翻译 | 已触发 ${translateStat.queued} 条（已就绪 ${translateStat.filled} 条，等待 ${translateStat.waited_ms}ms） |`);

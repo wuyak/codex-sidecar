@@ -88,3 +88,5 @@
 - 202601192233_ui_settings_cleanup_tabs_rename
 - 202601192251_ui_hint_refactor
 - 202601192302_ui_tabs_stable_order_badge
+- 202601201624_ui_no_drift_toggle
+- 202601201829_session_restart_restore

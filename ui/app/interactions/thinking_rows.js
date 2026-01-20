@@ -1,5 +1,5 @@
 import { flashToastAt } from "../utils/toast.js";
-import { stabilizeClickWithin } from "../utils/anchor.js";
+import { stabilizeToggleNoDrift } from "../utils/anchor.js";
 import { buildThinkingMetaRight } from "../thinking/meta.js";
 
 function _defaultThinkMode(hasZh) {
@@ -200,11 +200,12 @@ export function wireThinkingRowActions(dom, state) {
     const cur = _getRowThinkMode(row);
     const next = (cur === "zh") ? "en" : "zh";
     _setThinkModeOverride(state, mid, next, true);
-    try {
-      row.classList.remove("think-mode-en", "think-mode-zh", "think-mode-both");
-      row.classList.add(`think-mode-${next}`);
-    } catch (_) {}
-    _updateThinkingMetaRight(state, row, mid);
-    try { stabilizeClickWithin(row, Number(e && e.clientY) || 0); } catch (_) {}
+    stabilizeToggleNoDrift(row, () => {
+      try {
+        row.classList.remove("think-mode-en", "think-mode-zh", "think-mode-both");
+        row.classList.add(`think-mode-${next}`);
+      } catch (_) {}
+      _updateThinkingMetaRight(state, row, mid);
+    });
   });
 }

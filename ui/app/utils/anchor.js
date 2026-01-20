@@ -24,3 +24,35 @@ export function stabilizeClickWithin(el, clientY, opts = {}) {
   });
 }
 
+export function stabilizeToggleNoDrift(anchorEl, mutate, opts = {}) {
+  const el = anchorEl;
+  const fn = (typeof mutate === "function") ? mutate : null;
+  if (!el || typeof el.getBoundingClientRect !== "function") {
+    try { if (fn) fn(); } catch (_) {}
+    return;
+  }
+
+  let top0 = NaN;
+  try { top0 = Number(el.getBoundingClientRect().top); } catch (_) { top0 = NaN; }
+  const seq = (el.__stbSeq = (Number(el.__stbSeq) || 0) + 1);
+
+  try { if (fn) fn(); } catch (_) {}
+
+  const minDy = Number.isFinite(Number(opts.minDy)) ? Number(opts.minDy) : 1;
+  const maxDy = Number.isFinite(Number(opts.maxDy)) ? Number(opts.maxDy) : (Number(window.innerHeight) || 0);
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      try {
+        if (!el || el.__stbSeq !== seq) return;
+        if (el.isConnected === false) return;
+        const top1 = Number(el.getBoundingClientRect().top);
+        const dy = top1 - top0;
+        if (!Number.isFinite(dy)) return;
+        if (Math.abs(dy) < minDy) return;
+        if (maxDy > 0 && Math.abs(dy) > maxDy) return;
+        window.scrollBy(0, dy);
+      } catch (_) {}
+    });
+  });
+}

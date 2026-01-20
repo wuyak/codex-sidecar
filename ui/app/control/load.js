@@ -3,6 +3,7 @@ import { api } from "./api.js";
 import { applyProfileToInputs, normalizeHttpProfiles, refreshHttpProfileSelect } from "./http_profiles.js";
 import { setTopStatusSummary, showProviderBlocks } from "./ui.js";
 import { preloadNotifySound } from "../sound.js";
+import { resetClosedThreadsOnProcessChange } from "../closed_threads.js";
 
 const _LS_UI_FONT = "codex_sidecar_ui_font_size";
 const _LS_UI_BTN = "codex_sidecar_ui_btn_size";
@@ -250,6 +251,14 @@ export async function loadControl(dom, state) {
   let st = null;
   try {
     st = await fetch(`/api/status?t=${ts}`, { cache: "no-store" }).then(r => r.json());
+    // “清除会话”是 UI 级别的临时清理：进程重启后应恢复可见，避免跨进程永久隐藏。
+    try {
+      const pid = (st && typeof st === "object") ? (st.pid ?? "") : "";
+      const r = resetClosedThreadsOnProcessChange(state, pid);
+      if (r && r.changed) {
+        try { if (state) state.threadsDirty = true; } catch (_) {}
+      }
+    } catch (_) {}
     const w = (st && st.watcher) ? st.watcher : {};
     const fs = Array.isArray(w.follow_files) ? w.follow_files : [];
 

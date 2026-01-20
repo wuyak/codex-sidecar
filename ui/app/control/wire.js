@@ -1265,7 +1265,7 @@ export function wireControlEvents(dom, state, helpers) {
 			        const labelText = row && row.dataset ? String(row.dataset.label || "") : "";
 			        const ok = await confirmDialog(dom, {
 			          title: "清除该会话？",
-			          desc: `将从会话列表清除：${labelText || key}\n（不会删除原始会话文件；有新输出会自动回来）`,
+			          desc: `将从会话列表清除：${labelText || key}\n（不会删除原始会话文件；有新输出或重启后会自动回来）`,
 			          confirmText: "清除",
 			          cancelText: "取消",
 			          danger: true,
@@ -1295,7 +1295,7 @@ export function wireControlEvents(dom, state, helpers) {
 			          },
 			        });
 			        try { saveClosedThreads(m); } catch (_) {}
-			        _toastFromEl(btn, "已清除（有新输出会自动回来）");
+			        _toastFromEl(btn, "已清除（有新输出或重启后会自动回来）");
 			        try { renderTabs(); } catch (_) {}
 			        _renderBookmarkDrawerList();
 			        if (String(state.currentKey || "all") === key) {

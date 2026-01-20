@@ -35,7 +35,7 @@ class SidecarConfig:
     # Which CODEX_HOME to watch for sessions/rollout jsonl.
     watch_codex_home: str
 
-    replay_last_lines: int = 0
+    replay_last_lines: int = 200
     # 同时 tail 的会话文件数量（用于多会话并行，不依赖“锁定跟随”切换）。
     watch_max_sessions: int = 3
     poll_interval: float = 0.5
@@ -129,7 +129,7 @@ class SidecarConfig:
         return SidecarConfig(
             config_home=cfg_home,
             watch_codex_home=watch_home,
-            replay_last_lines=_to_int(d.get("replay_last_lines"), 0),
+            replay_last_lines=_to_int(d.get("replay_last_lines"), 200),
             watch_max_sessions=_to_int(d.get("watch_max_sessions") or d.get("max_sessions"), 3),
             poll_interval=_to_float(d.get("poll_interval"), 0.5),
             file_scan_interval=_to_float(d.get("file_scan_interval"), 2.0),
@@ -187,7 +187,7 @@ def default_config(config_home: Path) -> SidecarConfig:
     return SidecarConfig(
         config_home=cfg_home,
         watch_codex_home=_default_watch_codex_home(),
-        replay_last_lines=0,
+        replay_last_lines=200,
         watch_max_sessions=3,
         poll_interval=0.5,
         file_scan_interval=2.0,
@@ -267,6 +267,14 @@ def load_config(config_home: Path) -> SidecarConfig:
                                 save_config(config_home, cfg)
                             except Exception:
                                 pass
+            except Exception:
+                pass
+            # Migration: older default replay_last_lines=0 caused empty session list after restart
+            # unless new output arrives. Align to CLI default (200) so “重启即恢复”开箱即用。
+            try:
+                if int(getattr(cfg, "replay_last_lines", 0) or 0) <= 0:
+                    cfg.replay_last_lines = 200
+                    save_config(config_home, cfg)
             except Exception:
                 pass
             return cfg
