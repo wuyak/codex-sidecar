@@ -8,6 +8,9 @@
     <link rel="stylesheet" href="/ui/styles.css" />
 		  </head>
 				  <body data-bm-skin="default">
+	          <div id="offlineBookmarks" class="bookmarks" aria-label="展示标签栏">
+	            <div class="bm-rail" aria-label="展示标签"></div>
+	          </div>
 	          <div id="bookmarks" class="bookmarks" aria-label="会话标签栏">
 	            <div class="bm-rail" aria-label="会话标签"></div>
 	          </div>
@@ -306,23 +309,26 @@
 							        </div>
 							      </div>
 							      <div class="drawer-sec">
+								        <div class="meta">监听中 <span id="bookmarkCount" class="pill">0</span></div>
 								        <div id="bookmarkList" class="tabs" style="margin-top:10px;"></div>
-								        <details id="bookmarkHiddenDetails" class="drawer-details" style="margin-top:10px;">
-								          <summary class="meta">已关闭监听 <span id="bookmarkHiddenCount" class="pill">0</span></summary>
-								          <div id="bookmarkHiddenList" class="tabs" style="margin-top:10px;"></div>
-								        </details>
 								        <details id="offlineDetails" class="drawer-details" style="margin-top:10px;">
-								          <summary class="meta">展示名单 <span id="offlineCount" class="pill">0</span></summary>
+								          <summary class="meta">展示中 <span id="offlineShowCount" class="pill">0</span></summary>
+								          <div id="offlineShowList" class="tabs" style="margin-top:10px;"></div>
+								          <div class="meta" style="margin-top:10px;">添加展示</div>
 								          <div class="grid grid-compact" style="margin-top:10px;">
 								            <div class="meta">指定 rel</div>
 								            <div class="profile-row">
 								              <input id="offlineRel" placeholder="sessions/YYYY/MM/DD/rollout-*.jsonl" style="flex:1;" />
-								              <button id="offlineOpenBtn" class="mini-btn" type="button" aria-label="打开"><svg class="ico" aria-hidden="true"><use href="#i-play"></use></svg></button>
-								              <button id="offlineRefreshBtn" class="mini-btn" type="button" aria-label="刷新"><svg class="ico" aria-hidden="true"><use href="#i-refresh"></use></svg></button>
+								              <button id="offlineOpenBtn" class="mini-btn" type="button" aria-label="加入展示并打开"><svg class="ico" aria-hidden="true"><use href="#i-plus"></use></svg></button>
+								              <button id="offlineRefreshBtn" class="mini-btn" type="button" aria-label="刷新最近文件"><svg class="ico" aria-hidden="true"><use href="#i-refresh"></use></svg></button>
 								            </div>
 								          </div>
 								          <div id="offlineList" class="tabs" style="margin-top:10px;"></div>
 								          <div id="offlineErrorText" class="meta form-error" style="margin-top:6px;"></div>
+								        </details>
+								        <details id="bookmarkHiddenDetails" class="drawer-details" style="margin-top:10px;">
+								          <summary class="meta">关闭监听 <span id="bookmarkHiddenCount" class="pill">0</span></summary>
+								          <div id="bookmarkHiddenList" class="tabs" style="margin-top:10px;"></div>
 								        </details>
 							      </div>
 							    </div>
