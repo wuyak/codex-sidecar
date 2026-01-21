@@ -1,5 +1,6 @@
 		      *, *::before, *::after { box-sizing: border-box; }
-				      body { font-family: var(--ui-font-family, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji"); font-size: var(--ui-font-size, 14px); margin: 0; background: var(--c-bg, #fff); background-image: var(--bg-pattern, none); background-size: var(--bg-size, auto); background-position: var(--bg-pos, 0 0); background-attachment: fixed; color: var(--c-text, #0f172a); }
+				      html { scrollbar-gutter: stable; }
+				      body { font-family: var(--ui-font-family, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji"); font-size: var(--ui-font-size, 14px); margin: 0; scrollbar-gutter: stable; background: var(--c-bg, #fff); background-image: var(--bg-pattern, none); background-size: var(--bg-size, auto); background-position: var(--bg-pos, 0 0); background-attachment: fixed; color: var(--c-text, #0f172a); }
 				      body.popup-open { overflow: hidden; }
 					      :root {
                   --ui-font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";

@@ -100,3 +100,4 @@
 - 202601211340_arch_refactor_phase2
 - 202601211923_fix_ui_ol_numbering
 - 202601211959_fix_codeblock_toggle_scroll
+- 202601212038_fix_ui_scrollbar_gutter
