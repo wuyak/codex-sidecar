@@ -1,4 +1,4 @@
-import { stabilizeToggleNoDrift } from "../utils/anchor.js";
+import { stabilizeClickWithin, stabilizeToggleNoDrift } from "../utils/anchor.js";
 
 function _toggleToolDetails(btn) {
   if (!btn || btn.nodeType !== 1) return false;
@@ -44,8 +44,40 @@ export function toggleToolDetailsFromPre(pre, ev) {
       if (all && all.length === 1) btn = all[0];
     }
     if (!btn) return false;
+    const y = (ev && typeof ev.clientY === "number") ? Number(ev.clientY) : NaN;
+    const targetId = btn.getAttribute ? String(btn.getAttribute("data-target") || "") : "";
+    const swapId = btn.getAttribute ? String(btn.getAttribute("data-swap") || "") : "";
+    let targetWrap = null;
+    let swapWrap = null;
+    if (Number.isFinite(y)) {
+      if (targetId) {
+        try {
+          const el = document.getElementById(targetId);
+          targetWrap = (el && el.closest) ? (el.closest(".pre-wrap") || el) : el;
+        } catch (_) {}
+      }
+      if (swapId) {
+        try {
+          const el = document.getElementById(swapId);
+          swapWrap = (el && el.closest) ? (el.closest(".pre-wrap") || el) : el;
+        } catch (_) {}
+      }
+    }
     let ok = false;
     stabilizeToggleNoDrift(row || btn, () => { ok = _toggleToolDetails(btn); });
+    if (ok && Number.isFinite(y)) {
+      try {
+        requestAnimationFrame(() => {
+          try {
+            let anchor = null;
+            if (swapWrap && swapWrap.classList && !swapWrap.classList.contains("hidden")) anchor = swapWrap;
+            else if (targetWrap && targetWrap.classList && !targetWrap.classList.contains("hidden")) anchor = targetWrap;
+            else anchor = (pre && pre.closest) ? (pre.closest(".pre-wrap") || row || btn) : (row || btn);
+            stabilizeClickWithin(anchor || row || btn, y);
+          } catch (_) {}
+        });
+      } catch (_) {}
+    }
     return ok;
   } catch (_) {
     return false;

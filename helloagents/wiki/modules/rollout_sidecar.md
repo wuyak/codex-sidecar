@@ -62,7 +62,7 @@
 - UI 事件流分层：`ui/app/events/*`（timeline/buffer/stream）拆分，便于维护与进一步优化
 - 刷新期保护：刷新列表期间 SSE 会暂存到 `ssePending`；若积压过大则触发溢出兜底，刷新结束后自动回源同步一次
 - UI 装饰分层：长按复制/复制反馈由 `decorate/copy_hold.js` 负责；工具“详情/收起”切换由 `decorate/tool_toggle.js` 负责；`decorate/core.js` 仅做装饰编排
-- 工具“详情/收起”稳定：切换前后基于锚点 `top` 差值进行滚动补偿（无漂移），避免折叠/展开导致页面跳动
+- 工具“详情/收起”稳定：切换前后基于锚点 `top` 差值进行滚动补偿（无漂移）；并在从代码块内点击切换时，基于点击位置做滚动校正，避免收起后视口落到代码块下方
 - UI 会话栏分层：会话标签持久化拆到 `sidebar/labels.js`；书签渲染与交互在 `sidebar/tabs.js`；`sidebar.js` 作为 facade
 - UI 工具函数分层：`utils/*`（time/id/color/json/clipboard/error），`utils.js` 作为 facade
 - UI 格式化分层：`format/wrap/*`（command/lines/tree/rg/output），`format/wrap.js` 作为 facade
@@ -213,6 +213,19 @@ UI v2 已归档（默认不启用），仅保留作为历史参考：
   - 非代码块内移除行尾空白、压缩连续空行、清理下划线噪音：可能改变原始空行数量与行尾空格语义。
 - `ui/app/markdown/split.js`：
   - 对 “leading code block split” 的 `rest` 做 `trim()`：会去掉前后空行，影响首尾留白。
+
+## 已知问题（UI 交互）
+
+### 长代码块展开后滚动，收起时视口落到代码块下方
+
+现象：
+- 在工具输出的“详情”长代码块中向下滚动后，直接在代码块区域点击“收起/详情切换”，有概率导致收起后视口停留在该代码块下方内容（焦点漂移）。
+
+根因（UI 端）：
+- `decorate/tool_toggle.js` 的“无漂移切换”只补偿锚点 `top` 的变化；当用户已在长代码块中滚动到中下部时，收起会让大量内容高度瞬间消失，导致视口相对代码块区域发生偏移。
+
+修复（UI 端）：
+- 在 `toggleToolDetailsFromPre` 中，切换后基于点击 `clientY` 调用 `stabilizeClickWithin`，把视口校正回当前可见代码块区域，保证“展开/收起”后仍停留在同一代码块附近。
 
 ## 硅基流动 translate.json 配置（免费优先）
 硅基流动的 translate.js 提供了 `translate.json`（表单提交）接口。sidecar 已对该接口做兼容：仍使用 `HTTP（通用适配器）`，仅需把 URL 指向 `translate.json`。
