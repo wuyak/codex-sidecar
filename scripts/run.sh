@@ -204,7 +204,7 @@ if [ "${no_server}" != "1" ]; then
   maybe_autorecover_port
 fi
 
-PYTHONPATH="${repo_root}" python3 -m codex_sidecar "${extra_args[@]}" "$@" &
+PYTHONPATH="${repo_root}" python3 -m codex_sidecar --host "${host}" --port "${port}" "${extra_args[@]}" "$@" &
 pid="$!"
 
 trap 'kill "${pid}" 2>/dev/null || true' INT TERM
