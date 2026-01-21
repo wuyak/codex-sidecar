@@ -256,9 +256,23 @@ class SidecarHandler(BaseHTTPRequestHandler):
             except Exception:
                 cfg = {}
             try:
-                codex_home = Path(str((cfg or {}).get("watch_codex_home") or "")).expanduser()
+                wh_raw = str((cfg or {}).get("watch_codex_home") or "").strip()
+                codex_home = (Path(wh_raw).expanduser() if wh_raw else (Path.home() / ".codex"))
+                try:
+                    if codex_home.name == "sessions":
+                        codex_home = codex_home.parent
+                except Exception:
+                    pass
             except Exception:
                 codex_home = Path.home() / ".codex"
+            try:
+                sessions_dir = codex_home / "sessions"
+                if not sessions_dir.exists() or not sessions_dir.is_dir():
+                    self._send_json(HTTPStatus.OK, {"ok": False, "error": "sessions_not_found", "files": []})
+                    return
+            except Exception:
+                self._send_json(HTTPStatus.OK, {"ok": False, "error": "sessions_not_found", "files": []})
+                return
             try:
                 limit = int((qs.get("limit") or ["60"])[0])
             except Exception:
@@ -274,7 +288,13 @@ class SidecarHandler(BaseHTTPRequestHandler):
             except Exception:
                 cfg = {}
             try:
-                codex_home = Path(str((cfg or {}).get("watch_codex_home") or "")).expanduser()
+                wh_raw = str((cfg or {}).get("watch_codex_home") or "").strip()
+                codex_home = (Path(wh_raw).expanduser() if wh_raw else (Path.home() / ".codex"))
+                try:
+                    if codex_home.name == "sessions":
+                        codex_home = codex_home.parent
+                except Exception:
+                    pass
             except Exception:
                 codex_home = Path.home() / ".codex"
             rel = str((qs.get("rel") or qs.get("path") or [""])[0] or "").strip()

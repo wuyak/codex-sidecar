@@ -469,7 +469,8 @@ export function wireImportDialog(dom, state, helpers, opts = {}) {
       empty.className = "meta";
       empty.style.opacity = "0.7";
       empty.style.padding = "6px 2px";
-      empty.textContent = "暂无可选文件（可直接粘贴完整路径，或稍等写入）";
+      const loading = !!(state && state.offlineFilesLoading);
+      empty.textContent = loading ? "加载中…" : "暂无可选文件（可直接粘贴完整路径）";
       frag.appendChild(empty);
       host.appendChild(frag);
       return;
@@ -765,19 +766,40 @@ export function wireImportDialog(dom, state, helpers, opts = {}) {
     offlineFetchInFlight = true;
     try {
       setImportError("");
+      try {
+        const cur = Array.isArray(state && state.offlineFiles) ? state.offlineFiles : [];
+        if (!cur.length) {
+          state.offlineFilesLoading = true;
+          renderImportList();
+        }
+      } catch (_) {}
       const url = `/api/offline/files?limit=0&t=${now}`;
       const r = await fetch(url, { cache: "no-store" }).then((x) => x.json()).catch(() => null);
-      const files = Array.isArray(r && r.files) ? r.files : [];
+      if (!r || (r && r.ok === false)) {
+        const err = String((r && r.error) ? r.error : "").trim();
+        if (err === "not_found") setImportError("当前 sidecar 不支持离线导入（请重启/更新）");
+        else if (err === "sessions_not_found") setImportError("未找到 sessions 目录（请检查 CODEX_HOME / watch_codex_home）");
+        else setImportError("离线文件列表不可用");
+        state.offlineFiles = [];
+        state.offlineFilesLastSyncMs = now;
+        state.offlineFilesLoading = false;
+        renderImportList();
+        return;
+      }
+      const files = Array.isArray(r.files) ? r.files : [];
       state.offlineFiles = files;
       state.offlineFilesLastSyncMs = now;
+      state.offlineFilesLoading = false;
       renderImportList();
     } catch (_) {
       state.offlineFiles = [];
       state.offlineFilesLastSyncMs = now;
+      state.offlineFilesLoading = false;
       setImportError("离线文件列表加载失败");
       renderImportList();
     } finally {
       offlineFetchInFlight = false;
+      try { state.offlineFilesLoading = false; } catch (_) {}
     }
   };
 
@@ -865,8 +887,10 @@ export function wireImportDialog(dom, state, helpers, opts = {}) {
     if (!ok) return;
 
     try { setImportError(""); } catch (_) {}
+    const hasFiles = Array.isArray(state && state.offlineFiles) && state.offlineFiles.length;
+    try { if (!hasFiles) state.offlineFilesLoading = true; } catch (_) {}
     try { renderImportList(); } catch (_) {}
-    try { refreshOfflineFiles(false); } catch (_) {}
+    try { refreshOfflineFiles(!hasFiles); } catch (_) {}
     try {
       setTimeout(() => {
         try { if (dom.importRel && typeof dom.importRel.focus === "function") dom.importRel.focus(); } catch (_) {}
