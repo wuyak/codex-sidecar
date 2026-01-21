@@ -1372,13 +1372,19 @@ export function wireControlEvents(dom, state, helpers) {
         label.className = "tab-label";
         label.textContent = labelText;
 
-        const sub = document.createElement("span");
-        sub.className = "tab-sub";
-        const base = (String(file || rel).split("/").slice(-1)[0]) || rel;
-        sub.textContent = _isShown(rel) ? `${base} · 已在展示` : base;
+        // Avoid duplicating information: year/month/day already in group header,
+        // and labelText already carries stamp + id. Only add a small marker if shown.
+        if (_isShown(rel)) {
+          try {
+            const mark = document.createElement("span");
+            mark.className = "pill";
+            mark.style.marginLeft = "8px";
+            mark.textContent = "展示中";
+            label.appendChild(mark);
+          } catch (_) {}
+        }
 
         main.appendChild(label);
-        main.appendChild(sub);
         row.appendChild(dot);
         row.appendChild(main);
         listEl.appendChild(row);

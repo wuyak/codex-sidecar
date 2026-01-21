@@ -684,7 +684,6 @@ export function renderTabs(dom, state, onSelectKey) {
     const next = removeOfflineShowByKey(state.offlineShow, k);
     try { state.offlineShow = next; } catch (_) {}
     try { saveOfflineShowList(next); } catch (_) {}
-    _toastFromEl(sourceEl || hostOffline || hostLive, `已移除展示：${labelForToast || shortId(k)}`, { durationMs: 1600 });
 
     const curKey = String(state.currentKey || "all");
     if (curKey === k) {
