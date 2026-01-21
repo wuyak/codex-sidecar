@@ -109,6 +109,10 @@
 - 兼容（启动即监听，命令行参数方式）：
   - 在仓库根目录执行：`./run.sh --codex-home "$HOME/.codex" --port 8787 --replay-last-lines 5000`
 
+端口占用自动恢复（体验优化）：
+- 若检测到旧 sidecar 仍占用端口，但健康检查失败（例如意外关浏览器/进程卡死导致 UI 打不开），`./run.sh` / `./ui.sh` 会尝试**仅对 codex_sidecar 进程**做安全终止并重启。
+- 若占用端口的进程看起来不是 codex_sidecar，则会在终端提示并退出（避免误杀其它服务）；此时请手动停止占用进程或换端口（`PORT=...` / `--port ...`）。
+
 ## 配置持久化与多翻译 Profiles
 - UI 中点击“保存配置”会将配置写入项目目录内（默认放在仓库根目录下）：
   - 实际配置（本机使用，已加入 `.gitignore`）：`./config/sidecar/config.json`
