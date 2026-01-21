@@ -853,13 +853,15 @@
 				      }
 				      /* 导入对话：固定贴顶，且预留底部空间避免遮挡文件列表。 */
 				      #importDialog.popup-dialog {
-				        width: min(560px, calc(100vw - 24px - var(--safe-left) - var(--safe-right)));
+				        width: min(520px, calc(100vw - 24px - var(--safe-left) - var(--safe-right)));
 				        top: calc(var(--safe-top) + 12px) !important;
 				        bottom: auto !important;
 				        max-height: calc(100vh - 24px - var(--safe-top) - var(--safe-bottom) - var(--tabs-bar-h) - var(--tabs-stack-gap));
 				        overflow: hidden;
+				        display: flex;
+				        flex-direction: column;
 				      }
-				      #importDialog.popup-dialog .popup-dialog-form { display:flex; flex-direction:column; gap: 10px; height: 100%; }
+				      #importDialog.popup-dialog .popup-dialog-form { display:flex; flex-direction:column; gap: 10px; flex: 1 1 auto; min-height: 0; }
 				      #importDialog #importList { margin-top: 0 !important; flex: 1 1 auto; min-height: 0; overflow: hidden; }
 				      #importDialog #importErrorText { margin-top: 0 !important; }
 				      .popup-dialog::backdrop { background: rgba(15,23,42,.22); }
