@@ -12,11 +12,11 @@
 - [√] 2.1 在 `codex_sidecar/controller.py` 内统一翻译逻辑（probe/text/items）与错误/模型解析，减少重复代码，保持返回 shape 不变。
 - [√] 2.2 精简 `codex_sidecar/controller.py` 的 config 热更新路径：将 watcher 热更新的字段应用集中到单一 helper，减少散落 try/except。
 - [√] 2.3 为上述重构补齐/更新单测（优先“输入输出契约”，必要时用 fake controller/translator）。
-- [ ] 2.4 完成一次 git commit（后端阶段）。
+- [√] 2.4 完成一次 git commit（后端阶段）。
 
 ## 3. watcher：空转与分叉进一步收敛
-- [ ] 3.1 梳理 `codex_sidecar/watcher.py` 的循环：在无 follow targets 时减少不必要动作（仍需保留 tool gate 能力的最小轮询）。
-- [ ] 3.2 补齐关键边界 case 的单测（可行则加；不可行则用 compileall+全量单测回归兜底）。
+- [√] 3.1 梳理 `codex_sidecar/watcher.py` 的循环：在无 follow targets 时减少不必要动作（仍需保留 tool gate 能力的最小轮询）。
+- [-] 3.2 补齐关键边界 case 的单测（当前以 compileall + 全量单测回归兜底；后续如需可补充针对 idle 降频的时间型测试）。
 - [ ] 3.3 完成一次 git commit（watcher 阶段）。
 
 ## 4. 前端：降低 `wire.js`/`main.js` 的耦合（不改行为）

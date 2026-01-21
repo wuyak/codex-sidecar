@@ -203,6 +203,7 @@ class RolloutWatcher:
         # "needs confirmation" states even when no new rollout lines appear.
         self._tui = TuiGateTailer(self._codex_home / "log" / "codex-tui.log")
         self._stop_event: Optional[threading.Event] = None
+        self._last_tui_poll_ts: float = 0.0
 
         # Translation is decoupled from ingestion: watcher ingests EN first,
         # then a background worker translates and patches via op=update.
@@ -458,13 +459,26 @@ class RolloutWatcher:
                 self._last_file_scan_ts = now
             self._poll_follow_files()
             try:
-                self._tui.poll(
-                    thread_id=self._thread_id or "",
-                    read_tail_lines=read_tail_lines,
-                    sha1_hex=_sha1_hex,
-                    dedupe=self._dedupe,
-                    ingest=self._ingest.ingest,
-                )
+                # When process-follow is enabled and no Codex process is detected, polling
+                # the Codex TUI log at the normal "poll" cadence is mostly wasted work.
+                # Throttle it to the scan cadence (still responsive enough, cheaper idle).
+                do_tui = True
+                if self._follow_mode in ("idle", "wait_codex") and (not self._codex_detected):
+                    try:
+                        last = float(self._last_tui_poll_ts or 0.0)
+                    except Exception:
+                        last = 0.0
+                    if (now - last) < float(self._file_scan_interval_s or 0.0):
+                        do_tui = False
+                if do_tui:
+                    self._last_tui_poll_ts = now
+                    self._tui.poll(
+                        thread_id=self._thread_id or "",
+                        read_tail_lines=read_tail_lines,
+                        sha1_hex=_sha1_hex,
+                        dedupe=self._dedupe,
+                        ingest=self._ingest.ingest,
+                    )
             except Exception:
                 pass
             stop_event.wait(self._poll_interval_s)

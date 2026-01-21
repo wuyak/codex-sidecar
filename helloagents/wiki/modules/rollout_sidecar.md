@@ -177,6 +177,7 @@ UI v2 已归档（默认不启用），仅保留作为历史参考：
 - 性能优化：poll 在文件无新增（`size==offset`）时不会反复打开/读取文件，减少空转开销。
 - `目标刷新间隔（秒）`（scan）：刷新“跟随目标”（进程定位时=扫描 `/proc/*/fd`，非进程定位时=回退为 sessions 最新文件选择）。越小越快发现新会话，但开销更高。
 - 性能优化：TUI gate tail（`codex-tui.log`）在无新增（`size==offset`）时不会反复打开文件，减少空转 IO。
+- 性能优化：当处于 `idle/wait_codex`（进程定位开启但未检测到 Codex 进程）时，TUI gate 的轮询会降频到 scan cadence，减少空闲期空转。
 
 ## 硅基流动 translate.json 配置（免费优先）
 硅基流动的 translate.js 提供了 `translate.json`（表单提交）接口。sidecar 已对该接口做兼容：仍使用 `HTTP（通用适配器）`，仅需把 URL 指向 `translate.json`。

@@ -8,6 +8,7 @@
 - 后端：HTTP handler 抽离通用 JSON 解析/错误响应，并让离线/在线翻译端点复用同一内部路径，减少重复与维护成本。
 - 后端：tui gate tail 在无新增时跳过打开文件读取，进一步降低空转 IO。
 - 后端：controller 收敛翻译（probe/text/items）公共逻辑，并将 watcher 热更新应用集中到单一 helper，降低重复与分叉。
+- 后端：watcher 在进程定位模式的 `idle/wait_codex` 空闲期对 TUI gate 轮询降频到 scan cadence，进一步降低空转开销。
 - UI：移除浮动按钮 hover tooltip（避免提示遮挡/误导）；`aria-label` 仅用于无障碍读屏。
 - UI：设置抽屉“高级选项”更名为“监听设置”；配置目录移到监视目录下方；移除设置内冗余提示文案。
 - UI：会话管理抽屉移除“点击：切换会话”提示；会话行长按可复制对话 JSON 路径；副标题不再显示原始文件名。
