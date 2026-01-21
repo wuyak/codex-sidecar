@@ -853,7 +853,7 @@
 				      }
 				      /* 导入对话：固定贴顶，且预留底部空间避免遮挡文件列表。 */
 				      #importDialog.popup-dialog {
-				        width: min(420px, calc(100vw - 24px - var(--safe-left) - var(--safe-right)));
+				        width: min(360px, calc(100vw - 24px - var(--safe-left) - var(--safe-right)));
 				        top: calc(var(--safe-top) + 12px) !important;
 				        bottom: auto !important;
 				        max-height: calc(100vh - 24px - var(--safe-top) - var(--safe-bottom) - var(--tabs-bar-h) - var(--tabs-stack-gap));
