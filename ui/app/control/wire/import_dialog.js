@@ -234,6 +234,7 @@ export function wireImportDialog(dom, state, helpers, opts = {}) {
 
     const formatCount = (n) => {
       const x = Math.max(0, Number(n) || 0);
+      if (!x) return "";
       if (x >= 1000) return "999+";
       return String(x);
     };
@@ -245,6 +246,12 @@ export function wireImportDialog(dom, state, helpers, opts = {}) {
       const a = (attrs && typeof attrs === "object") ? attrs : {};
       const active = !!a.active;
       if (active) btn.classList.add("is-active");
+      try {
+        const act = String(a.action || "");
+        if (act === "selYear") btn.classList.add("imp-chip-year");
+        if (act === "selMonth") btn.classList.add("imp-chip-month");
+        if (act === "selDay") btn.classList.add("imp-chip-day");
+      } catch (_) {}
       try { btn.setAttribute("aria-pressed", active ? "true" : "false"); } catch (_) {}
       try { btn.setAttribute("aria-label", `${String(label || "")}（${Number(count) || 0}个文件）`); } catch (_) {}
       try { btn.dataset.action = String(a.action || ""); } catch (_) {}
@@ -256,9 +263,11 @@ export function wireImportDialog(dom, state, helpers, opts = {}) {
       text.textContent = String(label || "");
       btn.appendChild(text);
       try {
+        const v = formatCount(count);
+        if (!v) return btn;
         const badge = document.createElement("span");
         badge.className = "imp-chip-count";
-        badge.textContent = formatCount(count);
+        badge.textContent = v;
         btn.appendChild(badge);
       } catch (_) {}
       return btn;

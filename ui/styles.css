@@ -889,8 +889,18 @@
 				      #importDialog .imp-chip:focus-visible { outline: none; box-shadow: 0 1px 0 rgba(15,23,42,.04), var(--ring); border-color: rgba(14,165,233,.55); }
 				      #importDialog .imp-chip.is-active { border-color: rgba(14,165,233,.55); box-shadow: 0 1px 0 rgba(15,23,42,.04), var(--ring); background: rgba(14,165,233,.08); font-weight: 900; }
 				      #importDialog .imp-chip-text { font-variant-numeric: tabular-nums; }
-				      #importDialog .imp-chip-count { position:absolute; top: 3px; right: 3px; min-width: 18px; height: 18px; padding: 0 6px; border-radius: 999px; background: rgba(148,163,184,.18); border: 1px solid rgba(148,163,184,.35); color: var(--c-muted); font-size: 11px; font-variant-numeric: tabular-nums; display:flex; align-items:center; justify-content:center; line-height: 1; pointer-events: none; }
-				      #importDialog .imp-chip.is-active .imp-chip-count { background: rgba(14,165,233,.18); border-color: rgba(14,165,233,.35); color: var(--c-text); }
+				      #importDialog .imp-chip-count { position:absolute; top: 2px; right: 2px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: rgba(15,23,42,.78); color: rgba(255,255,255,.98); font-size: 11px; font-variant-numeric: tabular-nums; display:flex; align-items:center; justify-content:center; line-height: 18px; border: 1px solid rgba(255,255,255,.92); box-shadow: 0 10px 24px rgba(0,0,0,.10); pointer-events: none; }
+				      body[data-bm-skin="dark"] #importDialog .imp-chip-count { background: rgba(255,255,255,.14); color: rgba(226,232,240,.98); border-color: rgba(148,163,184,.22); box-shadow: 0 10px 24px rgba(0,0,0,.22); }
+				      #importDialog .imp-chip.is-active .imp-chip-count { background: rgba(14,165,233,.92); color: rgba(255,255,255,.98); }
+				      body[data-bm-skin="dark"] #importDialog .imp-chip.is-active .imp-chip-count { border-color: rgba(15,23,42,.92); }
+				      #importDialog .imp-row.imp-years,
+				      #importDialog .imp-row.imp-months { padding: 4px; border: 1px solid var(--c-border); border-radius: 14px; background: var(--c-soft-2); }
+				      #importDialog .imp-row.imp-years .imp-chip,
+				      #importDialog .imp-row.imp-months .imp-chip { background: transparent; border-color: transparent; box-shadow: none; }
+				      #importDialog .imp-row.imp-years .imp-chip:hover,
+				      #importDialog .imp-row.imp-months .imp-chip:hover { background: rgba(148,163,184,.12); }
+				      #importDialog .imp-row.imp-years .imp-chip.is-active,
+				      #importDialog .imp-row.imp-months .imp-chip.is-active { background: var(--c-surface); border-color: rgba(14,165,233,.55); box-shadow: 0 1px 0 rgba(15,23,42,.04), var(--ring); }
 				      #importDialog .imp-years .imp-chip { min-height: 36px; padding: 8px 14px; font-size: var(--ui-font-sm); font-weight: 900; }
 				      #importDialog .imp-months .imp-chip { min-height: 34px; padding: 7px 12px; border-radius: 14px; }
 				      #importDialog .imp-days .imp-chip { border-radius: 14px; }
