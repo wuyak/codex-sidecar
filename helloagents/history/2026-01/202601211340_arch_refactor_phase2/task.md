@@ -20,12 +20,12 @@
 - [√] 3.3 完成一次 git commit（watcher 阶段）。
 
 ## 4. 前端：降低 `wire.js`/`main.js` 的耦合（不改行为）
-- [ ] 4.1 拆分 `ui/app/control/wire.js`：按功能域迁移内部函数到 `ui/app/control/wire/*`（保留原导出签名）。
-- [ ] 4.2 精简 `ui/app/main.js` 的数据源分支判断：集中 Live/Offline 分流决策点。
-- [ ] 4.3 对改动文件执行 `node --check`，必要时补充最小契约测试。
-- [ ] 4.4 完成一次 git commit（前端阶段）。
+- [√] 4.1 拆分 `ui/app/control/wire.js`：按功能域迁移内部函数到 `ui/app/control/wire/*`（保留原导出签名）。
+- [√] 4.2 精简 `ui/app/main.js` 的数据源分支判断：集中 Live/Offline 分流决策点。
+- [√] 4.3 对改动文件执行 `node --check`，必要时补充最小契约测试。
+- [√] 4.4 完成一次 git commit（前端阶段）。
 
 ## 5. 收尾：一致性审计与方案迁移
-- [ ] 5.1 全量回归：`compileall` + `unittest` + JS 语法检查。
-- [ ] 5.2 更新知识库：`helloagents/CHANGELOG.md` + 受影响模块文档（保持 SSOT 与代码一致）。
-- [ ] 5.3 迁移方案包至 `helloagents/history/2026-01/` 并更新 `helloagents/history/index.md`。
+- [√] 5.1 全量回归：`compileall` + `unittest` + JS 语法检查。
+- [√] 5.2 更新知识库：`helloagents/CHANGELOG.md` + 受影响模块文档（保持 SSOT 与代码一致）。
+- [√] 5.3 迁移方案包至 `helloagents/history/2026-01/` 并更新 `helloagents/history/index.md`。

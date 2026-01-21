@@ -40,6 +40,7 @@
   - 其中 `watch/rollout_extract.py` 负责“单条 JSONL 记录 → UI 事件块”提取（assistant/user/tool/reasoning）
 - 服务端分层：`server.py` 仅负责启动/绑定；HTTP 路由、SSE 与静态资源拆分到 `http/*`
 - 控制面分层：`controller.py` 聚焦线程生命周期/配置入口；translator schema/构建与校验拆分到 `control/*`
+- UI 控制层：`ui/app/control/wire.js` 作为事件 wiring 入口，按功能域拆分到 `ui/app/control/wire/*`（例如 `ui_hints.js`、`import_dialog.js`），降低单文件耦合与复杂度。
 
 > 注：下文涉及 `ui/app/*` 的“分层/模块拆分”描述对应当前默认 UI（`ui/`）；此前尝试过 UI v2（Vue 3 + Vite + Pinia），现已归档到 `old/`（不再提供路由入口）。
 - 可选：WSL2/Linux 下支持“进程优先定位”当前会话文件
