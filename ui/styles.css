@@ -883,12 +883,17 @@
 				      #importDialog .imp-tree { display:flex; flex-direction:column; gap: 8px; }
 				      #importDialog .imp-row { display:flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
 				      #importDialog .imp-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 6px; }
-				      #importDialog .imp-chip { border: 1px solid var(--c-border); background: transparent; color: var(--c-text); border-radius: 999px; padding: 6px 10px; min-height: 32px; display:inline-flex; align-items:center; justify-content:center; gap: 6px; cursor: pointer; font-size: var(--ui-font-xs); box-shadow: none; white-space: nowrap; }
+				      #importDialog .imp-chip { border: 1px solid var(--c-border); background: var(--c-surface); color: var(--c-text); border-radius: 999px; padding: 6px 10px; min-height: 32px; display:inline-flex; align-items:center; justify-content:center; gap: 6px; cursor: pointer; font-size: var(--ui-font-xs); box-shadow: 0 1px 0 rgba(15,23,42,.04); white-space: nowrap; position: relative; }
 				      #importDialog .imp-chip:hover { background: var(--c-soft-2); }
 				      #importDialog .imp-chip:active { transform: translateY(1px); }
-				      #importDialog .imp-chip:focus-visible { outline: none; box-shadow: var(--ring); border-color: rgba(14,165,233,.55); }
-				      #importDialog .imp-chip.is-active { border-color: rgba(14,165,233,.55); box-shadow: var(--ring); background: rgba(14,165,233,.08); font-weight: 900; }
+				      #importDialog .imp-chip:focus-visible { outline: none; box-shadow: 0 1px 0 rgba(15,23,42,.04), var(--ring); border-color: rgba(14,165,233,.55); }
+				      #importDialog .imp-chip.is-active { border-color: rgba(14,165,233,.55); box-shadow: 0 1px 0 rgba(15,23,42,.04), var(--ring); background: rgba(14,165,233,.08); font-weight: 900; }
 				      #importDialog .imp-chip-text { font-variant-numeric: tabular-nums; }
+				      #importDialog .imp-chip-count { position:absolute; top: 3px; right: 3px; min-width: 18px; height: 18px; padding: 0 6px; border-radius: 999px; background: rgba(148,163,184,.18); border: 1px solid rgba(148,163,184,.35); color: var(--c-muted); font-size: 11px; font-variant-numeric: tabular-nums; display:flex; align-items:center; justify-content:center; line-height: 1; pointer-events: none; }
+				      #importDialog .imp-chip.is-active .imp-chip-count { background: rgba(14,165,233,.18); border-color: rgba(14,165,233,.35); color: var(--c-text); }
+				      #importDialog .imp-years .imp-chip { min-height: 36px; padding: 8px 14px; font-size: var(--ui-font-sm); font-weight: 900; }
+				      #importDialog .imp-months .imp-chip { min-height: 34px; padding: 7px 12px; border-radius: 14px; }
+				      #importDialog .imp-days .imp-chip { border-radius: 14px; }
 				      #importDialog .imp-path { margin-top: 2px; }
 				      #importDialog .imp-files { margin-top: 6px; }
 				      #importDialog .tab { padding: 6px 8px; border-radius: 10px; }

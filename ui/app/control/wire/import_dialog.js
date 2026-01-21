@@ -232,6 +232,12 @@ export function wireImportDialog(dom, state, helpers, opts = {}) {
       try { state.importSelD = selD; } catch (_) {}
     }
 
+    const formatCount = (n) => {
+      const x = Math.max(0, Number(n) || 0);
+      if (x >= 1000) return "999+";
+      return String(x);
+    };
+
     const makeChip = (label, count, attrs = {}) => {
       const btn = document.createElement("button");
       btn.type = "button";
@@ -249,6 +255,12 @@ export function wireImportDialog(dom, state, helpers, opts = {}) {
       text.className = "imp-chip-text";
       text.textContent = String(label || "");
       btn.appendChild(text);
+      try {
+        const badge = document.createElement("span");
+        badge.className = "imp-chip-count";
+        badge.textContent = formatCount(count);
+        btn.appendChild(badge);
+      } catch (_) {}
       return btn;
     };
 
