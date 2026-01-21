@@ -171,8 +171,9 @@ UI v2 已归档（默认不启用），仅保留作为历史参考：
 - `仅在有进程时跟随`：开启后若未检测到匹配的 Codex 进程，则 sidecar 会进入 idle（不跟随任何文件）；关闭则会回退为 sessions 扫描（仍可看到最新会话）。注：若检测到进程但暂未发现其打开的 rollout 文件，会进入 `wait_rollout` 等待文件出现（不扫 sessions）。
 - `进程匹配 regex`：用于匹配 Codex 进程命令行（默认 `codex`），只影响“进程定位”的检测范围。
   - 进程检测优先按 `/proc/<pid>/exe` basename 与 argv0 匹配，只有在无法判断时才回退到整条 cmdline 匹配；UI 状态里的 `pid:` 默认展示“确实打开了 rollout 的 pid”（更干净），候选 pid 仅在调试信息里展示。
-- `poll（秒）`：主循环轮询间隔（越小越实时，但 CPU/IO 更高）。
-- `scan（秒）`：会话文件/进程 fd 扫描间隔（越小越快发现新会话，但开销更高）。
+- 性能优化：进程定位会缓存“已命中的 Codex PID 列表”和“进程树”，在 PID 未变化时避免每次都全量扫描 `/proc`（仍会按 scan 周期刷新 fd 以发现新打开的 rollout 文件）。
+- `读取间隔（秒）`（poll）：读取**已纳入监听名单**的会话文件增量内容（越小越实时，但 CPU/IO 更高）。
+- `目标刷新间隔（秒）`（scan）：刷新“跟随目标”（进程定位时=扫描 `/proc/*/fd`，非进程定位时=回退为 sessions 最新文件选择）。越小越快发现新会话，但开销更高。
 
 ## 硅基流动 translate.json 配置（免费优先）
 硅基流动的 translate.js 提供了 `translate.json`（表单提交）接口。sidecar 已对该接口做兼容：仍使用 `HTTP（通用适配器）`，仅需把 URL 指向 `translate.json`。
