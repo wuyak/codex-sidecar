@@ -1,6 +1,5 @@
 import os
 import re
-import time
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -10,7 +9,6 @@ from .procfs import (
     _proc_iter_fd_targets_with_flags,
     _proc_list_pids,
     _proc_read_argv0_basename,
-    _proc_read_cmdline,
     _proc_read_exe_basename,
     _proc_read_ppid,
 )
@@ -54,15 +52,6 @@ class FollowPicker:
             self._codex_process_re = re.compile(self._codex_process_regex_raw, flags=re.IGNORECASE)
         except Exception:
             self._codex_process_re = None
-
-        # Perf: scanning /proc can be expensive when done frequently. We keep a small cache:
-        # - Roots (Codex-like PIDs) are usually stable while Codex is running.
-        # - The full process tree (roots + children) only needs recompute when roots change.
-        self._cached_root_pids: List[int] = []
-        self._cached_root_allow_cmdline: bool = False
-        self._cached_tree_roots_key: Tuple[int, ...] = ()
-        self._cached_tree_pids: List[int] = []
-        self._cached_tree_ts: float = 0.0
 
     @property
     def codex_process_regex(self) -> str:
@@ -113,11 +102,11 @@ class FollowPicker:
         follow_mode = "pinned"
 
         if self._follow_codex_process and self._codex_process_re is not None:
-            pids = self._detect_codex_processes_cached()
+            pids = self._detect_codex_processes()
             candidate_pids = list(pids)
             codex_detected = bool(pids)
             if codex_detected:
-                tree = self._collect_process_tree_cached(pids)
+                tree = self._collect_process_tree(pids)
                 opened, openers = self._find_rollout_opened_by_pids(tree, limit=12)
                 if opened:
                     process_file = opened[0]
@@ -164,7 +153,7 @@ class FollowPicker:
                 codex_detected=False,
             )
 
-        pids = self._detect_codex_processes_cached()
+        pids = self._detect_codex_processes()
         codex_detected = bool(pids)
 
         if not codex_detected:
@@ -183,7 +172,7 @@ class FollowPicker:
                 codex_detected=False,
             )
 
-        tree = self._collect_process_tree_cached(pids)
+        tree = self._collect_process_tree(pids)
         opened, openers = self._find_rollout_opened_by_pids(tree, limit=12)
         if opened:
             return FollowPick(
@@ -210,83 +199,36 @@ class FollowPicker:
             candidate_pids=list(pids),
         )
 
-    def _pid_matches_codex(self, pid: int, *, allow_cmdline: bool) -> bool:
+    def _pid_matches_codex(self, pid: int) -> bool:
         re_pat = self._codex_process_re
         if re_pat is None:
             return False
         try:
             exe0 = _proc_read_exe_basename(pid)
-            if exe0 and re_pat.search(exe0):
+            if exe0 and re_pat.fullmatch(exe0):
                 return True
         except Exception:
             pass
         try:
             a0 = _proc_read_argv0_basename(pid)
-            if a0 and re_pat.search(a0):
+            if a0 and re_pat.fullmatch(a0):
                 return True
         except Exception:
             pass
-        if allow_cmdline:
-            try:
-                cmd = _proc_read_cmdline(pid)
-                if cmd and re_pat.search(cmd):
-                    return True
-            except Exception:
-                pass
         return False
 
-    def _detect_codex_processes_cached(self) -> List[int]:
+    def _detect_codex_processes(self) -> List[int]:
         """
-        Detect Codex-like processes with a cache-friendly strategy.
+        Full scan of /proc to find candidate Codex processes (strong match only).
 
-        - Fast-path: validate previously detected PIDs (cheap, no full /proc scan).
-        - Slow-path: full scan to discover PIDs.
-
-        注意：即便 roots 稳定，rollout 文件仍可能切换；fd 扫描仍由上层控制 scan 周期触发。
+        约定（更精准，默认不误伤）：
+        - 仅匹配 /proc/<pid>/exe basename 与 argv0 basename（fullmatch）
+        - 不再回退到整条 cmdline 的弱匹配（避免“名字里带 codex”的非目标进程污染名单）
         """
         re_pat = self._codex_process_re
         if re_pat is None:
-            self._cached_root_pids = []
-            self._cached_root_allow_cmdline = False
             return []
-
-        cached = list(self._cached_root_pids or [])
-        if cached:
-            keep: List[int] = []
-            allow_cmdline = bool(self._cached_root_allow_cmdline)
-            for pid in cached:
-                try:
-                    ip = int(pid)
-                except Exception:
-                    continue
-                if self._pid_matches_codex(ip, allow_cmdline=allow_cmdline):
-                    keep.append(ip)
-            if keep:
-                self._cached_root_pids = keep
-                return keep[:64]
-
-        pids, allow_cmdline = self._detect_codex_processes_full()
-        self._cached_root_pids = list(pids)
-        self._cached_root_allow_cmdline = bool(allow_cmdline)
-        # Roots changed: invalidate cached tree.
-        self._cached_tree_roots_key = ()
-        self._cached_tree_pids = []
-        self._cached_tree_ts = 0.0
-        return list(pids)
-
-    def _detect_codex_processes_full(self) -> Tuple[List[int], bool]:
-        """
-        Full scan of /proc to find candidate Codex processes.
-
-        Returns:
-          (pids, allow_cmdline)
-        - allow_cmdline=True indicates we fell back to cmdline matching (weaker signal).
-        """
-        re_pat = self._codex_process_re
-        if re_pat is None:
-            return ([], False)
         strong: List[int] = []
-        weak: List[int] = []
         my_pid = None
         try:
             my_pid = int(os.getpid())
@@ -295,53 +237,16 @@ class FollowPicker:
         try:
             pids = _proc_list_pids()
         except Exception:
-            return ([], False)
+            return []
         for pid in pids:
             if my_pid is not None and int(pid) == my_pid:
                 continue
             try:
-                exe0 = _proc_read_exe_basename(pid)
-                if exe0 and re_pat.search(exe0):
+                if self._pid_matches_codex(int(pid)):
                     strong.append(int(pid))
-                    continue
-            except Exception:
-                pass
-            try:
-                a0 = _proc_read_argv0_basename(pid)
-                if a0 and re_pat.search(a0):
-                    strong.append(int(pid))
-                    continue
-            except Exception:
-                pass
-            try:
-                cmd = _proc_read_cmdline(pid)
-                if cmd and re_pat.search(cmd):
-                    # NOTE: cmdline 匹配容易误命中（例如 sidecar 自己的路径/参数含 “codex”）。
-                    # 仅在找不到任何“强匹配（exe/argv0）”时才会回退使用 cmdline 匹配。
-                    weak.append(int(pid))
             except Exception:
                 continue
-        if strong:
-            return (strong[:64], False)
-        return (weak[:64], True if weak else False)
-
-    def _collect_process_tree_cached(self, roots: Sequence[int]) -> List[int]:
-        """
-        Cache process-tree expansion by roots.
-        The full tree build scans all pids/ppids and is relatively expensive.
-        """
-        roots_key: Tuple[int, ...] = ()
-        try:
-            roots_key = tuple(sorted(int(r) for r in roots))
-        except Exception:
-            roots_key = ()
-        if roots_key and roots_key == self._cached_tree_roots_key and self._cached_tree_pids:
-            return list(self._cached_tree_pids)
-        tree = self._collect_process_tree(roots)
-        self._cached_tree_roots_key = roots_key
-        self._cached_tree_pids = list(tree)
-        self._cached_tree_ts = time.time()
-        return tree
+        return strong[:64]
 
     def _collect_process_tree(self, roots: Sequence[int]) -> List[int]:
         want: Set[int] = set()
