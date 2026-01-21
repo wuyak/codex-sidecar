@@ -301,18 +301,70 @@ export function wireImportDialog(dom, state, helpers, opts = {}) {
       root.appendChild(monthsRow);
     }
 
-    // Days (grid)
+    // Days (calendar grid: 7 columns + weekday headers)
     if (days.length) {
-      const daysGrid = document.createElement("div");
-      daysGrid.className = "imp-grid imp-days";
-      for (const d of days) {
-        let n = 0;
-        try { n = (daysMap && daysMap.get(d)) ? (daysMap.get(d) || []).length : 0; } catch (_) { n = 0; }
-        const dd = String(Number(d) || d);
-        const chip = makeChip(`${dd}日`, n, { action: "selDay", day: d, active: d === selD, displayLabel: dd });
-        daysGrid.appendChild(chip);
+      const yNum = Number(selY);
+      const mNum = Number(selM);
+      const hasYm = Number.isFinite(yNum) && Number.isFinite(mNum) && yNum > 0 && mNum >= 1 && mNum <= 12;
+      if (hasYm) {
+        const weekdays = ["一", "二", "三", "四", "五", "六", "日"]; // Monday-first
+        const weekRow = document.createElement("div");
+        weekRow.className = "imp-weekdays";
+        for (const w of weekdays) {
+          const el = document.createElement("div");
+          el.className = "imp-weekday";
+          el.textContent = w;
+          weekRow.appendChild(el);
+        }
+        root.appendChild(weekRow);
+
+        const daysGrid = document.createElement("div");
+        daysGrid.className = "imp-grid imp-days imp-calendar";
+
+        const first = new Date(yNum, mNum - 1, 1);
+        const jsDow = first.getDay(); // 0=Sun..6=Sat
+        const offset = (jsDow + 6) % 7; // Monday=0..Sunday=6
+        const daysInMonth = new Date(yNum, mNum, 0).getDate();
+
+        for (let i = 0; i < offset; i += 1) {
+          const empty = document.createElement("div");
+          empty.className = "imp-day-empty";
+          daysGrid.appendChild(empty);
+        }
+
+        for (let dayNum = 1; dayNum <= daysInMonth; dayNum += 1) {
+          const key = String(dayNum).padStart(2, "0");
+          let n = 0;
+          try { n = (daysMap && daysMap.get(key)) ? (daysMap.get(key) || []).length : 0; } catch (_) { n = 0; }
+          const chip = makeChip(`${dayNum}日`, n, { action: "selDay", day: key, active: key === selD, displayLabel: String(dayNum) });
+          if (!n) {
+            try { chip.disabled = true; } catch (_) {}
+            try { chip.classList.add("is-empty"); } catch (_) {}
+          }
+          daysGrid.appendChild(chip);
+        }
+
+        const total = offset + daysInMonth;
+        const tail = (7 - (total % 7)) % 7;
+        for (let i = 0; i < tail; i += 1) {
+          const empty = document.createElement("div");
+          empty.className = "imp-day-empty";
+          daysGrid.appendChild(empty);
+        }
+
+        root.appendChild(daysGrid);
+      } else {
+        const daysGrid = document.createElement("div");
+        daysGrid.className = "imp-grid imp-days";
+        for (const d of days) {
+          let n = 0;
+          try { n = (daysMap && daysMap.get(d)) ? (daysMap.get(d) || []).length : 0; } catch (_) { n = 0; }
+          const dd = String(Number(d) || d);
+          const chip = makeChip(`${dd}日`, n, { action: "selDay", day: d, active: d === selD, displayLabel: dd });
+          daysGrid.appendChild(chip);
+        }
+        root.appendChild(daysGrid);
       }
-      root.appendChild(daysGrid);
     }
 
     let selectedItems = [];

@@ -902,10 +902,14 @@
 				      #importDialog .imp-row.imp-months .imp-chip.is-active { background: var(--c-surface); border-color: rgba(14,165,233,.55); box-shadow: 0 1px 0 rgba(15,23,42,.04), var(--ring); }
 				      #importDialog .imp-years .imp-chip { min-height: 36px; padding: 8px 14px; font-size: var(--ui-font-sm); font-weight: 900; }
 				      #importDialog .imp-months .imp-chip { min-height: 34px; padding: 7px 12px; border-radius: 14px; }
-				      #importDialog .imp-days { padding: 6px; border: 1px solid var(--c-border); border-radius: 14px; background: var(--c-soft-2); }
-				      #importDialog .imp-chip.imp-chip-day { min-height: 46px; aspect-ratio: 1 / 1; border-radius: 14px; padding: 10px; align-items:flex-start; justify-content:flex-start; }
-				      #importDialog .imp-chip.imp-chip-day:hover { background: var(--c-surface); border-color: var(--c-border-strong); }
+				      #importDialog .imp-weekdays { display:grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; padding: 0 2px; }
+				      #importDialog .imp-weekday { text-align:center; font-size: 11px; color: var(--c-muted); opacity: .85; font-variant-numeric: tabular-nums; }
+				      #importDialog .imp-days.imp-calendar { display:grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; padding: 2px; }
+				      #importDialog .imp-day-empty { aspect-ratio: 1 / 1; border-radius: 14px; background: transparent; border: 1px solid transparent; }
+				      #importDialog .imp-chip.imp-chip-day { aspect-ratio: 1 / 1; border-radius: 14px; padding: 10px; align-items:flex-start; justify-content:flex-start; }
 				      #importDialog .imp-chip.imp-chip-day .imp-chip-text { font-size: var(--ui-font-sm); font-weight: 900; }
+				      #importDialog .imp-chip.imp-chip-day.is-empty { opacity: .42; background: transparent; border-color: rgba(148,163,184,.18); box-shadow: none; cursor: default; }
+				      #importDialog .imp-chip.imp-chip-day.is-empty:hover { background: transparent; }
 				      #importDialog .imp-day-count { position:absolute; right: 8px; bottom: 8px; min-width: 18px; height: 18px; padding: 0 6px; border-radius: 999px; background: rgba(148,163,184,.14); border: 1px solid rgba(148,163,184,.35); color: var(--c-muted); font-size: 11px; font-variant-numeric: tabular-nums; display:flex; align-items:center; justify-content:center; line-height: 18px; pointer-events: none; }
 				      body[data-bm-skin="dark"] #importDialog .imp-day-count { background: rgba(148,163,184,.16); border-color: rgba(148,163,184,.22); color: rgba(226,232,240,.92); }
 				      #importDialog .imp-chip.is-active .imp-day-count { background: rgba(14,165,233,.16); border-color: rgba(14,165,233,.35); color: var(--c-text); }
