@@ -5,7 +5,6 @@ import { applyProfileToInputs, readHttpInputs, refreshHttpProfileSelect, upsertS
 import { closeBookmarkDrawer, closeDrawer, closeTranslateDrawer, confirmDialog, openBookmarkDrawer, openDrawer, openTranslatorSettings, setStatus, setTopStatusSummary, showProviderBlocks } from "./ui.js";
 import { showShutdownScreen } from "../shutdown.js";
 import { setViewMode, toggleViewMode } from "../view_mode.js";
-import { flashToastAt } from "../utils/toast.js";
 import { copyToClipboard } from "../utils/clipboard.js";
 import { buildThinkingMetaRight } from "../thinking/meta.js";
 import { maybePlayNotifySound, preloadNotifySound } from "../sound.js";
@@ -17,7 +16,9 @@ import { saveClosedThreads } from "../closed_threads.js";
 import { saveHiddenThreads } from "../sidebar/hidden.js";
 import { getUnreadCount } from "../unread.js";
 import { isOfflineKey, offlineKeyFromRel } from "../offline.js";
-import { removeOfflineShowByKey, removeOfflineShowByRel, saveOfflineShowList, upsertOfflineShow } from "../offline_show.js";
+import { removeOfflineShowByKey, saveOfflineShowList } from "../offline_show.js";
+import { wireImportDialog } from "./wire/import_dialog.js";
+import { hideUiHoverTip, openPopupNearEl, showUiHoverTip, toastFromEl } from "./wire/ui_hints.js";
 
 export function wireControlEvents(dom, state, helpers) {
   const h = (helpers && typeof helpers === "object") ? helpers : {};
@@ -84,80 +85,9 @@ export function wireControlEvents(dom, state, helpers) {
 
   const _sanitizeTranslateMode = (mode) => (String(mode || "").trim().toLowerCase() === "manual") ? "manual" : "auto";
 
-  const _toastFromEl = (el, text, opts = {}) => {
-    const isLight = ("isLight" in opts) ? !!opts.isLight : true;
-    const durationMs = Number.isFinite(Number(opts.durationMs)) ? Number(opts.durationMs) : 1100;
-    try {
-      const node = el && el.getBoundingClientRect ? el : null;
-      const r = node ? node.getBoundingClientRect() : null;
-      const x = r ? (r.left + r.width / 2) : (window.innerWidth / 2);
-      const y = r ? (r.top + r.height / 2) : 24;
-      flashToastAt(x, y, text, { isLight, durationMs });
-    } catch (_) {}
-  };
-
-  let _uiHoverTipEl = null;
-  const _ensureUiHoverTipEl = () => {
-    try {
-      if (_uiHoverTipEl && document.body && document.body.contains(_uiHoverTipEl)) return _uiHoverTipEl;
-    } catch (_) {}
-    try {
-      const el = document.createElement("div");
-      el.className = "ui-hover-tip";
-      el.setAttribute("aria-hidden", "true");
-      document.body.appendChild(el);
-      _uiHoverTipEl = el;
-      return el;
-    } catch (_) {
-      _uiHoverTipEl = null;
-      return null;
-    }
-  };
-
-  const _hideUiHoverTip = () => {
-    const el = _ensureUiHoverTipEl();
-    if (!el) return;
-    try { el.classList.remove("show"); } catch (_) {}
-  };
-
-  const _placeUiHoverTip = (el, anchorEl, opts = {}) => {
-    const anchor = anchorEl && typeof anchorEl.getBoundingClientRect === "function" ? anchorEl : null;
-    if (!el || !anchor) return;
-    const pad = Number.isFinite(Number(opts.pad)) ? Number(opts.pad) : 10;
-    const gap = Number.isFinite(Number(opts.gap)) ? Number(opts.gap) : 6;
-    const insetX = Number.isFinite(Number(opts.insetX)) ? Number(opts.insetX) : 12;
-    const prefer = String(opts.prefer || "below").trim().toLowerCase(); // below|above
-
-    const r = anchor.getBoundingClientRect();
-    const tr = el.getBoundingClientRect();
-    const vw = window.innerWidth || 0;
-    const vh = window.innerHeight || 0;
-
-    let left = r.left + insetX;
-    left = _clamp(left, pad, Math.max(pad, vw - pad - tr.width));
-
-    const below = r.bottom + gap;
-    const above = r.top - gap - tr.height;
-    let top = below;
-    if (prefer === "above" || (below + tr.height) > (vh - pad)) top = above;
-    top = _clamp(top, pad, Math.max(pad, vh - pad - tr.height));
-
-    try { el.style.left = `${left}px`; } catch (_) {}
-    try { el.style.top = `${top}px`; } catch (_) {}
-  };
-
-  const _showUiHoverTip = (anchorEl, text, opts = {}) => {
-    const msg = String(text || "").trim();
-    if (!msg) return;
-    const el = _ensureUiHoverTipEl();
-    if (!el) return;
-    try { el.textContent = msg; } catch (_) {}
-    try { el.style.left = "0px"; el.style.top = "0px"; el.style.visibility = "hidden"; } catch (_) {}
-    try { el.classList.add("show"); } catch (_) {}
-    try { _placeUiHoverTip(el, anchorEl, opts); } catch (_) {}
-    try { el.style.visibility = ""; } catch (_) {}
-    try { el.classList.add("show"); } catch (_) {}
-  };
+  const _toastFromEl = (el, text, opts = {}) => { toastFromEl(el, text, opts); };
+  const _showUiHoverTip = showUiHoverTip;
+  const _hideUiHoverTip = hideUiHoverTip;
 
   const _clamp = (n, a, b) => {
     const x = Number(n);
@@ -165,77 +95,7 @@ export function wireControlEvents(dom, state, helpers) {
     return Math.min(b, Math.max(a, x));
   };
 
-  const _openPopupNearEl = (dlg, anchorEl, opts = {}) => {
-    const dialog = dlg && typeof dlg.show === "function" ? dlg : null;
-    const anchor = anchorEl && typeof anchorEl.getBoundingClientRect === "function" ? anchorEl : null;
-    if (!dialog || !anchor) return false;
-
-    const pad = Number.isFinite(Number(opts.pad)) ? Number(opts.pad) : 12;
-    const gap = Number.isFinite(Number(opts.gap)) ? Number(opts.gap) : 10;
-    const prefer = String(opts.prefer || "left").trim().toLowerCase(); // left|right
-    const align = String(opts.align || "start").trim().toLowerCase(); // start|center|end
-
-    // Avoid flicker: show hidden first, then position.
-    let prevVis = "";
-    try { prevVis = String(dialog.style.visibility || ""); } catch (_) {}
-    try { dialog.style.visibility = "hidden"; } catch (_) {}
-    try { dialog.style.left = "0px"; dialog.style.top = "0px"; } catch (_) {}
-    try { if (dialog.open) dialog.close(); } catch (_) {}
-    try { dialog.show(); } catch (_) { return false; }
-
-    let cleanup = null;
-    try {
-      const ar = anchor.getBoundingClientRect();
-      const dr = dialog.getBoundingClientRect();
-      const vw = window.innerWidth || 0;
-      const vh = window.innerHeight || 0;
-
-      let left = 0;
-      if (prefer === "right") left = ar.right + gap;
-      else left = ar.left - dr.width - gap;
-
-      let top = 0;
-      if (align === "end") top = ar.bottom - dr.height;
-      else if (align === "center") top = ar.top + (ar.height - dr.height) / 2;
-      else top = ar.top;
-
-      // If our first choice is off-screen, try the other side.
-      if (left < pad && prefer !== "right") left = ar.right + gap;
-      if ((left + dr.width + pad) > vw && prefer === "right") left = ar.left - dr.width - gap;
-
-      left = _clamp(left, pad, Math.max(pad, vw - dr.width - pad));
-      top = _clamp(top, pad, Math.max(pad, vh - dr.height - pad));
-
-      try { dialog.style.left = `${left}px`; } catch (_) {}
-      try { dialog.style.top = `${top}px`; } catch (_) {}
-    } catch (_) {}
-
-    try { dialog.style.visibility = prevVis || "visible"; } catch (_) {}
-
-    // Close when clicking outside (popover-like).
-    try {
-      const onDown = (e) => {
-        try {
-          if (!dialog.open) return;
-          const t = e && e.target ? e.target : null;
-          if (!t) return;
-          if (dialog.contains && dialog.contains(t)) return;
-          if (anchor.contains && anchor.contains(t)) return;
-          try { dialog.close(); } catch (_) {}
-        } catch (_) {}
-      };
-      const onClose = () => {
-        try { document.removeEventListener("pointerdown", onDown, true); } catch (_) {}
-      };
-      cleanup = onClose;
-      try { document.addEventListener("pointerdown", onDown, true); } catch (_) {}
-      try { dialog.addEventListener("close", onClose, { once: true }); } catch (_) {}
-    } catch (_) {}
-
-    // Safety: if dialog is removed or throws, ensure listeners don't linger.
-    void cleanup;
-    return true;
-  };
+  const _openPopupNearEl = openPopupNearEl;
 
   const _applyTranslateModeLocal = (mode) => {
     const m = _sanitizeTranslateMode(mode);
@@ -601,35 +461,6 @@ export function wireControlEvents(dom, state, helpers) {
       else openDrawer(dom);
     } catch (_) { openDrawer(dom); }
   });
-
-  const _openImportDialog = () => {
-    const btn = dom && dom.importBtn ? dom.importBtn : null;
-    const dlg = dom && dom.importDialog ? dom.importDialog : null;
-    const canPopup = !!(btn && dlg && typeof dlg.show === "function");
-    if (!canPopup) return;
-    try {
-      if (dlg.open) { dlg.close(); return; }
-    } catch (_) {}
-
-    // Keep UI clean: import popover is exclusive with drawers.
-    try { closeDrawer(dom); } catch (_) {}
-    try { closeTranslateDrawer(dom); } catch (_) {}
-    try { closeBookmarkDrawer(dom); } catch (_) {}
-    try { if (dom.exportPrefsDialog && dom.exportPrefsDialog.open) dom.exportPrefsDialog.close(); } catch (_) {}
-    try { if (dom.quickViewDialog && dom.quickViewDialog.open) dom.quickViewDialog.close(); } catch (_) {}
-
-    const ok = _openPopupNearEl(dlg, btn, { prefer: "left", align: "start", gap: 10, pad: 12 });
-    if (!ok) return;
-
-    try { _setImportError(""); } catch (_) {}
-    try { _renderImportList(); } catch (_) {}
-    try { _refreshOfflineFiles(false); } catch (_) {}
-    try {
-      setTimeout(() => {
-        try { if (dom.importRel && typeof dom.importRel.focus === "function") dom.importRel.focus(); } catch (_) {}
-      }, 0);
-    } catch (_) {}
-  };
 
   const _isBookmarkDrawerOpen = () => {
     try {
@@ -1049,21 +880,6 @@ export function wireControlEvents(dom, state, helpers) {
       try { _renderOfflineShowList(); } catch (_) {}
 	  };
 
-  const _importRelFromInput = () => {
-    try {
-      const el = dom && dom.importRel ? dom.importRel : null;
-      return el ? String(el.value || "").trim() : "";
-    } catch (_) {
-      return "";
-    }
-  };
-
-  const _setImportError = (msg) => {
-    const el = dom && dom.importErrorText ? dom.importErrorText : null;
-    if (!el) return;
-    try { el.textContent = String(msg || "").trim(); } catch (_) {}
-  };
-
   const _renderOfflineShowList = () => {
     const host = dom && dom.offlineShowList ? dom.offlineShowList : null;
     if (!host) return;
@@ -1332,309 +1148,8 @@ export function wireControlEvents(dom, state, helpers) {
     host.appendChild(frag);
   };
 
-  const _isImportDialogOpen = () => {
-    try { return !!(dom && dom.importDialog && dom.importDialog.open); } catch (_) { return false; }
-  };
-
-  const _renderImportList = () => {
-    const host = dom && dom.importList ? dom.importList : null;
-    if (!host) return;
-    if (!_isImportDialogOpen()) return;
-
-    const files = Array.isArray(state && state.offlineFiles) ? state.offlineFiles : [];
-
-    try { host.replaceChildren(); } catch (_) { while (host.firstChild) host.removeChild(host.firstChild); }
-    const frag = document.createDocumentFragment();
-
-    if (!files.length) {
-      const empty = document.createElement("div");
-      empty.className = "meta";
-      empty.style.opacity = "0.7";
-      empty.style.padding = "6px 2px";
-      empty.textContent = "暂无可选文件（可手动输入 rel，或稍等写入）";
-      frag.appendChild(empty);
-      host.appendChild(frag);
-      return;
-    }
-
-    const _parseYmd = (rel) => {
-      const r = String(rel || "").trim().replaceAll("\\", "/").replace(/^\/+/, "");
-      const parts = r.split("/");
-      if (parts.length < 5) return null;
-      if (parts[0] !== "sessions") return null;
-      const y = String(parts[1] || "");
-      const m = String(parts[2] || "");
-      const d = String(parts[3] || "");
-      if (!/^\d{4}$/.test(y)) return null;
-      if (!/^\d{2}$/.test(m)) return null;
-      if (!/^\d{2}$/.test(d)) return null;
-      return { y, m, d };
-    };
-
-    // Build a directory tree: year -> month -> day -> [files...]
-    const tree = new Map(); // y -> Map(m -> Map(d -> items[]))
-    const other = []; // fallback bucket (should be rare)
-    for (const it of files) {
-      const rel = String((it && it.rel) ? it.rel : "").trim();
-      if (!rel) continue;
-      const ymd = _parseYmd(rel);
-      if (!ymd) { other.push(it); continue; }
-      const { y, m, d } = ymd;
-      if (!tree.has(y)) tree.set(y, new Map());
-      const ym = tree.get(y);
-      if (!ym.has(m)) ym.set(m, new Map());
-      const dm = ym.get(m);
-      if (!dm.has(d)) dm.set(d, []);
-      try { dm.get(d).push(it); } catch (_) {}
-    }
-
-    const _desc = (a, b) => String(b || "").localeCompare(String(a || ""));
-    const years = Array.from(tree.keys()).sort(_desc);
-
-    const _countYear = (y) => {
-      try {
-        const ym = tree.get(y);
-        let n = 0;
-        for (const m of ym.keys()) {
-          const dm = ym.get(m);
-          for (const d of dm.keys()) n += (dm.get(d) || []).length;
-        }
-        return n;
-      } catch (_) { return 0; }
-    };
-    const _countMonth = (y, m) => {
-      try {
-        const dm = tree.get(y).get(m);
-        let n = 0;
-        for (const d of dm.keys()) n += (dm.get(d) || []).length;
-        return n;
-      } catch (_) { return 0; }
-    };
-
-    const _isShown = (rel) => {
-      const r = String(rel || "").trim();
-      if (!r) return false;
-      try {
-        const show = Array.isArray(state && state.offlineShow) ? state.offlineShow : [];
-        for (const s of show) {
-          if (!s || typeof s !== "object") continue;
-          if (String(s.rel || "").trim() === r) return true;
-        }
-      } catch (_) {}
-      return false;
-    };
-
-    const _makePill = (n) => {
-      const pill = document.createElement("span");
-      pill.className = "pill";
-      pill.style.marginLeft = "8px";
-      pill.textContent = String(n || 0);
-      return pill;
-    };
-
-    const _renderFileRowsInto = (listEl, items) => {
-      if (!listEl) return;
-      if (listEl.dataset && listEl.dataset.loaded === "1") return;
-      try { if (listEl.dataset) listEl.dataset.loaded = "1"; } catch (_) {}
-
-      const arr = Array.isArray(items) ? items.slice(0) : [];
-      // Sort by filename timestamp (directory date order should not depend on mtime).
-      arr.sort((a, b) => {
-        const ra = String(a && a.rel ? a.rel : "");
-        const rb = String(b && b.rel ? b.rel : "");
-        const fa = (ra.split("/").slice(-1)[0] || "").trim();
-        const fb = (rb.split("/").slice(-1)[0] || "").trim();
-        if (fa && fb && fa !== fb) return fb.localeCompare(fa);
-        return rb.localeCompare(ra);
-      });
-
-      for (const it of arr) {
-        const rel = String((it && it.rel) ? it.rel : "").trim();
-        const file = String((it && it.file) ? it.file : "").trim();
-        const tid = String((it && it.thread_id) ? it.thread_id : "").trim();
-        if (!rel) continue;
-
-        const stamp = rolloutStampFromFile(file || rel);
-        const idPart = tid ? shortId(tid) : shortId((file.split("/").slice(-1)[0]) || rel);
-        const labelText = (stamp && idPart) ? `${stamp} · ${idPart}` : (idPart || stamp || rel);
-
-        const row = document.createElement("div");
-        row.className = "tab";
-        row.dataset.rel = rel;
-        row.dataset.file = file;
-        row.dataset.threadId = tid;
-        row.setAttribute("role", "button");
-        row.tabIndex = 0;
-        try { row.removeAttribute("title"); } catch (_) {}
-
-        const dot = document.createElement("span");
-        dot.className = "tab-dot";
-        try { dot.style.background = String(colorForKey(offlineKeyFromRel(rel)).fg || "#64748b"); } catch (_) {}
-
-        const main = document.createElement("div");
-        main.className = "tab-main";
-
-        const label = document.createElement("span");
-        label.className = "tab-label";
-        label.textContent = labelText;
-
-        // Avoid duplicating information: year/month/day already in group header,
-        // and labelText already carries stamp + id. Only add a small marker if shown.
-        if (_isShown(rel)) {
-          try {
-            const mark = document.createElement("span");
-            mark.className = "pill";
-            mark.style.marginLeft = "8px";
-            mark.textContent = "展示中";
-            label.appendChild(mark);
-          } catch (_) {}
-        }
-
-        main.appendChild(label);
-        row.appendChild(dot);
-        row.appendChild(main);
-        listEl.appendChild(row);
-      }
-    };
-
-    let firstYear = true;
-    for (const y of years) {
-      const ym = tree.get(y);
-      const months = Array.from(ym.keys()).sort(_desc);
-      const yearDetails = document.createElement("details");
-      yearDetails.className = "drawer-details";
-      if (firstYear) yearDetails.open = true;
-      firstYear = false;
-
-      const yearSummary = document.createElement("summary");
-      yearSummary.className = "meta";
-      yearSummary.textContent = `sessions/${y}`;
-      try { yearSummary.appendChild(_makePill(_countYear(y))); } catch (_) {}
-      yearDetails.appendChild(yearSummary);
-
-      for (const m of months) {
-        const dm = ym.get(m);
-        const days = Array.from(dm.keys()).sort(_desc);
-        const monthDetails = document.createElement("details");
-        monthDetails.className = "drawer-details";
-        monthDetails.style.marginLeft = "10px";
-        monthDetails.open = false;
-
-        const monthSummary = document.createElement("summary");
-        monthSummary.className = "meta";
-        monthSummary.textContent = `sessions/${y}/${m}`;
-        try { monthSummary.appendChild(_makePill(_countMonth(y, m))); } catch (_) {}
-        monthDetails.appendChild(monthSummary);
-
-        for (const d of days) {
-          const items = dm.get(d) || [];
-          const dayDetails = document.createElement("details");
-          dayDetails.className = "drawer-details";
-          dayDetails.style.marginLeft = "20px";
-          dayDetails.open = false;
-
-          const daySummary = document.createElement("summary");
-          daySummary.className = "meta";
-          daySummary.textContent = `sessions/${y}/${m}/${d}`;
-          try { daySummary.appendChild(_makePill(items.length)); } catch (_) {}
-          dayDetails.appendChild(daySummary);
-
-          const list = document.createElement("div");
-          list.className = "tabs";
-          list.style.marginTop = "10px";
-          try { list.dataset.loaded = "0"; } catch (_) {}
-
-          dayDetails.appendChild(list);
-          dayDetails.addEventListener("toggle", () => {
-            try {
-              if (!dayDetails.open) return;
-              _renderFileRowsInto(list, items);
-            } catch (_) {}
-          });
-
-          monthDetails.appendChild(dayDetails);
-        }
-
-        yearDetails.appendChild(monthDetails);
-      }
-
-      frag.appendChild(yearDetails);
-    }
-
-    if (other.length) {
-      const details = document.createElement("details");
-      details.className = "drawer-details";
-      details.open = false;
-      const summary = document.createElement("summary");
-      summary.className = "meta";
-      summary.textContent = "其他";
-      try { summary.appendChild(_makePill(other.length)); } catch (_) {}
-      details.appendChild(summary);
-      const list = document.createElement("div");
-      list.className = "tabs";
-      list.style.marginTop = "10px";
-      details.appendChild(list);
-      details.addEventListener("toggle", () => {
-        try {
-          if (!details.open) return;
-          _renderFileRowsInto(list, other);
-        } catch (_) {}
-      });
-      frag.appendChild(details);
-    }
-
-    host.appendChild(frag);
-  };
-
-  let _offlineFetchInFlight = false;
-  const _refreshOfflineFiles = async (force = false) => {
-    if (_offlineFetchInFlight) return;
-    if (!_isImportDialogOpen()) return;
-    const now = Date.now();
-    const last = Number(state && state.offlineFilesLastSyncMs) || 0;
-    if (!force && last && (now - last) < 5000) return;
-    _offlineFetchInFlight = true;
-    try {
-      _setImportError("");
-      const url = `/api/offline/files?limit=0&t=${now}`;
-      const r = await fetch(url, { cache: "no-store" }).then((x) => x.json()).catch(() => null);
-      const files = Array.isArray(r && r.files) ? r.files : [];
-      state.offlineFiles = files;
-      state.offlineFilesLastSyncMs = now;
-      _renderImportList();
-    } catch (e) {
-      state.offlineFiles = [];
-      state.offlineFilesLastSyncMs = now;
-      _setImportError("离线文件列表加载失败");
-      _renderImportList();
-    } finally {
-      _offlineFetchInFlight = false;
-    }
-  };
-
-  const _openOfflineRel = async (rel, meta = {}) => {
-    let rel0 = String(rel || "").trim().replaceAll("\\", "/");
-    while (rel0.startsWith("/")) rel0 = rel0.slice(1);
-    if (!rel0) return;
-    if (!rel0.startsWith("sessions/")) {
-      try { _setImportError("rel 必须以 sessions/ 开头"); } catch (_) {}
-      return;
-    }
-    const file = String(meta.file || "").trim();
-    const tid = String(meta.thread_id || meta.threadId || "").trim();
-    try { _setImportError(""); } catch (_) {}
-    try {
-      const next = upsertOfflineShow(state.offlineShow, { rel: rel0, file, thread_id: tid });
-      state.offlineShow = next;
-      saveOfflineShowList(next);
-    } catch (_) {}
-    try { renderTabs(); } catch (_) {}
-    try { _renderBookmarkDrawerList(); } catch (_) {}
-    const key = offlineKeyFromRel(rel0);
-    await onSelectKey(key);
-    try { if (dom && dom.importDialog && dom.importDialog.open) dom.importDialog.close(); } catch (_) {}
-    closeBookmarkDrawer(dom);
-  };
+  // 导入对话（离线展示入口）
+  wireImportDialog(dom, state, { onSelectKey, renderTabs }, { renderBookmarkDrawerList: _renderBookmarkDrawerList });
 
   const _openBookmarkDrawer = () => {
     openBookmarkDrawer(dom);
@@ -2083,41 +1598,6 @@ export function wireControlEvents(dom, state, helpers) {
   if (dom.bookmarkHiddenList) dom.bookmarkHiddenList.addEventListener("keydown", async (e) => { try { await _handleBookmarkListKeydown(e); } catch (_) {} });
   if (dom.offlineShowList) dom.offlineShowList.addEventListener("click", async (e) => { try { await _handleOfflineShowListClick(e); } catch (_) {} });
   if (dom.offlineShowList) dom.offlineShowList.addEventListener("keydown", async (e) => { try { await _handleOfflineShowListKeydown(e); } catch (_) {} });
-
-  // 导入对话（离线展示入口）
-  if (dom.importBtn) dom.importBtn.addEventListener("click", () => { try { _openImportDialog(); } catch (_) {} });
-  if (dom.importDialogCloseBtn) dom.importDialogCloseBtn.addEventListener("click", () => { try { if (dom.importDialog && dom.importDialog.open) dom.importDialog.close(); } catch (_) {} });
-  if (dom.importRefreshBtn) dom.importRefreshBtn.addEventListener("click", async () => { try { await _refreshOfflineFiles(true); } catch (_) {} });
-  if (dom.importOpenBtn) dom.importOpenBtn.addEventListener("click", async () => { try { await _openOfflineRel(_importRelFromInput()); } catch (_) {} });
-  if (dom.importRel) dom.importRel.addEventListener("keydown", async (e) => {
-    try {
-      const keyName = String(e && e.key ? e.key : "");
-      if (keyName !== "Enter") return;
-      try { e.preventDefault(); } catch (_) {}
-      await _openOfflineRel(_importRelFromInput());
-    } catch (_) {}
-  });
-  if (dom.importList) dom.importList.addEventListener("click", async (e) => {
-    try {
-      const row = e && e.target && e.target.closest ? e.target.closest(".tab[data-rel]") : null;
-      if (!row) return;
-      const rel = row.dataset ? String(row.dataset.rel || "") : "";
-      const file = row.dataset ? String(row.dataset.file || "") : "";
-      const thread_id = row.dataset ? String(row.dataset.threadId || "") : "";
-      if (!rel) return;
-      await _openOfflineRel(rel, { file, thread_id });
-    } catch (_) {}
-  });
-  if (dom.importList) dom.importList.addEventListener("keydown", async (e) => {
-    try {
-      const keyName = String(e && e.key ? e.key : "");
-      if (keyName !== "Enter" && keyName !== " ") return;
-      const row = e && e.target && e.target.closest ? e.target.closest(".tab[data-rel]") : null;
-      if (!row) return;
-      try { e.preventDefault(); } catch (_) {}
-      await _openOfflineRel(String(row.dataset ? row.dataset.rel || "" : ""), { file: String(row.dataset ? row.dataset.file || "" : ""), thread_id: String(row.dataset ? row.dataset.threadId || "" : "") });
-    } catch (_) {}
-  });
 
   // offline-show-changed：用于同步“展示中”列表（例如从展示标签栏关闭时）。
   try {

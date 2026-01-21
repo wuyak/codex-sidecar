@@ -43,8 +43,6 @@ export async function initApp() {
 
   const applyFollowPolicy = async (key) => {
     try {
-      // 离线会话：仅展示/导出，不影响实时监听的 follow 选择。
-      if (isOfflineKey(key)) return;
       let pinOnSelect = true;
       try { pinOnSelect = localStorage.getItem("codex_sidecar_pin_on_select") !== "0"; } catch (_) { pinOnSelect = true; }
 
@@ -85,21 +83,23 @@ export async function initApp() {
         if (had) saveClosedThreads(state.closedThreads);
       }
     } catch (_) {}
+    const offline = isOfflineKey(key);
     state.currentKey = key;
     try { updateUnreadButton(dom, state); } catch (_) {}
     const { needsRefresh } = activateView(dom, state, key);
     // 快速 UI 反馈：先更新选中态，再异步拉取/重绘消息列表。
     try { renderTabsWrapper(dom, state); } catch (_) {}
-    await applyFollowPolicy(key);
-    // 优先回放后台缓冲的 SSE（避免频繁切换时每次都全量 refreshList）。
+    if (!offline) await applyFollowPolicy(key);
+    // 优先回放后台缓冲的 SSE（避免频繁切换时每次都全量 refreshList；离线视图不回放 SSE）。
     let overflow = false;
     try {
-      if (!needsRefresh && key !== "all") {
+      if (!offline && !needsRefresh && key !== "all") {
         const r = drainBufferedForKey(dom, state, key, renderMessage, renderTabsWrapper);
         overflow = !!(r && r.overflow);
       }
     } catch (_) {}
-    if (key === "all" || needsRefresh || overflow) {
+    // 离线视图：每次切换都回源一次，保证“展示中”可追上最新写入（仍由 tail_lines 控制开销）。
+    if (key === "all" || needsRefresh || overflow || offline) {
       await refreshList(dom, state, renderTabsWrapper, renderMessage, renderEmpty);
     }
   };
