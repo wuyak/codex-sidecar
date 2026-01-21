@@ -74,6 +74,8 @@ class TuiGateTailer:
             # Truncated/rotated.
             self._offset = 0
             self._buf = b""
+        if self._offset == size:
+            return
 
         try:
             with path.open("rb") as f:

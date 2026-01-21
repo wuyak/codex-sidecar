@@ -93,6 +93,53 @@ class SidecarHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _send_error(self, status: int, error: str, extra: Optional[Dict[str, Any]] = None) -> None:
+        obj: Dict[str, Any] = {"ok": False, "error": str(error or "")}
+        if isinstance(extra, dict):
+            obj.update(extra)
+        self._send_json(status, obj)
+
+    def _read_json_object(self, *, allow_invalid_json: bool) -> Optional[Dict[str, Any]]:
+        """
+        Read request body as a JSON object.
+
+        - allow_invalid_json=True: invalid JSON falls back to {} (compat for control endpoints).
+        - allow_invalid_json=False: invalid JSON returns 400 invalid_json.
+        """
+        length = int(self.headers.get("Content-Length") or "0")
+        raw = self.rfile.read(length) if length > 0 else b"{}"
+        try:
+            obj = json.loads(raw.decode("utf-8", errors="replace"))
+        except Exception:
+            if allow_invalid_json:
+                obj = {}
+            else:
+                self._send_error(HTTPStatus.BAD_REQUEST, "invalid_json")
+                return None
+        if not isinstance(obj, dict):
+            self._send_error(HTTPStatus.BAD_REQUEST, "invalid_payload")
+            return None
+        return obj
+
+    def _handle_translate_text(self, obj: Dict[str, Any]) -> None:
+        items = obj.get("items")
+        if isinstance(items, list):
+            try:
+                r = self._controller.translate_items(items)
+            except Exception:
+                r = {"ok": False, "error": "translate_failed", "items": []}
+            out_items = []
+            try:
+                out_items = r.get("items") if isinstance(r, dict) and isinstance(r.get("items"), list) else []
+            except Exception:
+                out_items = []
+            # Keep legacy shape: always return {ok:true, items:[...]} and surface per-item errors.
+            self._send_json(HTTPStatus.OK, {"ok": True, "items": out_items})
+            return
+
+        text = str(obj.get("text") or "")
+        self._send_json(HTTPStatus.OK, self._controller.translate_text(text))
+
     def do_GET(self) -> None:
         u = urlparse(self.path)
         path = u.path
@@ -385,20 +432,13 @@ class SidecarHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         # Control plane (JSON).
         if self.path == "/api/config":
-            length = int(self.headers.get("Content-Length") or "0")
-            raw = self.rfile.read(length) if length > 0 else b"{}"
-            try:
-                obj = json.loads(raw.decode("utf-8", errors="replace"))
-            except Exception:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "invalid_json"})
-                return
-            if not isinstance(obj, dict):
-                self._send_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "invalid_payload"})
+            obj = self._read_json_object(allow_invalid_json=False)
+            if obj is None:
                 return
             try:
                 cfg = self._controller.update_config(obj)
             except ValueError as e:
-                self._send_json(HTTPStatus.CONFLICT, {"ok": False, "error": str(e)})
+                self._send_error(HTTPStatus.CONFLICT, str(e))
                 return
             safe_cfg = redact_sidecar_config(cfg) if isinstance(cfg, dict) else cfg
             try:
@@ -424,47 +464,18 @@ class SidecarHandler(BaseHTTPRequestHandler):
             return
 
         if self.path == "/api/control/retranslate":
-            length = int(self.headers.get("Content-Length") or "0")
-            raw = self.rfile.read(length) if length > 0 else b"{}"
-            try:
-                obj = json.loads(raw.decode("utf-8", errors="replace"))
-            except Exception:
-                obj = {}
-            if not isinstance(obj, dict):
-                self._send_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "invalid_payload"})
+            obj = self._read_json_object(allow_invalid_json=True)
+            if obj is None:
                 return
             mid = str(obj.get("id") or obj.get("mid") or obj.get("msg_id") or "")
             self._send_json(HTTPStatus.OK, self._controller.retranslate(mid))
             return
 
         if self.path == "/api/control/translate_text":
-            length = int(self.headers.get("Content-Length") or "0")
-            raw = self.rfile.read(length) if length > 0 else b"{}"
-            try:
-                obj = json.loads(raw.decode("utf-8", errors="replace"))
-            except Exception:
-                obj = {}
-            if not isinstance(obj, dict):
-                self._send_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "invalid_payload"})
+            obj = self._read_json_object(allow_invalid_json=True)
+            if obj is None:
                 return
-
-            items = obj.get("items")
-            if isinstance(items, list):
-                try:
-                    r = self._controller.translate_items(items)
-                except Exception:
-                    r = {"ok": False, "error": "translate_failed", "items": []}
-                out_items = []
-                try:
-                    out_items = r.get("items") if isinstance(r, dict) and isinstance(r.get("items"), list) else []
-                except Exception:
-                    out_items = []
-                # Keep legacy shape: always return {ok:true, items:[...]} and surface per-item errors.
-                self._send_json(HTTPStatus.OK, {"ok": True, "items": out_items})
-                return
-
-            text = str(obj.get("text") or "")
-            self._send_json(HTTPStatus.OK, self._controller.translate_text(text))
+            self._handle_translate_text(obj)
             return
 
         if self.path == "/api/control/translate_probe":
@@ -473,14 +484,8 @@ class SidecarHandler(BaseHTTPRequestHandler):
             return
 
         if self.path == "/api/control/reveal_secret":
-            length = int(self.headers.get("Content-Length") or "0")
-            raw = self.rfile.read(length) if length > 0 else b"{}"
-            try:
-                obj = json.loads(raw.decode("utf-8", errors="replace"))
-            except Exception:
-                obj = {}
-            if not isinstance(obj, dict):
-                self._send_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "invalid_payload"})
+            obj = self._read_json_object(allow_invalid_json=True)
+            if obj is None:
                 return
             provider = str(obj.get("provider") or obj.get("p") or "")
             field = str(obj.get("field") or obj.get("k") or "")
@@ -489,14 +494,8 @@ class SidecarHandler(BaseHTTPRequestHandler):
             return
 
         if self.path == "/api/control/follow":
-            length = int(self.headers.get("Content-Length") or "0")
-            raw = self.rfile.read(length) if length > 0 else b"{}"
-            try:
-                obj = json.loads(raw.decode("utf-8", errors="replace"))
-            except Exception:
-                obj = {}
-            if not isinstance(obj, dict):
-                self._send_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "invalid_payload"})
+            obj = self._read_json_object(allow_invalid_json=True)
+            if obj is None:
                 return
             mode = str(obj.get("mode") or obj.get("selection_mode") or "auto")
             thread_id = str(obj.get("thread_id") or obj.get("threadId") or "")
@@ -540,32 +539,10 @@ class SidecarHandler(BaseHTTPRequestHandler):
             return
 
         if self.path == "/api/offline/translate":
-            length = int(self.headers.get("Content-Length") or "0")
-            raw = self.rfile.read(length) if length > 0 else b"{}"
-            try:
-                obj = json.loads(raw.decode("utf-8", errors="replace"))
-            except Exception:
-                obj = {}
-            if not isinstance(obj, dict):
-                self._send_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "invalid_payload"})
+            obj = self._read_json_object(allow_invalid_json=True)
+            if obj is None:
                 return
-
-            items = obj.get("items")
-            if isinstance(items, list):
-                try:
-                    r = self._controller.translate_items(items)
-                except Exception:
-                    r = {"ok": False, "error": "translate_failed", "items": []}
-                out_items = []
-                try:
-                    out_items = r.get("items") if isinstance(r, dict) and isinstance(r.get("items"), list) else []
-                except Exception:
-                    out_items = []
-                self._send_json(HTTPStatus.OK, {"ok": True, "items": out_items})
-                return
-
-            text = str(obj.get("text") or "")
-            self._send_json(HTTPStatus.OK, self._controller.translate_text(text))
+            self._handle_translate_text(obj)
             return
 
         if self.path != "/ingest":
