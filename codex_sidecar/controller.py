@@ -8,6 +8,7 @@ from .config import SidecarConfig, load_config, save_config
 from .control.translator_build import build_translator, count_valid_http_profiles, select_http_profile
 from .control.translator_specs import TRANSLATORS
 from .security import restore_masked_secrets_in_patch
+from .translator import Translator
 from .watcher import HttpIngestClient, RolloutWatcher
 
 
@@ -52,6 +53,32 @@ class SidecarController:
     def translators(self) -> Dict[str, Any]:
         return {"translators": [t.__dict__ for t in TRANSLATORS]}
 
+    def _translator_error(self, tr: Translator) -> str:
+        err = ""
+        try:
+            err = str(getattr(tr, "last_error", "") or "").strip()
+        except Exception:
+            err = ""
+        if err.startswith("WARN:"):
+            err = err[len("WARN:") :].strip()
+        return err
+
+    def _translator_model(self, tr: Translator, provider_fallback: str) -> str:
+        model = ""
+        try:
+            model = str(getattr(tr, "_resolved_model", "") or getattr(tr, "model", "") or "").strip()
+        except Exception:
+            model = ""
+        if not model:
+            model = str(provider_fallback or "").strip()
+        return model
+
+    def _build_translator(self, cfg: SidecarConfig) -> Optional[Translator]:
+        try:
+            return build_translator(cfg)
+        except Exception:
+            return None
+
     def translate_probe(self) -> Dict[str, Any]:
         """
         Best-effort probe to validate the current translator configuration actually produces output.
@@ -76,9 +103,8 @@ class SidecarController:
             "中文说明：这行不应被翻译或改动。\n"
         )
         t0 = time.monotonic()
-        try:
-            tr = build_translator(cfg)
-        except Exception:
+        tr = self._build_translator(cfg)
+        if tr is None:
             return {"ok": False, "provider": provider, "error": "build_translator_failed"}
 
         out = ""
@@ -89,13 +115,7 @@ class SidecarController:
         ms = (time.monotonic() - t0) * 1000.0
 
         out_s = str(out or "").strip()
-        err = ""
-        try:
-            err = str(getattr(tr, "last_error", "") or "").strip()
-        except Exception:
-            err = ""
-        if err.startswith("WARN:"):
-            err = err[len("WARN:") :].strip()
+        err = self._translator_error(tr)
 
         # Basic format checks (primarily for NVIDIA, but fine for others too).
         heading_ok = ("##" in out_s) or ("\n#" in ("\n" + out_s))
@@ -104,12 +124,8 @@ class SidecarController:
         if provider == "nvidia":
             ok = ok and heading_ok and code_ok
 
-        model = ""
-        try:
-            model = str(getattr(tr, "_resolved_model", "") or getattr(tr, "model", "") or "").strip()
-        except Exception:
-            model = ""
-        if not model and provider:
+        model = self._translator_model(tr, provider)
+        if not model:
             model = provider
 
         return {
@@ -140,9 +156,8 @@ class SidecarController:
         provider = str(getattr(cfg, "translator_provider", "") or "openai").strip().lower() or "openai"
 
         t0 = time.monotonic()
-        try:
-            tr = build_translator(cfg)
-        except Exception:
+        tr = self._build_translator(cfg)
+        if tr is None:
             return {"ok": False, "provider": provider, "error": "build_translator_failed"}
 
         out = ""
@@ -153,19 +168,8 @@ class SidecarController:
         ms = (time.monotonic() - t0) * 1000.0
 
         out_s = str(out or "").strip()
-        err = ""
-        try:
-            err = str(getattr(tr, "last_error", "") or "").strip()
-        except Exception:
-            err = ""
-        if err.startswith("WARN:"):
-            err = err[len("WARN:") :].strip()
-
-        model = ""
-        try:
-            model = str(getattr(tr, "_resolved_model", "") or getattr(tr, "model", "") or "").strip()
-        except Exception:
-            model = ""
+        err = self._translator_error(tr)
+        model = self._translator_model(tr, provider)
         if not model:
             model = provider
 
@@ -213,16 +217,11 @@ class SidecarController:
         provider = str(getattr(cfg, "translator_provider", "") or "openai").strip().lower() or "openai"
 
         t0_all = time.monotonic()
-        try:
-            tr = build_translator(cfg)
-        except Exception:
+        tr = self._build_translator(cfg)
+        if tr is None:
             return {"ok": False, "provider": provider, "error": "build_translator_failed", "items": []}
 
-        model = ""
-        try:
-            model = str(getattr(tr, "_resolved_model", "") or getattr(tr, "model", "") or "").strip()
-        except Exception:
-            model = ""
+        model = self._translator_model(tr, provider)
         if not model:
             model = provider
 
@@ -241,13 +240,7 @@ class SidecarController:
                 out = ""
             ms = (time.monotonic() - t0) * 1000.0
             out_s = str(out or "").strip()
-            err = ""
-            try:
-                err = str(getattr(tr, "last_error", "") or "").strip()
-            except Exception:
-                err = ""
-            if err.startswith("WARN:"):
-                err = err[len("WARN:") :].strip()
+            err = self._translator_error(tr)
             out_items.append(
                 {
                     "id": mid,
@@ -380,42 +373,53 @@ class SidecarController:
             self._cfg = SidecarConfig.from_dict(cur)
             if persist:
                 save_config(self._config_home, self._cfg)
-            # Hot-apply translate_mode for the running watcher (no restart required).
-            try:
-                next_tm = str(getattr(self._cfg, "translate_mode", "auto") or "auto").strip().lower()
-                watcher = self._watcher
-                running = bool(self._thread is not None and self._thread.is_alive())
-                if watcher is not None and running and next_tm and next_tm != prev_tm:
-                    watcher.set_translate_mode(next_tm)
-            except Exception:
-                pass
-            # Hot-reload translator/provider config for the running watcher.
-            try:
-                watcher = self._watcher
-                running = bool(self._thread is not None and self._thread.is_alive())
-                next_provider = str(getattr(self._cfg, "translator_provider", "") or "").strip().lower()
-                if watcher is not None and running and (touched_translator or next_provider != prev_provider):
-                    watcher.set_translator(build_translator(self._cfg))
-            except Exception:
-                pass
-            # Hot-apply watcher runtime settings where it's safe (no full restart required).
-            # Note: watch_codex_home still requires stop/start to take effect.
-            try:
-                watcher = self._watcher
-                running = bool(self._thread is not None and self._thread.is_alive())
-                if watcher is not None and running:
-                    watcher.set_watch_max_sessions(int(getattr(self._cfg, "watch_max_sessions", 3) or 3))
-                    watcher.set_replay_last_lines(int(getattr(self._cfg, "replay_last_lines", 0) or 0))
-                    watcher.set_poll_interval_s(float(getattr(self._cfg, "poll_interval", 0.5) or 0.5))
-                    watcher.set_file_scan_interval_s(float(getattr(self._cfg, "file_scan_interval", 2.0) or 2.0))
-                    watcher.set_follow_picker_config(
-                        follow_codex_process=bool(getattr(self._cfg, "follow_codex_process", False)),
-                        codex_process_regex=str(getattr(self._cfg, "codex_process_regex", "codex") or "codex"),
-                        only_follow_when_process=bool(getattr(self._cfg, "only_follow_when_process", True)),
-                    )
-            except Exception:
-                pass
+            self._apply_watcher_hot_updates(prev_tm=prev_tm, prev_provider=prev_provider, touched_translator=touched_translator)
             return self._cfg.to_dict()
+
+    def _apply_watcher_hot_updates(self, *, prev_tm: str, prev_provider: str, touched_translator: bool) -> None:
+        watcher = None
+        running = False
+        cfg = None
+        try:
+            with self._lock:
+                watcher = self._watcher
+                running = bool(self._thread is not None and self._thread.is_alive())
+                cfg = self._cfg
+        except Exception:
+            return
+        if watcher is None or not running or cfg is None:
+            return
+
+        # Hot-apply translate_mode for the running watcher (no restart required).
+        try:
+            next_tm = str(getattr(cfg, "translate_mode", "auto") or "auto").strip().lower()
+            if next_tm and next_tm != str(prev_tm or ""):
+                watcher.set_translate_mode(next_tm)
+        except Exception:
+            pass
+
+        # Hot-reload translator/provider config for the running watcher.
+        try:
+            next_provider = str(getattr(cfg, "translator_provider", "") or "").strip().lower()
+            if bool(touched_translator) or next_provider != str(prev_provider or ""):
+                watcher.set_translator(build_translator(cfg))
+        except Exception:
+            pass
+
+        # Hot-apply watcher runtime settings where it's safe (no full restart required).
+        # Note: watch_codex_home still requires stop/start to take effect.
+        try:
+            watcher.set_watch_max_sessions(int(getattr(cfg, "watch_max_sessions", 3) or 3))
+            watcher.set_replay_last_lines(int(getattr(cfg, "replay_last_lines", 0) or 0))
+            watcher.set_poll_interval_s(float(getattr(cfg, "poll_interval", 0.5) or 0.5))
+            watcher.set_file_scan_interval_s(float(getattr(cfg, "file_scan_interval", 2.0) or 2.0))
+            watcher.set_follow_picker_config(
+                follow_codex_process=bool(getattr(cfg, "follow_codex_process", False)),
+                codex_process_regex=str(getattr(cfg, "codex_process_regex", "codex") or "codex"),
+                only_follow_when_process=bool(getattr(cfg, "only_follow_when_process", True)),
+            )
+        except Exception:
+            pass
 
     def clear_messages(self) -> None:
         try:
