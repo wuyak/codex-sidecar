@@ -181,6 +181,36 @@ UI v2 已归档（默认不启用），仅保留作为历史参考：
 - 性能优化：TUI gate tail（`codex-tui.log`）在无新增（`size==offset`）时不会反复打开文件，减少空转 IO。
 - 性能优化：当处于 `idle/wait_codex`（进程定位开启但未检测到 Codex 进程）时，TUI gate 的轮询会降频到 scan cadence，减少空闲期空转。
 
+## 已知问题（UI Markdown 渲染）
+
+### 有序列表序号显示为 1（混合列表/子项场景）
+
+现象：
+- 部分回答块（`assistant_message`）在 UI 中渲染时，多个“小标题序号”都显示为 1（如 `1) ...`、`2) ...`、`3) ...` 在 UI 里变成每段都从 1 开始）。
+
+根因（UI 端）：
+- UI 使用自定义轻量 Markdown 渲染器（`ui/app/markdown/render.js`）。当文本形如：
+  - `1) ...`（有序列表项）
+  - 紧接着 `- ...`（无序子项）
+  渲染器会在遇到 `- ...` 时把当前 `<ol>` 立即 flush 成“只有 1 个 `<li>` 的 `<ol>`”，随后切换到 `<ul>`；下一段 `2) ...` 又新开一个 `<ol>`。
+- 同时渲染器会丢弃原始序号（仅提取 item 文本，不输出 `<ol start>` / `<li value>`），因此每个独立 `<ol>` 都从 1 显示。
+
+验证要点：
+- Codex 写入的 `rollout-*.jsonl` 原文通常是正确递增的（例如 `1) ...`、`2) ...`、`3) ...`）；问题主要发生在 UI 渲染阶段。
+
+### 其他“格式修剪/归一化”点（可能影响原文保真）
+
+说明：以下行为多数是“为可读性/去终端换行噪音”的取舍，但确实可能改变 Markdown 的原始排版语义。
+
+- `ui/app/markdown/render.js`：
+  - 对每行做 `trimEnd()`：会移除行尾空格，可能破坏 Markdown 的“两个空格=强制换行”语义。
+  - 段落 flush 时 `replace(/\\s+/g, \" \")`：会把连续空白（含换行/多空格）压缩成单空格，改变原始换行与对齐。
+  - `smartJoinParts()` + `t.trim()`：会合并终端换行并按中英文字符规则插入/去掉空格，可能改变作者刻意的分行/空格布局。
+- `ui/app/markdown/clean.js`（主要用于思考块 thinking）：
+  - 非代码块内移除行尾空白、压缩连续空行、清理下划线噪音：可能改变原始空行数量与行尾空格语义。
+- `ui/app/markdown/split.js`：
+  - 对 “leading code block split” 的 `rest` 做 `trim()`：会去掉前后空行，影响首尾留白。
+
 ## 硅基流动 translate.json 配置（免费优先）
 硅基流动的 translate.js 提供了 `translate.json`（表单提交）接口。sidecar 已对该接口做兼容：仍使用 `HTTP（通用适配器）`，仅需把 URL 指向 `translate.json`。
 
