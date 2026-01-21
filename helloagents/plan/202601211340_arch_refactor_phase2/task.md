@@ -17,7 +17,7 @@
 ## 3. watcher：空转与分叉进一步收敛
 - [√] 3.1 梳理 `codex_sidecar/watcher.py` 的循环：在无 follow targets 时减少不必要动作（仍需保留 tool gate 能力的最小轮询）。
 - [-] 3.2 补齐关键边界 case 的单测（当前以 compileall + 全量单测回归兜底；后续如需可补充针对 idle 降频的时间型测试）。
-- [ ] 3.3 完成一次 git commit（watcher 阶段）。
+- [√] 3.3 完成一次 git commit（watcher 阶段）。
 
 ## 4. 前端：降低 `wire.js`/`main.js` 的耦合（不改行为）
 - [ ] 4.1 拆分 `ui/app/control/wire.js`：按功能域迁移内部函数到 `ui/app/control/wire/*`（保留原导出签名）。
