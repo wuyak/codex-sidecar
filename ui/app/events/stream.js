@@ -189,18 +189,20 @@ export function connectEventStream(dom, state, upsertThread, renderTabs, renderM
         }
       } catch (_) {}
 
+      const k = keyOf(msg);
+      const isHidden = !!(state && state.hiddenThreads && typeof state.hiddenThreads.has === "function" && state.hiddenThreads.has(k));
       // Updates should not bump thread counts.
       if (op !== "update") upsertThread(state, msg);
 
-      const k = keyOf(msg);
-      const shouldRender = (state.currentKey === "all" || state.currentKey === k);
+      // “all” 视图仅代表“当前在监听的会话汇总”，不应被“关闭监听”的会话污染。
+      const shouldRender = (!isHidden) && (state.currentKey === "all" || state.currentKey === k);
       const isReplay = _isReplay(msg);
       const atBottom = shouldRender ? _isAtBottom(80) : false;
 
       // 右下角提醒（不依赖当前会话可见性：通过“未读”汇总，避免错过多会话输出）
       try {
         const kind = String((msg && msg.kind) ? msg.kind : "").trim();
-        if (kind === "tool_gate") {
+        if (!isHidden && kind === "tool_gate") {
           const txt = String(msg.text || "");
           if (_toolGateWaiting(txt)) {
             notifyCorner("tool_gate", "终端等待确认", _summarizeToolGate(txt) || "请回到终端完成确认/授权后继续。", { level: "warn", sticky: true });
@@ -217,7 +219,7 @@ export function connectEventStream(dom, state, upsertThread, renderTabs, renderM
         }
         // “未读”仅对用户关心的类型：回答输出 / 审批提示。
         // tool_call/tool_output（如 apply_patch）噪音较高，不计入未读/不响铃。
-        if (op !== "update" && kind === "assistant_message") {
+        if (!isHidden && op !== "update" && kind === "assistant_message") {
           // 只有“新通知”才响铃：历史回放/补齐不算。
           // 当前视图在底部也不一定“已读”（可能挂机）；仅当用户在近 5s 有明确交互且页面可见/聚焦时，才视为已看到。
           const userActive = _isUserActive(state);
@@ -244,10 +246,10 @@ export function connectEventStream(dom, state, upsertThread, renderTabs, renderM
         }
       } else {
         // 仅为“已缓存的会话视图”缓冲，避免长时间挂着时对大量冷门 key 无限占用内存。
-        if (shouldBufferKey(state, k)) bufferForKey(state, k, msg);
+        if (!isHidden && shouldBufferKey(state, k)) bufferForKey(state, k, msg);
       }
       // 译文回填（op=update）不影响会话计数/排序，避免每条 update 都重绘侧栏。
-      if (op !== "update") _scheduleTabs(80);
+      if (!isHidden && op !== "update") _scheduleTabs(80);
     } catch (e) {}
   }
 

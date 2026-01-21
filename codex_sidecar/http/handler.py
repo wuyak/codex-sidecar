@@ -523,6 +523,19 @@ class SidecarHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.OK, self._controller.set_follow(mode, thread_id=thread_id, file=file))
             return
 
+        if self.path == "/api/control/follow_excludes":
+            obj = self._read_json_object(allow_invalid_json=True)
+            if obj is None:
+                return
+            keys = obj.get("keys") or obj.get("exclude_keys") or obj.get("thread_keys") or []
+            files = obj.get("files") or obj.get("exclude_files") or []
+            if not isinstance(keys, list):
+                keys = []
+            if not isinstance(files, list):
+                files = []
+            self._send_json(HTTPStatus.OK, self._controller.set_follow_excludes(keys=keys, files=files))
+            return
+
         if self.path == "/api/control/restart_process":
             # Respond first, then restart asynchronously; otherwise the process may re-exec/exit
             # before the response body is fully written.

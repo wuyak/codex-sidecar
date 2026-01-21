@@ -172,6 +172,10 @@ class RolloutWatcher:
         # Follow targets (multi-session).
         self._cursors: Dict[Path, _FileCursor] = {}
         self._follow_files: List[Path] = []
+        # User-controlled exclusions (UI “关闭监听”): exclude by thread_id and/or file path.
+        # Stored as sets and applied when computing follow targets.
+        self._exclude_keys: Set[str] = set()
+        self._exclude_files: Set[Path] = set()
 
         self._current_file: Optional[Path] = None
         self._offset: int = 0
@@ -425,6 +429,65 @@ class RolloutWatcher:
                 self._pinned_file = None
             self._follow_dirty = True
 
+    def set_follow_excludes(self, keys: Optional[List[str]] = None, files: Optional[List[str]] = None) -> None:
+        """
+        Update the exclusion set for follow targets at runtime.
+
+        This powers the UI “关闭监听”：被关闭的会话不应再被 watcher 轮询/读取，也不应触发提示音。
+
+        - keys: thread keys (usually rollout thread_id uuid)
+        - files: absolute or CODEX_HOME-relative rollout file paths (must be under sessions/**)
+        """
+        raw_keys = keys if isinstance(keys, list) else []
+        raw_files = files if isinstance(files, list) else []
+
+        cleaned_keys: Set[str] = set()
+        for x in raw_keys:
+            try:
+                s = str(x or "").strip()
+            except Exception:
+                s = ""
+            if not s:
+                continue
+            # Keep it bounded to avoid untrusted UI inputs growing without limit.
+            cleaned_keys.add(s[:256])
+            if len(cleaned_keys) >= 1000:
+                break
+
+        cleaned_files: Set[Path] = set()
+        sessions_root = (self._codex_home / "sessions").resolve()
+        for x in raw_files:
+            try:
+                s = str(x or "").strip()
+            except Exception:
+                s = ""
+            if not s:
+                continue
+            try:
+                cand = Path(s).expanduser()
+                if not cand.is_absolute():
+                    cand = (self._codex_home / cand).resolve()
+                else:
+                    cand = cand.resolve()
+                try:
+                    _ = cand.relative_to(sessions_root)
+                except Exception:
+                    continue
+                if cand.exists() and cand.is_file() and _ROLLOUT_RE.match(cand.name):
+                    cleaned_files.add(cand)
+            except Exception:
+                continue
+            if len(cleaned_files) >= 1000:
+                break
+
+        try:
+            with self._follow_lock:
+                self._exclude_keys = cleaned_keys
+                self._exclude_files = cleaned_files
+                self._follow_dirty = True
+        except Exception:
+            return
+
     def run(self, stop_event) -> None:
         # Keep a reference so inner loops can react quickly (e.g. stop in the middle of large file reads).
         self._stop_event = stop_event
@@ -497,10 +560,35 @@ class RolloutWatcher:
                 sel = str(self._selection_mode or "auto").strip().lower()
                 pin_tid = str(self._pinned_thread_id or "").strip()
                 pin_file = self._pinned_file
+                excl_keys = set(self._exclude_keys or set())
+                excl_files = set(self._exclude_files or set())
         except Exception:
             sel = "auto"
             pin_tid = ""
             pin_file = None
+            excl_keys = set()
+            excl_files = set()
+
+        def _is_excluded(p: Optional[Path]) -> bool:
+            if p is None:
+                return False
+            try:
+                if p in excl_files:
+                    return True
+            except Exception:
+                pass
+            try:
+                tid0 = _parse_thread_id_from_filename(p) or ""
+                if tid0 and tid0 in excl_keys:
+                    return True
+            except Exception:
+                pass
+            try:
+                if str(p) in excl_keys:
+                    return True
+            except Exception:
+                pass
+            return False
 
         pick = self._follow_picker.pick(selection_mode=sel, pinned_thread_id=pin_tid, pinned_file=pin_file)
         picked = pick.picked
@@ -549,11 +637,16 @@ class RolloutWatcher:
         # Do NOT scan sessions/** to "fill to N" (more stable + cheaper).
         if self._follow_mode == "process":
             try:
-                targets = list(self._process_files or [])[:n]
+                for p in list(self._process_files or []):
+                    if len(targets) >= n:
+                        break
+                    if _is_excluded(p):
+                        continue
+                    targets.append(p)
             except Exception:
                 targets = []
         else:
-            if picked is not None:
+            if picked is not None and (not _is_excluded(picked)):
                 targets.append(picked)
             if len(targets) < n:
                 # Pin mode: never backfill from sessions/** by mtime (prevents zombie sessions).
@@ -562,6 +655,8 @@ class RolloutWatcher:
                         for p in list(self._process_files or []):
                             if len(targets) >= n:
                                 break
+                            if _is_excluded(p):
+                                continue
                             if p in targets:
                                 continue
                             targets.append(p)
@@ -579,6 +674,8 @@ class RolloutWatcher:
                     for p in cands:
                         if len(targets) >= n:
                             break
+                        if _is_excluded(p):
+                            continue
                         if p in targets:
                             continue
                         targets.append(p)

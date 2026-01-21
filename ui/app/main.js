@@ -30,6 +30,31 @@ export async function initApp() {
   try { state.closedThreads = loadClosedThreads(); } catch (_) { state.closedThreads = new Map(); }
   try { state.offlineShow = loadOfflineShowList(); } catch (_) { state.offlineShow = []; }
 
+  // 将“关闭监听”（本机 localStorage）同步到后端 watcher：真正停止轮询/读取，避免提示音与资源开销。
+  const _syncFollowExcludes = async () => {
+    try {
+      const set = (state && state.hiddenThreads && typeof state.hiddenThreads.values === "function") ? state.hiddenThreads : new Set();
+      const keys = Array.from(set.values());
+      await fetch("/api/control/follow_excludes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keys }),
+      });
+    } catch (_) {}
+  };
+  try { await _syncFollowExcludes(); } catch (_) {}
+  try {
+    let t = 0;
+    window.addEventListener("hidden-threads-changed", () => {
+      if (t) { try { clearTimeout(t); } catch (_) {} }
+      t = setTimeout(() => {
+        t = 0;
+        try { state.hiddenThreads = loadHiddenThreads(); } catch (_) { state.hiddenThreads = new Set(); }
+        try { _syncFollowExcludes(); } catch (_) {}
+      }, 80);
+    });
+  } catch (_) {}
+
   // 用户活跃度：仅把“明确交互”（按键/滚轮/点击）记为活跃，避免程序化滚动误判。
   try {
     const touch = () => {

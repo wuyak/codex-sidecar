@@ -25,6 +25,7 @@ export function saveHiddenThreads(set) {
   try {
     const arr = Array.from(set || []).map(_sanitizeKey).filter(Boolean);
     localStorage.setItem(_LS_HIDDEN, JSON.stringify(arr));
+    try { window.dispatchEvent(new CustomEvent("hidden-threads-changed")); } catch (_) {}
   } catch (_) {}
 }
 
@@ -39,4 +40,3 @@ export function loadShowHiddenFlag() {
 export function saveShowHiddenFlag(on) {
   try { localStorage.setItem(_LS_SHOW_HIDDEN, on ? "1" : "0"); } catch (_) {}
 }
-

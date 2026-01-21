@@ -2,7 +2,7 @@ import os
 import threading
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from .config import SidecarConfig, load_config, save_config
 from .control.translator_build import build_translator, count_valid_http_profiles, select_http_profile
@@ -35,6 +35,10 @@ class SidecarController:
         self._selection_mode: str = "auto"  # auto|pin
         self._pinned_thread_id: str = ""
         self._pinned_file: str = ""
+        # Follow exclusions (UI runtime state; NOT persisted to config.json).
+        # Used to implement “关闭监听”：被关闭的会话不应再被 watcher 轮询/读取。
+        self._follow_exclude_keys: Set[str] = set()
+        self._follow_exclude_files: Set[str] = set()
 
     def set_process_stop_event(self, stop_event: threading.Event) -> None:
         """
@@ -507,6 +511,10 @@ class SidecarController:
                 watcher.set_follow(self._selection_mode, thread_id=self._pinned_thread_id, file=self._pinned_file)
             except Exception:
                 pass
+            try:
+                watcher.set_follow_excludes(keys=list(self._follow_exclude_keys), files=list(self._follow_exclude_files))
+            except Exception:
+                pass
             self._stop_event = stop_event
             self._watcher = watcher
 
@@ -540,6 +548,58 @@ class SidecarController:
             except Exception:
                 pass
         return {"ok": True, "mode": m, "thread_id": tid, "file": fp}
+
+    def set_follow_excludes(self, keys: Optional[List[str]] = None, files: Optional[List[str]] = None) -> Dict[str, Any]:
+        """
+        Update watcher follow exclusions (UI “关闭监听” list).
+
+        This is runtime state and intentionally not persisted to config.json.
+        """
+        raw_keys = keys if isinstance(keys, list) else []
+        raw_files = files if isinstance(files, list) else []
+
+        cleaned_keys: Set[str] = set()
+        for x in raw_keys:
+            try:
+                s = str(x or "").strip()
+            except Exception:
+                s = ""
+            if not s:
+                continue
+            cleaned_keys.add(s[:256])
+            if len(cleaned_keys) >= 1000:
+                break
+
+        cleaned_files: Set[str] = set()
+        for x in raw_files:
+            try:
+                s = str(x or "").strip()
+            except Exception:
+                s = ""
+            if not s:
+                continue
+            cleaned_files.add(s[:2048])
+            if len(cleaned_files) >= 1000:
+                break
+
+        watcher = None
+        running = False
+        with self._lock:
+            self._follow_exclude_keys = cleaned_keys
+            self._follow_exclude_files = cleaned_files
+            watcher = self._watcher
+            running = bool(self._thread is not None and self._thread.is_alive())
+        if watcher is not None and running:
+            try:
+                watcher.set_follow_excludes(keys=list(cleaned_keys), files=list(cleaned_files))
+            except Exception:
+                pass
+
+        return {
+            "ok": True,
+            "exclude_keys": sorted(list(cleaned_keys)),
+            "exclude_files": sorted(list(cleaned_files)),
+        }
 
     def _run_watcher(self) -> None:
         try:
