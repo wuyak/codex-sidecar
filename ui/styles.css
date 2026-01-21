@@ -850,6 +850,12 @@
 				        color: var(--c-text);
 				        box-shadow: var(--shadow-md);
 				      }
+				      /* 导入对话：固定贴顶，且预留底部空间避免遮挡文件列表。 */
+				      #importDialog.popup-dialog {
+				        top: calc(var(--safe-top) + 12px) !important;
+				        bottom: auto !important;
+				        max-height: calc(100vh - 24px - var(--safe-top) - var(--safe-bottom) - var(--tabs-bar-h) - var(--tabs-stack-gap));
+				      }
 				      .popup-dialog::backdrop { background: rgba(15,23,42,.22); }
 				      .popup-dialog-form { padding: 12px 12px 10px; }
 				      .popup-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
