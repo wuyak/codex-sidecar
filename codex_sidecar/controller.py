@@ -337,6 +337,10 @@ class SidecarController:
         return self._patch_config(patch, persist=False, allow_empty_translator_config=True)
 
     def _patch_config(self, patch: Dict[str, Any], persist: bool, allow_empty_translator_config: bool) -> Dict[str, Any]:
+        prev_tm = "auto"
+        prev_provider = "openai"
+        touched_translator = False
+        out_cfg: Dict[str, Any] = {}
         with self._lock:
             cur = self._cfg.to_dict()
             # UI may send masked placeholders back; restore existing secrets to avoid persisting "********".
@@ -377,8 +381,15 @@ class SidecarController:
             self._cfg = SidecarConfig.from_dict(cur)
             if persist:
                 save_config(self._config_home, self._cfg)
-            self._apply_watcher_hot_updates(prev_tm=prev_tm, prev_provider=prev_provider, touched_translator=touched_translator)
-            return self._cfg.to_dict()
+            out_cfg = self._cfg.to_dict()
+
+        try:
+            self._apply_watcher_hot_updates(
+                prev_tm=prev_tm, prev_provider=prev_provider, touched_translator=touched_translator
+            )
+        except Exception:
+            pass
+        return out_cfg
 
     def _apply_watcher_hot_updates(self, *, prev_tm: str, prev_provider: str, touched_translator: bool) -> None:
         watcher = None

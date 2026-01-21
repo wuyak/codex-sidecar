@@ -232,6 +232,21 @@ UI v2 已归档（默认不启用），仅保留作为历史参考：
 修复（UI 端）：
 - 在 `toggleToolDetailsFromPre` 中，切换后基于点击 `clientY` 调用 `stabilizeClickWithin`，把视口校正回当前可见代码块区域，保证“展开/收起”后仍停留在同一代码块附近。
 
+## 已知问题（后端控制面）
+
+### `/health` 正常但 `/api/config` / `/api/status` 卡死（UI 空白/不可用）
+
+现象：
+- 端口仍在监听，`GET /health` 返回 200（看似“服务正常”），但 UI 首屏请求 `/api/config` / `/api/status` 超时，表现为“空白/无数据”。
+
+根因（后端）：
+- `controller.py` 的 `SidecarController._patch_config()` 在持有 `self._lock` 时调用 `_apply_watcher_hot_updates()`；
+  后者内部再次 `with self._lock` 获取快照。由于 `threading.Lock` 非可重入，会发生自锁死锁。
+- 一旦触发，控制面接口（`/api/config`、`/api/status`、`POST /api/config` 等）会永久阻塞，只能重启进程恢复。
+
+修复（后端）：
+- 将 watcher 热更新应用移动到释放 `self._lock` 之后执行，避免自锁；并增加回归测试确保 `update_config` 不会卡住。
+
 ## 硅基流动 translate.json 配置（免费优先）
 硅基流动的 translate.js 提供了 `translate.json`（表单提交）接口。sidecar 已对该接口做兼容：仍使用 `HTTP（通用适配器）`，仅需把 URL 指向 `translate.json`。
 
