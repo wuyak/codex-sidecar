@@ -121,6 +121,72 @@ class SidecarHandler(BaseHTTPRequestHandler):
             return None
         return obj
 
+    def _controller_config_best_effort(self) -> Dict[str, Any]:
+        """
+        Best-effort fetch of controller config for endpoints that can tolerate failure.
+        """
+        try:
+            cfg = self._controller.get_config()
+        except Exception:
+            cfg = {}
+        return cfg if isinstance(cfg, dict) else {}
+
+    def _config_home_best_effort(self, cfg: Optional[Dict[str, Any]] = None) -> Path:
+        src = cfg if isinstance(cfg, dict) else {}
+        try:
+            return Path(str((src or {}).get("config_home") or "")).expanduser()
+        except Exception:
+            return Path.cwd()
+
+    def _watch_codex_home_best_effort(self, cfg: Optional[Dict[str, Any]] = None) -> Path:
+        """
+        Resolve CODEX_HOME to watch, based on controller config (best-effort).
+
+        Notes:
+        - UI may pass a sessions/** path; normalize to its parent.
+        - Fallback is ~/.codex.
+        """
+        src = cfg if isinstance(cfg, dict) else {}
+        try:
+            wh_raw = str((src or {}).get("watch_codex_home") or "").strip()
+            codex_home = (Path(wh_raw).expanduser() if wh_raw else (Path.home() / ".codex"))
+            try:
+                if codex_home.name == "sessions":
+                    codex_home = codex_home.parent
+            except Exception:
+                pass
+            return codex_home
+        except Exception:
+            return Path.home() / ".codex"
+
+    def _apply_config_display_fields(self, cfg: Dict[str, Any]) -> None:
+        # Display-only helpers (do not persist).
+        try:
+            cfg_home = str(cfg.get("config_home") or "")
+            cfg["config_home_display"] = _project_rel_path(cfg_home)
+            if cfg.get("config_home_display"):
+                cfg["config_file_display"] = str(Path(str(cfg["config_home_display"])) / "config.json")
+        except Exception:
+            pass
+
+    def _build_config_payload(self, raw_cfg: Any) -> Dict[str, Any]:
+        cfg = redact_sidecar_config(raw_cfg) if isinstance(raw_cfg, dict) else raw_cfg
+        if isinstance(cfg, dict):
+            self._apply_config_display_fields(cfg)
+        payload: Dict[str, Any] = {"ok": True, "config": cfg}
+        if isinstance(cfg, dict):
+            payload.update(cfg)
+        return payload
+
+    def _decorate_status_payload(self, st: Any) -> Any:
+        try:
+            if isinstance(st, dict) and isinstance(st.get("config"), dict):
+                st["config"] = redact_sidecar_config(st["config"])
+                self._apply_config_display_fields(st["config"])
+        except Exception:
+            pass
+        return st
+
     def _handle_translate_text(self, obj: Dict[str, Any]) -> None:
         items = obj.get("items")
         if isinstance(items, list):
@@ -163,47 +229,17 @@ class SidecarHandler(BaseHTTPRequestHandler):
 
         if path == "/api/config":
             raw_cfg = self._controller.get_config()
-            cfg = redact_sidecar_config(raw_cfg) if isinstance(raw_cfg, dict) else raw_cfg
-            # Display-only helpers (do not persist).
-            try:
-                if isinstance(cfg, dict):
-                    cfg_home = str(cfg.get("config_home") or "")
-                    cfg["config_home_display"] = _project_rel_path(cfg_home)
-                    if cfg.get("config_home_display"):
-                        cfg["config_file_display"] = str(Path(str(cfg["config_home_display"])) / "config.json")
-            except Exception:
-                pass
-            payload = {"ok": True, "config": cfg}
-            if isinstance(cfg, dict):
-                payload.update(cfg)
-            self._send_json(HTTPStatus.OK, payload)
+            self._send_json(HTTPStatus.OK, self._build_config_payload(raw_cfg))
             return
 
         if path == "/api/status":
             st = self._controller.status()
-            try:
-                if isinstance(st, dict) and isinstance(st.get("config"), dict):
-                    st["config"] = redact_sidecar_config(st["config"])
-                    cfg_home = str(st["config"].get("config_home") or "")
-                    st["config"]["config_home_display"] = _project_rel_path(cfg_home)
-                    if st["config"].get("config_home_display"):
-                        st["config"]["config_file_display"] = str(
-                            Path(str(st["config"]["config_home_display"])) / "config.json"
-                        )
-            except Exception:
-                pass
-            self._send_json(HTTPStatus.OK, st)
+            self._send_json(HTTPStatus.OK, self._decorate_status_payload(st))
             return
 
         if path == "/api/sfx":
-            try:
-                cfg = self._controller.get_config()
-            except Exception:
-                cfg = {}
-            try:
-                cfg_home = Path(str((cfg or {}).get("config_home") or "")).expanduser()
-            except Exception:
-                cfg_home = Path.cwd()
+            cfg = self._controller_config_best_effort()
+            cfg_home = self._config_home_best_effort(cfg)
             payload = list_sfx(cfg_home)
             try:
                 if isinstance(cfg, dict) and isinstance(payload, dict):
@@ -216,14 +252,8 @@ class SidecarHandler(BaseHTTPRequestHandler):
 
         if path.startswith("/api/sfx/file/"):
             name = path[len("/api/sfx/file/") :]
-            try:
-                cfg = self._controller.get_config()
-            except Exception:
-                cfg = {}
-            try:
-                cfg_home = Path(str((cfg or {}).get("config_home") or "")).expanduser()
-            except Exception:
-                cfg_home = Path.cwd()
+            cfg = self._controller_config_best_effort()
+            cfg_home = self._config_home_best_effort(cfg)
             data, ct = read_custom_sfx_bytes(cfg_home, name)
             if data is None:
                 self._send_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": "not_found"})
@@ -251,20 +281,8 @@ class SidecarHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/offline/files":
-            try:
-                cfg = self._controller.get_config()
-            except Exception:
-                cfg = {}
-            try:
-                wh_raw = str((cfg or {}).get("watch_codex_home") or "").strip()
-                codex_home = (Path(wh_raw).expanduser() if wh_raw else (Path.home() / ".codex"))
-                try:
-                    if codex_home.name == "sessions":
-                        codex_home = codex_home.parent
-                except Exception:
-                    pass
-            except Exception:
-                codex_home = Path.home() / ".codex"
+            cfg = self._controller_config_best_effort()
+            codex_home = self._watch_codex_home_best_effort(cfg)
             try:
                 sessions_dir = codex_home / "sessions"
                 if not sessions_dir.exists() or not sessions_dir.is_dir():
@@ -283,20 +301,8 @@ class SidecarHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/offline/messages":
-            try:
-                cfg = self._controller.get_config()
-            except Exception:
-                cfg = {}
-            try:
-                wh_raw = str((cfg or {}).get("watch_codex_home") or "").strip()
-                codex_home = (Path(wh_raw).expanduser() if wh_raw else (Path.home() / ".codex"))
-                try:
-                    if codex_home.name == "sessions":
-                        codex_home = codex_home.parent
-                except Exception:
-                    pass
-            except Exception:
-                codex_home = Path.home() / ".codex"
+            cfg = self._controller_config_best_effort()
+            codex_home = self._watch_codex_home_best_effort(cfg)
             rel = str((qs.get("rel") or qs.get("path") or [""])[0] or "").strip()
             if not rel:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "missing_rel"})
@@ -460,19 +466,7 @@ class SidecarHandler(BaseHTTPRequestHandler):
             except ValueError as e:
                 self._send_error(HTTPStatus.CONFLICT, str(e))
                 return
-            safe_cfg = redact_sidecar_config(cfg) if isinstance(cfg, dict) else cfg
-            try:
-                if isinstance(safe_cfg, dict):
-                    cfg_home = str(safe_cfg.get("config_home") or "")
-                    safe_cfg["config_home_display"] = _project_rel_path(cfg_home)
-                    if safe_cfg.get("config_home_display"):
-                        safe_cfg["config_file_display"] = str(Path(str(safe_cfg["config_home_display"])) / "config.json")
-            except Exception:
-                pass
-            payload = {"ok": True, "config": safe_cfg}
-            if isinstance(safe_cfg, dict):
-                payload.update(safe_cfg)
-            self._send_json(HTTPStatus.OK, payload)
+            self._send_json(HTTPStatus.OK, self._build_config_payload(cfg))
             return
 
         if self.path == "/api/control/start":
