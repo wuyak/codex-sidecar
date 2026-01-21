@@ -192,92 +192,143 @@ export function wireImportDialog(dom, state, helpers, opts = {}) {
       }
     };
 
-    let firstYear = true;
-    for (const y of years) {
-      const ym = tree.get(y);
-      const months = Array.from(ym.keys()).sort(desc);
-      const yearDetails = document.createElement("details");
-      yearDetails.className = "drawer-details";
-      if (firstYear) yearDetails.open = true;
-      firstYear = false;
+    // Compact 3-level index:
+    // - Years: horizontal chips
+    // - Months: horizontal chips
+    // - Days: compact grid
+    // - Files: list for selected day only
+    const root = document.createElement("div");
+    root.className = "imp-tree";
 
-      const yearSummary = document.createElement("summary");
-      yearSummary.className = "meta";
-      yearSummary.textContent = `sessions/${y}`;
-      try { yearSummary.appendChild(makePill(countYear(y))); } catch (_) {}
-      yearDetails.appendChild(yearSummary);
+    const pickFirst = (xs) => (Array.isArray(xs) && xs.length) ? String(xs[0] || "") : "";
+    const hasYear = (y) => y && tree.has(y);
+    const hasMonth = (y, m) => {
+      if (!y || !m) return false;
+      try { return !!(tree.get(y) && tree.get(y).has(m)); } catch (_) { return false; }
+    };
+    const hasDay = (y, m, d) => {
+      if (!y || !m || !d) return false;
+      try { return !!(tree.get(y).get(m) && tree.get(y).get(m).has(d)); } catch (_) { return false; }
+    };
 
-      for (const m of months) {
-        const dm = ym.get(m);
-        const days = Array.from(dm.keys()).sort(desc);
-        const monthDetails = document.createElement("details");
-        monthDetails.className = "drawer-details";
-        monthDetails.style.marginLeft = "10px";
-        monthDetails.open = false;
+    let selY = "";
+    let selM = "";
+    let selD = "";
+    try { selY = String(state && state.importSelY ? state.importSelY : ""); } catch (_) { selY = ""; }
+    try { selM = String(state && state.importSelM ? state.importSelM : ""); } catch (_) { selM = ""; }
+    try { selD = String(state && state.importSelD ? state.importSelD : ""); } catch (_) { selD = ""; }
 
-        const monthSummary = document.createElement("summary");
-        monthSummary.className = "meta";
-        monthSummary.textContent = `sessions/${y}/${m}`;
-        try { monthSummary.appendChild(makePill(countMonth(y, m))); } catch (_) {}
-        monthDetails.appendChild(monthSummary);
-
-        for (const d of days) {
-          const items = dm.get(d) || [];
-          const dayDetails = document.createElement("details");
-          dayDetails.className = "drawer-details";
-          dayDetails.style.marginLeft = "20px";
-          dayDetails.open = false;
-
-          const daySummary = document.createElement("summary");
-          daySummary.className = "meta";
-          daySummary.textContent = `sessions/${y}/${m}/${d}`;
-          try { daySummary.appendChild(makePill(items.length)); } catch (_) {}
-          dayDetails.appendChild(daySummary);
-
-          const list = document.createElement("div");
-          list.className = "tabs";
-          list.style.marginTop = "6px";
-          try { list.dataset.loaded = "0"; } catch (_) {}
-
-          dayDetails.appendChild(list);
-          dayDetails.addEventListener("toggle", () => {
-            try {
-              if (!dayDetails.open) return;
-              renderFileRowsInto(list, items);
-            } catch (_) {}
-          });
-
-          monthDetails.appendChild(dayDetails);
-        }
-
-        yearDetails.appendChild(monthDetails);
-      }
-
-      frag.appendChild(yearDetails);
+    if (!hasYear(selY)) {
+      selY = pickFirst(years);
+      selM = "";
+      selD = "";
+      try { state.importSelY = selY; state.importSelM = ""; state.importSelD = ""; } catch (_) {}
     }
+
+    const monthsMap = hasYear(selY) ? tree.get(selY) : null;
+    const months = monthsMap ? Array.from(monthsMap.keys()).sort(desc) : [];
+    if (!hasMonth(selY, selM)) {
+      selM = pickFirst(months);
+      selD = "";
+      try { state.importSelM = selM; state.importSelD = ""; } catch (_) {}
+    }
+
+    const daysMap = hasMonth(selY, selM) ? tree.get(selY).get(selM) : null;
+    const days = daysMap ? Array.from(daysMap.keys()).sort(desc) : [];
+    if (!hasDay(selY, selM, selD)) {
+      selD = pickFirst(days);
+      try { state.importSelD = selD; } catch (_) {}
+    }
+
+    const makeChip = (label, count, attrs = {}) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "imp-chip";
+      const a = (attrs && typeof attrs === "object") ? attrs : {};
+      const active = !!a.active;
+      if (active) btn.classList.add("is-active");
+      try { btn.setAttribute("aria-pressed", active ? "true" : "false"); } catch (_) {}
+      try { btn.dataset.action = String(a.action || ""); } catch (_) {}
+      if (a.year) try { btn.dataset.year = String(a.year); } catch (_) {}
+      if (a.month) try { btn.dataset.month = String(a.month); } catch (_) {}
+      if (a.day) try { btn.dataset.day = String(a.day); } catch (_) {}
+      const text = document.createElement("span");
+      text.className = "imp-chip-text";
+      text.textContent = String(label || "");
+      btn.appendChild(text);
+      try {
+        const pill = makePill(count);
+        pill.style.marginLeft = "6px";
+        btn.appendChild(pill);
+      } catch (_) {}
+      return btn;
+    };
+
+    // Years
+    const yearsRow = document.createElement("div");
+    yearsRow.className = "imp-row imp-years";
+    for (const y of years) {
+      const chip = makeChip(String(y), countYear(y), { action: "selYear", year: y, active: y === selY });
+      yearsRow.appendChild(chip);
+    }
+    root.appendChild(yearsRow);
+
+    // Months
+    if (months.length) {
+      const monthsRow = document.createElement("div");
+      monthsRow.className = "imp-row imp-months";
+      for (const m of months) {
+        const chip = makeChip(String(m), countMonth(selY, m), { action: "selMonth", month: m, active: m === selM });
+        monthsRow.appendChild(chip);
+      }
+      root.appendChild(monthsRow);
+    }
+
+    // Days (grid)
+    if (days.length) {
+      const daysGrid = document.createElement("div");
+      daysGrid.className = "imp-grid imp-days";
+      for (const d of days) {
+        let n = 0;
+        try { n = (daysMap && daysMap.get(d)) ? (daysMap.get(d) || []).length : 0; } catch (_) { n = 0; }
+        const chip = makeChip(String(d), n, { action: "selDay", day: d, active: d === selD });
+        daysGrid.appendChild(chip);
+      }
+      root.appendChild(daysGrid);
+    }
+
+    const pathLine = document.createElement("div");
+    pathLine.className = "meta imp-path";
+    pathLine.textContent = (selY && selM && selD) ? `sessions/${selY}/${selM}/${selD}` : "sessions/";
+    root.appendChild(pathLine);
+
+    const filesHost = document.createElement("div");
+    filesHost.className = "tabs imp-files";
+    try { filesHost.dataset.loaded = "0"; } catch (_) {}
+    let selectedItems = [];
+    try {
+      selectedItems = (selY && selM && selD && daysMap && daysMap.get(selD)) ? (daysMap.get(selD) || []) : [];
+    } catch (_) {
+      selectedItems = [];
+    }
+    renderFileRowsInto(filesHost, selectedItems);
+    root.appendChild(filesHost);
 
     if (other.length) {
-      const details = document.createElement("details");
-      details.className = "drawer-details";
-      details.open = false;
-      const summary = document.createElement("summary");
-      summary.className = "meta";
-      summary.textContent = "其他";
-      try { summary.appendChild(makePill(other.length)); } catch (_) {}
-      details.appendChild(summary);
-      const list = document.createElement("div");
-      list.className = "tabs";
-      list.style.marginTop = "6px";
-      details.appendChild(list);
-      details.addEventListener("toggle", () => {
-        try {
-          if (!details.open) return;
-          renderFileRowsInto(list, other);
-        } catch (_) {}
-      });
-      frag.appendChild(details);
+      const otherLine = document.createElement("div");
+      otherLine.className = "meta";
+      otherLine.style.marginTop = "8px";
+      otherLine.style.opacity = "0.8";
+      otherLine.textContent = `其他：${other.length}`;
+      root.appendChild(otherLine);
+      const otherHost = document.createElement("div");
+      otherHost.className = "tabs";
+      try { otherHost.dataset.loaded = "0"; } catch (_) {}
+      renderFileRowsInto(otherHost, other);
+      root.appendChild(otherHost);
     }
 
+    frag.appendChild(root);
     host.appendChild(frag);
   };
 
@@ -415,6 +466,50 @@ export function wireImportDialog(dom, state, helpers, opts = {}) {
   });
   if (dom.importList) dom.importList.addEventListener("click", async (e) => {
     try {
+      const chip = e && e.target && e.target.closest ? e.target.closest("button.imp-chip[data-action]") : null;
+      if (chip && chip.dataset) {
+        const act = String(chip.dataset.action || "");
+        if (act === "selYear") {
+          const y = String(chip.dataset.year || "");
+          try { state.importSelY = y; state.importSelM = ""; state.importSelD = ""; } catch (_) {}
+          renderImportList();
+          setTimeout(() => {
+            try {
+              const q = `button.imp-chip[data-action="selYear"][data-year="${y}"]`;
+              const btn = dom && dom.importList && dom.importList.querySelector ? dom.importList.querySelector(q) : null;
+              if (btn && typeof btn.focus === "function") btn.focus();
+            } catch (_) {}
+          }, 0);
+          return;
+        }
+        if (act === "selMonth") {
+          const m = String(chip.dataset.month || "");
+          try { state.importSelM = m; state.importSelD = ""; } catch (_) {}
+          renderImportList();
+          setTimeout(() => {
+            try {
+              const q = `button.imp-chip[data-action="selMonth"][data-month="${m}"]`;
+              const btn = dom && dom.importList && dom.importList.querySelector ? dom.importList.querySelector(q) : null;
+              if (btn && typeof btn.focus === "function") btn.focus();
+            } catch (_) {}
+          }, 0);
+          return;
+        }
+        if (act === "selDay") {
+          const d = String(chip.dataset.day || "");
+          try { state.importSelD = d; } catch (_) {}
+          renderImportList();
+          setTimeout(() => {
+            try {
+              const q = `button.imp-chip[data-action="selDay"][data-day="${d}"]`;
+              const btn = dom && dom.importList && dom.importList.querySelector ? dom.importList.querySelector(q) : null;
+              if (btn && typeof btn.focus === "function") btn.focus();
+            } catch (_) {}
+          }, 0);
+          return;
+        }
+      }
+
       const row = e && e.target && e.target.closest ? e.target.closest(".tab[data-rel]") : null;
       if (!row) return;
       const rel = row.dataset ? String(row.dataset.rel || "") : "";
@@ -428,9 +523,53 @@ export function wireImportDialog(dom, state, helpers, opts = {}) {
     try {
       const keyName = String(e && e.key ? e.key : "");
       if (keyName !== "Enter" && keyName !== " ") return;
+      try { e.preventDefault(); } catch (_) {}
+      const chip = e && e.target && e.target.closest ? e.target.closest("button.imp-chip[data-action]") : null;
+      if (chip && chip.dataset) {
+        const act = String(chip.dataset.action || "");
+        if (act === "selYear") {
+          const y = String(chip.dataset.year || "");
+          try { state.importSelY = y; state.importSelM = ""; state.importSelD = ""; } catch (_) {}
+          renderImportList();
+          setTimeout(() => {
+            try {
+              const q = `button.imp-chip[data-action="selYear"][data-year="${y}"]`;
+              const btn = dom && dom.importList && dom.importList.querySelector ? dom.importList.querySelector(q) : null;
+              if (btn && typeof btn.focus === "function") btn.focus();
+            } catch (_) {}
+          }, 0);
+          return;
+        }
+        if (act === "selMonth") {
+          const m = String(chip.dataset.month || "");
+          try { state.importSelM = m; state.importSelD = ""; } catch (_) {}
+          renderImportList();
+          setTimeout(() => {
+            try {
+              const q = `button.imp-chip[data-action="selMonth"][data-month="${m}"]`;
+              const btn = dom && dom.importList && dom.importList.querySelector ? dom.importList.querySelector(q) : null;
+              if (btn && typeof btn.focus === "function") btn.focus();
+            } catch (_) {}
+          }, 0);
+          return;
+        }
+        if (act === "selDay") {
+          const d = String(chip.dataset.day || "");
+          try { state.importSelD = d; } catch (_) {}
+          renderImportList();
+          setTimeout(() => {
+            try {
+              const q = `button.imp-chip[data-action="selDay"][data-day="${d}"]`;
+              const btn = dom && dom.importList && dom.importList.querySelector ? dom.importList.querySelector(q) : null;
+              if (btn && typeof btn.focus === "function") btn.focus();
+            } catch (_) {}
+          }, 0);
+          return;
+        }
+      }
+
       const row = e && e.target && e.target.closest ? e.target.closest(".tab[data-rel]") : null;
       if (!row) return;
-      try { e.preventDefault(); } catch (_) {}
       await openOfflineRel(String(row.dataset ? row.dataset.rel || "" : ""), { file: String(row.dataset ? row.dataset.file || "" : ""), thread_id: String(row.dataset ? row.dataset.threadId || "" : "") });
     } catch (_) {}
   });
