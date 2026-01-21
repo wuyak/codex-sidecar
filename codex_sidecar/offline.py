@@ -6,6 +6,7 @@ from urllib.parse import quote
 
 from .watch.rollout_extract import extract_rollout_items
 from .watch.rollout_paths import _ROLLOUT_RE, _latest_rollout_files, _parse_thread_id_from_filename
+from .watch.tail_lines import read_tail_lines
 
 
 def _sha1_hex(s: str) -> str:
@@ -131,44 +132,6 @@ def list_offline_rollout_files(codex_home: Path, limit: int = 60) -> List[Dict[s
             }
         )
     return out
-
-
-def read_tail_lines(path: Path, last_lines: int, max_bytes: int = 32 * 1024 * 1024) -> List[bytes]:
-    """
-    Read last N lines from a file (best-effort), bounded by max_bytes.
-
-    Mirrors the behavior in watcher._read_tail_lines, but is self-contained so offline APIs
-    do not depend on a running watcher instance.
-    """
-    try:
-        size = path.stat().st_size
-    except Exception:
-        return []
-    if size == 0:
-        return []
-    block = 256 * 1024
-    want = max(1, int(last_lines) + 1)
-    buf = b""
-    read_bytes = 0
-    pos = int(size)
-    while pos > 0 and buf.count(b"\n") < want and read_bytes < int(max_bytes):
-        step = block if pos >= block else pos
-        pos -= step
-        try:
-            with path.open("rb") as f:
-                f.seek(pos)
-                chunk = f.read(step)
-        except Exception:
-            break
-        buf = chunk + buf
-        read_bytes += len(chunk)
-    lines = buf.splitlines()
-    if pos != 0 and lines:
-        lines = lines[1:]
-    ll = int(last_lines)
-    if ll <= 0:
-        return lines
-    return lines[-ll:]
 
 
 def build_offline_messages(

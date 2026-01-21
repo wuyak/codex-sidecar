@@ -21,6 +21,7 @@ from .watch.rollout_paths import (
 from .watch.rollout_extract import extract_rollout_items
 from .watch.translation_pump import TranslationPump
 from .watch.follow_picker import FollowPicker
+from .watch.tail_lines import read_tail_lines
 from .watch.tui_gate import TuiGateTailer
 
 def _sha1_hex(s: str) -> str:
@@ -459,7 +460,7 @@ class RolloutWatcher:
             try:
                 self._tui.poll(
                     thread_id=self._thread_id or "",
-                    read_tail_lines=self._read_tail_lines,
+                    read_tail_lines=read_tail_lines,
                     sha1_hex=_sha1_hex,
                     dedupe=self._dedupe,
                     ingest=self._ingest.ingest,
@@ -619,52 +620,13 @@ class RolloutWatcher:
             pass
 
 
-    def _read_tail_lines(self, path: Path, last_lines: int, max_bytes: int = 32 * 1024 * 1024) -> List[bytes]:
-        """
-        从文件尾部向前读取，尽量精确获取最后 N 行，避免单纯固定字节数导致“回放不足”。
-
-        - last_lines: 需要的行数（不含可能的前置 partial line）
-        - max_bytes: 最多读取的字节数上限，防止极端大文件占用过高
-        """
-        try:
-            size = path.stat().st_size
-        except Exception:
-            return []
-
-        if size == 0:
-            return []
-
-        block = 256 * 1024
-        want = max(1, last_lines + 1)
-        buf = b""
-        read_bytes = 0
-        pos = size
-
-        while pos > 0 and buf.count(b"\n") < want and read_bytes < max_bytes:
-            step = block if pos >= block else pos
-            pos -= step
-            try:
-                with path.open("rb") as f:
-                    f.seek(pos)
-                    chunk = f.read(step)
-            except Exception:
-                break
-            buf = chunk + buf
-            read_bytes += len(chunk)
-
-        lines = buf.splitlines()
-        # If we didn't start from 0, we may have a partial first line; drop it.
-        if pos != 0 and lines:
-            lines = lines[1:]
-        return lines[-last_lines:] if last_lines > 0 else lines
-
     def _replay_tail(self, cur: _FileCursor, last_lines: int) -> None:
         path = cur.path
         # Respect the user's configured replay window strictly.
         replay_lines = max(0, int(last_lines))
         if replay_lines == 0:
             return
-        tail = self._read_tail_lines(path, last_lines=replay_lines)
+        tail = read_tail_lines(path, last_lines=replay_lines)
         for bline in tail:
             if self._stop_requested():
                 break
@@ -692,8 +654,12 @@ class RolloutWatcher:
             size = int(path.stat().st_size)
         except Exception:
             return
+        if size <= 0:
+            return
         if cur.offset > size:
             cur.offset = 0
+        if cur.offset == size:
+            return
         try:
             with path.open("rb") as f:
                 f.seek(cur.offset)

@@ -2,7 +2,7 @@ import os
 import re
 import time
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Pattern, Sequence, Set, Tuple
 
@@ -29,11 +29,11 @@ class FollowPick:
     follow_mode: str
     codex_detected: bool
     # PIDs that actually opened rollout-*.jsonl (a tighter set than "candidates").
-    codex_pids: List[int]
-    process_file: Optional[Path]
-    process_files: List[Path]
+    codex_pids: List[int] = field(default_factory=list)
+    process_file: Optional[Path] = None
+    process_files: List[Path] = field(default_factory=list)
     # Candidate root PIDs matched by regex (debugging only).
-    candidate_pids: List[int]
+    candidate_pids: List[int] = field(default_factory=list)
 
 
 class FollowPicker:
@@ -100,10 +100,6 @@ class FollowPicker:
                 thread_id=None,
                 follow_mode="pinned_missing",
                 codex_detected=False,
-                codex_pids=[],
-                process_file=None,
-                process_files=[],
-                candidate_pids=[],
             )
 
         tid = _parse_thread_id_from_filename(cand)
@@ -131,11 +127,11 @@ class FollowPicker:
                 else:
                     follow_mode = "pinned_wait_rollout"
 
-            return FollowPick(
-                picked=cand,
-                thread_id=tid,
-                follow_mode=follow_mode,
-                codex_detected=codex_detected,
+        return FollowPick(
+            picked=cand,
+            thread_id=tid,
+            follow_mode=follow_mode,
+            codex_detected=codex_detected,
             codex_pids=codex_pids,
             process_file=process_file,
             process_files=process_files,
@@ -150,10 +146,6 @@ class FollowPicker:
                 thread_id=_parse_thread_id_from_filename(picked) if picked is not None else None,
                 follow_mode="legacy",
                 codex_detected=False,
-                codex_pids=[],
-                process_file=None,
-                process_files=[],
-                candidate_pids=[],
             )
 
         if self._codex_process_re is None:
@@ -163,10 +155,6 @@ class FollowPicker:
                     thread_id=None,
                     follow_mode="wait_codex",
                     codex_detected=False,
-                    codex_pids=[],
-                    process_file=None,
-                    process_files=[],
-                    candidate_pids=[],
                 )
             picked = _latest_rollout_file(self._codex_home)
             return FollowPick(
@@ -174,10 +162,6 @@ class FollowPicker:
                 thread_id=_parse_thread_id_from_filename(picked) if picked is not None else None,
                 follow_mode="fallback",
                 codex_detected=False,
-                codex_pids=[],
-                process_file=None,
-                process_files=[],
-                candidate_pids=[],
             )
 
         pids = self._detect_codex_processes_cached()
@@ -190,10 +174,6 @@ class FollowPicker:
                     thread_id=None,
                     follow_mode="idle",
                     codex_detected=False,
-                    codex_pids=[],
-                    process_file=None,
-                    process_files=[],
-                    candidate_pids=[],
                 )
             picked = _latest_rollout_file(self._codex_home)
             return FollowPick(
@@ -201,10 +181,6 @@ class FollowPicker:
                 thread_id=_parse_thread_id_from_filename(picked) if picked is not None else None,
                 follow_mode="fallback",
                 codex_detected=False,
-                codex_pids=[],
-                process_file=None,
-                process_files=[],
-                candidate_pids=[],
             )
 
         tree = self._collect_process_tree_cached(pids)
