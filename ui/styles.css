@@ -879,44 +879,55 @@
 				      .pref-row:focus-visible { outline: none; box-shadow: var(--ring); }
 				      .pref-check { width: 18px; height: 18px; border-radius: 999px; border: 1px solid var(--c-border-strong); display:flex; align-items:center; justify-content:center; font-size: 12px; font-weight: 900; flex: 0 0 auto; color: var(--c-accent); }
 
-				      /* 导入对话：三级索引（年/月/日）更紧凑，减少滚动负担。 */
-				      #importDialog .imp-tree { display:flex; flex-direction:column; gap: 8px; }
-				      #importDialog .imp-row { display:flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
-				      #importDialog .imp-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 6px; }
-				      #importDialog .imp-chip { border: 1px solid var(--c-border); background: var(--c-surface); color: var(--c-text); border-radius: 999px; padding: 6px 10px; min-height: 32px; display:inline-flex; align-items:center; justify-content:center; gap: 6px; cursor: pointer; font-size: var(--ui-font-xs); box-shadow: 0 1px 0 rgba(15,23,42,.04); white-space: nowrap; position: relative; }
-				      #importDialog .imp-chip:hover { background: var(--c-soft-2); }
-				      #importDialog .imp-chip:active { transform: translateY(1px); }
-				      #importDialog .imp-chip:focus-visible { outline: none; box-shadow: 0 1px 0 rgba(15,23,42,.04), var(--ring); border-color: rgba(14,165,233,.55); }
-				      #importDialog .imp-chip.is-active { border-color: rgba(14,165,233,.55); box-shadow: 0 1px 0 rgba(15,23,42,.04), var(--ring); background: rgba(14,165,233,.08); font-weight: 900; }
-				      #importDialog .imp-chip-text { font-variant-numeric: tabular-nums; }
-				      #importDialog .imp-chip-count { min-width: 18px; height: 18px; padding: 0 6px; border-radius: 999px; background: rgba(148,163,184,.14); border: 1px solid rgba(148,163,184,.35); color: var(--c-muted); font-size: 11px; font-variant-numeric: tabular-nums; display:inline-flex; align-items:center; justify-content:center; line-height: 18px; pointer-events: none; }
-				      body[data-bm-skin="dark"] #importDialog .imp-chip-count { background: rgba(148,163,184,.16); border-color: rgba(148,163,184,.22); color: rgba(226,232,240,.92); }
-				      #importDialog .imp-chip.is-active .imp-chip-count { background: rgba(14,165,233,.16); border-color: rgba(14,165,233,.35); color: var(--c-text); }
-				      #importDialog .imp-row.imp-years,
-				      #importDialog .imp-row.imp-months { padding: 4px; border: 1px solid var(--c-border); border-radius: 14px; background: var(--c-soft-2); }
-				      #importDialog .imp-row.imp-years .imp-chip,
-				      #importDialog .imp-row.imp-months .imp-chip { background: transparent; border-color: transparent; box-shadow: none; }
-				      #importDialog .imp-row.imp-years .imp-chip:hover,
-				      #importDialog .imp-row.imp-months .imp-chip:hover { background: rgba(148,163,184,.12); }
-				      #importDialog .imp-row.imp-years .imp-chip.is-active,
-				      #importDialog .imp-row.imp-months .imp-chip.is-active { background: var(--c-surface); border-color: rgba(14,165,233,.55); box-shadow: 0 1px 0 rgba(15,23,42,.04), var(--ring); }
-				      #importDialog .imp-years .imp-chip { min-height: 36px; padding: 8px 14px; font-size: var(--ui-font-sm); font-weight: 900; }
-				      #importDialog .imp-months .imp-chip { min-height: 34px; padding: 7px 12px; border-radius: 14px; }
-				      #importDialog .imp-weekdays { display:grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; padding: 0 2px; }
-				      #importDialog .imp-weekday { text-align:center; font-size: 11px; color: var(--c-muted); opacity: .85; font-variant-numeric: tabular-nums; }
-				      #importDialog .imp-days.imp-calendar { display:grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; padding: 2px; }
-				      #importDialog .imp-day-empty { aspect-ratio: 1 / 1; border-radius: 14px; background: transparent; border: 1px solid transparent; }
-				      #importDialog .imp-chip.imp-chip-day { aspect-ratio: 1 / 1; border-radius: 14px; padding: 10px; align-items:flex-start; justify-content:flex-start; }
-				      #importDialog .imp-chip.imp-chip-day .imp-chip-text { font-size: var(--ui-font-sm); font-weight: 900; }
-				      #importDialog .imp-chip.imp-chip-day.is-empty { opacity: .42; background: transparent; border-color: rgba(148,163,184,.18); box-shadow: none; cursor: default; }
-				      #importDialog .imp-chip.imp-chip-day.is-empty:hover { background: transparent; }
-				      #importDialog .imp-day-count { position:absolute; right: 8px; bottom: 8px; min-width: 18px; height: 18px; padding: 0 6px; border-radius: 999px; background: rgba(148,163,184,.14); border: 1px solid rgba(148,163,184,.35); color: var(--c-muted); font-size: 11px; font-variant-numeric: tabular-nums; display:flex; align-items:center; justify-content:center; line-height: 18px; pointer-events: none; }
-				      body[data-bm-skin="dark"] #importDialog .imp-day-count { background: rgba(148,163,184,.16); border-color: rgba(148,163,184,.22); color: rgba(226,232,240,.92); }
-				      #importDialog .imp-chip.is-active .imp-day-count { background: rgba(14,165,233,.16); border-color: rgba(14,165,233,.35); color: var(--c-text); }
-				      #importDialog .imp-path { margin-top: 2px; }
-				      #importDialog .imp-files { margin-top: 6px; }
-				      #importDialog .tab { padding: 6px 8px; border-radius: 10px; }
-				      #importDialog .tab-dot { width: 8px; height: 8px; }
+					      /* 导入对话：日历组件（Air Datepicker）+ 会话文件列表。 */
+					      #importDialog .imp-import { display:flex; flex-direction:column; gap: 10px; }
+					      #importDialog .imp-cal-wrap { border: 1px solid var(--c-border); border-radius: 14px; background: var(--c-soft-2); padding: 8px; }
+					      #importDialog .imp-pane { display:flex; flex-direction:column; gap: 8px; }
+					      #importDialog .imp-head { display:flex; align-items:center; gap: 8px; }
+					      #importDialog .imp-files { margin-top: 0; max-height: min(46vh, 360px); overflow:auto; }
+					      #importDialog .tab { padding: 6px 8px; border-radius: 10px; }
+					      #importDialog .tab-dot { width: 8px; height: 8px; }
+
+					      #importDialog .imp-cal .air-datepicker {
+					        width: 100%;
+					        box-shadow: none;
+					        --adp-font-family: var(--ui-font-family);
+					        --adp-font-size: 12px;
+					        --adp-border-radius: 12px;
+					        --adp-border-color: var(--c-border);
+					        --adp-border-color-inner: var(--c-border);
+					        --adp-background-color: var(--c-surface);
+					        --adp-background-color-hover: var(--c-soft-2);
+					        --adp-background-color-active: var(--c-soft);
+					        --adp-color: var(--c-text);
+					        --adp-color-current-date: var(--c-accent);
+					        --adp-color-disabled: rgba(148,163,184,.85);
+					        --adp-day-name-color: var(--c-muted);
+					        --adp-day-name-color-hover: var(--c-text);
+					        --adp-day-cell-width: 38px;
+					        --adp-day-cell-height: 36px;
+					        --adp-month-cell-height: 44px;
+					        --adp-year-cell-height: 44px;
+					        --adp-nav-height: 42px;
+					        --adp-padding: 6px;
+					        --adp-cell-border-radius: 12px;
+					        --adp-cell-background-color-selected: var(--c-accent);
+					        --adp-cell-background-color-selected-hover: var(--c-accent);
+					      }
+					      body[data-bm-skin="dark"] #importDialog .imp-cal .air-datepicker {
+					        --adp-background-color: rgba(15,23,42,.58);
+					        --adp-border-color: rgba(148,163,184,.22);
+					        --adp-border-color-inner: rgba(148,163,184,.22);
+					        --adp-background-color-hover: rgba(148,163,184,.10);
+					        --adp-background-color-active: rgba(148,163,184,.14);
+					        --adp-day-name-color: rgba(148,163,184,.92);
+					        --adp-color-disabled: rgba(148,163,184,.70);
+					      }
+					      #importDialog .imp-cal .air-datepicker-cell.-day- { justify-content:flex-start; align-items:flex-start; padding: 7px 6px; font-weight: 900; font-variant-numeric: tabular-nums; }
+					      #importDialog .imp-cal .air-datepicker-cell[data-count]::after { content: attr(data-count); position:absolute; top: 5px; right: 5px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: rgba(148,163,184,.14); border: 1px solid rgba(148,163,184,.35); color: var(--c-muted); font-size: 11px; font-variant-numeric: tabular-nums; display:flex; align-items:center; justify-content:center; line-height: 18px; pointer-events: none; }
+					      body[data-bm-skin="dark"] #importDialog .imp-cal .air-datepicker-cell[data-count]::after { background: rgba(148,163,184,.16); border-color: rgba(148,163,184,.22); color: rgba(226,232,240,.92); }
+					      #importDialog .imp-cal .air-datepicker-cell.-selected-[data-count]::after { background: rgba(255,255,255,.18); border-color: rgba(255,255,255,.35); color: #fff; }
+					      #importDialog .imp-cal .air-datepicker-cell.imp-adp-empty { opacity: .46; }
 				      .pref-row[aria-pressed="false"] .pref-check { color: transparent; }
 				      .pref-check::before { content: "✓"; }
 				      .pref-row[aria-pressed="false"] .pref-check::before { content: ""; }
