@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 - 新增：离线“展示中”+ 双标签栏 — 会话管理抽屉分为 `监听中/展示中/关闭监听`；离线会话显示在独立“展示标签栏”（不混入监听标签栏），用于回看/导出且不影响 follow/未读/提示音。
-- UI：新增“导入对话”入口（右侧工具栏）；弹窗内支持输入 `rel` 或按 `sessions/YYYY/MM/DD` 分组选择最近 `rollout-*.jsonl` 加入展示并打开。
+- UI：新增“导入对话”入口（右侧工具栏）；弹窗内支持输入 `rel` 或按 `sessions/YYYY/MM/DD` 的年/月/日分级浏览选择 `rollout-*.jsonl` 加入展示并打开。
 - 新增：通用翻译接口 `POST /api/control/translate_text`（支持批量 items）；离线思考翻译与导出补齐译文写入本机缓存 `offlineZh:${rel}`。
 - UI：移除浮动按钮 hover tooltip（避免提示遮挡/误导）；`aria-label` 仅用于无障碍读屏。
 - UI：设置抽屉“高级选项”更名为“监听设置”；配置目录移到监视目录下方；移除设置内冗余提示文案。

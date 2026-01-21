@@ -1251,44 +1251,98 @@ export function wireControlEvents(dom, state, helpers) {
       return;
     }
 
-    const groups = new Map(); // dir -> { dir, items: [] }
-    const order = [];
+    const _parseYmd = (rel) => {
+      const r = String(rel || "").trim().replaceAll("\\", "/").replace(/^\/+/, "");
+      const parts = r.split("/");
+      if (parts.length < 5) return null;
+      if (parts[0] !== "sessions") return null;
+      const y = String(parts[1] || "");
+      const m = String(parts[2] || "");
+      const d = String(parts[3] || "");
+      if (!/^\d{4}$/.test(y)) return null;
+      if (!/^\d{2}$/.test(m)) return null;
+      if (!/^\d{2}$/.test(d)) return null;
+      return { y, m, d };
+    };
+
+    // Build a directory tree: year -> month -> day -> [files...]
+    const tree = new Map(); // y -> Map(m -> Map(d -> items[]))
+    const other = []; // fallback bucket (should be rare)
     for (const it of files) {
       const rel = String((it && it.rel) ? it.rel : "").trim();
       if (!rel) continue;
-      const dir = rel.includes("/") ? rel.split("/").slice(0, -1).join("/") : "sessions";
-      if (!groups.has(dir)) { groups.set(dir, { dir, items: [] }); order.push(dir); }
-      try { groups.get(dir).items.push(it); } catch (_) {}
+      const ymd = _parseYmd(rel);
+      if (!ymd) { other.push(it); continue; }
+      const { y, m, d } = ymd;
+      if (!tree.has(y)) tree.set(y, new Map());
+      const ym = tree.get(y);
+      if (!ym.has(m)) ym.set(m, new Map());
+      const dm = ym.get(m);
+      if (!dm.has(d)) dm.set(d, []);
+      try { dm.get(d).push(it); } catch (_) {}
     }
 
-    let first = true;
-    for (const dir of order) {
-      const g = groups.get(dir);
-      const items = g && Array.isArray(g.items) ? g.items : [];
-      if (!items.length) continue;
+    const _desc = (a, b) => String(b || "").localeCompare(String(a || ""));
+    const years = Array.from(tree.keys()).sort(_desc);
 
-      const details = document.createElement("details");
-      details.className = "drawer-details";
-      if (first) details.open = true;
-      first = false;
-
-      const summary = document.createElement("summary");
-      summary.className = "meta";
-      summary.textContent = dir;
-
+    const _countYear = (y) => {
       try {
-        const pill = document.createElement("span");
-        pill.className = "pill";
-        pill.style.marginLeft = "8px";
-        pill.textContent = String(items.length);
-        summary.appendChild(pill);
+        const ym = tree.get(y);
+        let n = 0;
+        for (const m of ym.keys()) {
+          const dm = ym.get(m);
+          for (const d of dm.keys()) n += (dm.get(d) || []).length;
+        }
+        return n;
+      } catch (_) { return 0; }
+    };
+    const _countMonth = (y, m) => {
+      try {
+        const dm = tree.get(y).get(m);
+        let n = 0;
+        for (const d of dm.keys()) n += (dm.get(d) || []).length;
+        return n;
+      } catch (_) { return 0; }
+    };
+
+    const _isShown = (rel) => {
+      const r = String(rel || "").trim();
+      if (!r) return false;
+      try {
+        const show = Array.isArray(state && state.offlineShow) ? state.offlineShow : [];
+        for (const s of show) {
+          if (!s || typeof s !== "object") continue;
+          if (String(s.rel || "").trim() === r) return true;
+        }
       } catch (_) {}
+      return false;
+    };
 
-      const list = document.createElement("div");
-      list.className = "tabs";
-      list.style.marginTop = "10px";
+    const _makePill = (n) => {
+      const pill = document.createElement("span");
+      pill.className = "pill";
+      pill.style.marginLeft = "8px";
+      pill.textContent = String(n || 0);
+      return pill;
+    };
 
-      for (const it of items) {
+    const _renderFileRowsInto = (listEl, items) => {
+      if (!listEl) return;
+      if (listEl.dataset && listEl.dataset.loaded === "1") return;
+      try { if (listEl.dataset) listEl.dataset.loaded = "1"; } catch (_) {}
+
+      const arr = Array.isArray(items) ? items.slice(0) : [];
+      // Sort by filename timestamp (directory date order should not depend on mtime).
+      arr.sort((a, b) => {
+        const ra = String(a && a.rel ? a.rel : "");
+        const rb = String(b && b.rel ? b.rel : "");
+        const fa = (ra.split("/").slice(-1)[0] || "").trim();
+        const fb = (rb.split("/").slice(-1)[0] || "").trim();
+        if (fa && fb && fa !== fb) return fb.localeCompare(fa);
+        return rb.localeCompare(ra);
+      });
+
+      for (const it of arr) {
         const rel = String((it && it.rel) ? it.rel : "").trim();
         const file = String((it && it.file) ? it.file : "").trim();
         const tid = String((it && it.thread_id) ? it.thread_id : "").trim();
@@ -1321,25 +1375,99 @@ export function wireControlEvents(dom, state, helpers) {
         const sub = document.createElement("span");
         sub.className = "tab-sub";
         const base = (String(file || rel).split("/").slice(-1)[0]) || rel;
-        let extra = "";
-        try {
-          const show = Array.isArray(state && state.offlineShow) ? state.offlineShow : [];
-          for (const s of show) {
-            if (!s || typeof s !== "object") continue;
-            if (String(s.rel || "").trim() === rel) { extra = " · 已在展示"; break; }
-          }
-        } catch (_) {}
-        sub.textContent = `${base}${extra}`;
+        sub.textContent = _isShown(rel) ? `${base} · 已在展示` : base;
 
         main.appendChild(label);
         main.appendChild(sub);
         row.appendChild(dot);
         row.appendChild(main);
-        list.appendChild(row);
+        listEl.appendChild(row);
+      }
+    };
+
+    let firstYear = true;
+    for (const y of years) {
+      const ym = tree.get(y);
+      const months = Array.from(ym.keys()).sort(_desc);
+      const yearDetails = document.createElement("details");
+      yearDetails.className = "drawer-details";
+      if (firstYear) yearDetails.open = true;
+      firstYear = false;
+
+      const yearSummary = document.createElement("summary");
+      yearSummary.className = "meta";
+      yearSummary.textContent = `sessions/${y}`;
+      try { yearSummary.appendChild(_makePill(_countYear(y))); } catch (_) {}
+      yearDetails.appendChild(yearSummary);
+
+      for (const m of months) {
+        const dm = ym.get(m);
+        const days = Array.from(dm.keys()).sort(_desc);
+        const monthDetails = document.createElement("details");
+        monthDetails.className = "drawer-details";
+        monthDetails.style.marginLeft = "10px";
+        monthDetails.open = false;
+
+        const monthSummary = document.createElement("summary");
+        monthSummary.className = "meta";
+        monthSummary.textContent = `sessions/${y}/${m}`;
+        try { monthSummary.appendChild(_makePill(_countMonth(y, m))); } catch (_) {}
+        monthDetails.appendChild(monthSummary);
+
+        for (const d of days) {
+          const items = dm.get(d) || [];
+          const dayDetails = document.createElement("details");
+          dayDetails.className = "drawer-details";
+          dayDetails.style.marginLeft = "20px";
+          dayDetails.open = false;
+
+          const daySummary = document.createElement("summary");
+          daySummary.className = "meta";
+          daySummary.textContent = `sessions/${y}/${m}/${d}`;
+          try { daySummary.appendChild(_makePill(items.length)); } catch (_) {}
+          dayDetails.appendChild(daySummary);
+
+          const list = document.createElement("div");
+          list.className = "tabs";
+          list.style.marginTop = "10px";
+          try { list.dataset.loaded = "0"; } catch (_) {}
+
+          dayDetails.appendChild(list);
+          dayDetails.addEventListener("toggle", () => {
+            try {
+              if (!dayDetails.open) return;
+              _renderFileRowsInto(list, items);
+            } catch (_) {}
+          });
+
+          monthDetails.appendChild(dayDetails);
+        }
+
+        yearDetails.appendChild(monthDetails);
       }
 
+      frag.appendChild(yearDetails);
+    }
+
+    if (other.length) {
+      const details = document.createElement("details");
+      details.className = "drawer-details";
+      details.open = false;
+      const summary = document.createElement("summary");
+      summary.className = "meta";
+      summary.textContent = "其他";
+      try { summary.appendChild(_makePill(other.length)); } catch (_) {}
       details.appendChild(summary);
+      const list = document.createElement("div");
+      list.className = "tabs";
+      list.style.marginTop = "10px";
       details.appendChild(list);
+      details.addEventListener("toggle", () => {
+        try {
+          if (!details.open) return;
+          _renderFileRowsInto(list, other);
+        } catch (_) {}
+      });
       frag.appendChild(details);
     }
 
@@ -1356,7 +1484,7 @@ export function wireControlEvents(dom, state, helpers) {
     _offlineFetchInFlight = true;
     try {
       _setImportError("");
-      const url = `/api/offline/files?limit=120&t=${now}`;
+      const url = `/api/offline/files?limit=0&t=${now}`;
       const r = await fetch(url, { cache: "no-store" }).then((x) => x.json()).catch(() => null);
       const files = Array.isArray(r && r.files) ? r.files : [];
       state.offlineFiles = files;
