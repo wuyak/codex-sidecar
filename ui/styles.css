@@ -882,13 +882,13 @@
 				      /* 导入对话：三级索引（年/月/日）更紧凑，减少滚动负担。 */
 				      #importDialog .imp-tree { display:flex; flex-direction:column; gap: 8px; }
 				      #importDialog .imp-row { display:flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
-				      #importDialog .imp-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 6px; }
-				      #importDialog .imp-chip { border: 1px solid var(--c-border); background: transparent; color: var(--c-text); border-radius: 999px; padding: 4px 8px; display:inline-flex; align-items:center; gap: 0; cursor: pointer; font-size: var(--ui-font-xs); box-shadow: none; }
+				      #importDialog .imp-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 6px; }
+				      #importDialog .imp-chip { border: 1px solid var(--c-border); background: transparent; color: var(--c-text); border-radius: 999px; padding: 6px 10px; min-height: 32px; display:inline-flex; align-items:center; justify-content:center; gap: 6px; cursor: pointer; font-size: var(--ui-font-xs); box-shadow: none; white-space: nowrap; }
 				      #importDialog .imp-chip:hover { background: var(--c-soft-2); }
 				      #importDialog .imp-chip:active { transform: translateY(1px); }
 				      #importDialog .imp-chip:focus-visible { outline: none; box-shadow: var(--ring); border-color: rgba(14,165,233,.55); }
-				      #importDialog .imp-chip.is-active { border-color: rgba(14,165,233,.55); box-shadow: var(--ring); background: var(--c-surface); }
-				      #importDialog .imp-chip .pill { padding: 1px 6px; margin-left: 6px !important; font-variant-numeric: tabular-nums; }
+				      #importDialog .imp-chip.is-active { border-color: rgba(14,165,233,.55); box-shadow: var(--ring); background: rgba(14,165,233,.08); font-weight: 900; }
+				      #importDialog .imp-chip-text { font-variant-numeric: tabular-nums; }
 				      #importDialog .imp-path { margin-top: 2px; }
 				      #importDialog .imp-files { margin-top: 6px; }
 				      #importDialog .tab { padding: 6px 8px; border-radius: 10px; }

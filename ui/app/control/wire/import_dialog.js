@@ -83,8 +83,8 @@ export function wireImportDialog(dom, state, helpers, opts = {}) {
       try { dm.get(d).push(it); } catch (_) {}
     }
 
-    const desc = (a, b) => String(b || "").localeCompare(String(a || ""));
-    const years = Array.from(tree.keys()).sort(desc);
+    const asc = (a, b) => String(a || "").localeCompare(String(b || ""));
+    const years = Array.from(tree.keys()).sort(asc);
 
     const countYear = (y) => {
       try {
@@ -117,14 +117,6 @@ export function wireImportDialog(dom, state, helpers, opts = {}) {
         }
       } catch (_) {}
       return false;
-    };
-
-    const makePill = (n) => {
-      const pill = document.createElement("span");
-      pill.className = "pill";
-      pill.style.marginLeft = "8px";
-      pill.textContent = String(n || 0);
-      return pill;
     };
 
     const renderFileRowsInto = (listEl, items) => {
@@ -200,7 +192,7 @@ export function wireImportDialog(dom, state, helpers, opts = {}) {
     const root = document.createElement("div");
     root.className = "imp-tree";
 
-    const pickFirst = (xs) => (Array.isArray(xs) && xs.length) ? String(xs[0] || "") : "";
+    const pickLast = (xs) => (Array.isArray(xs) && xs.length) ? String(xs[xs.length - 1] || "") : "";
     const hasYear = (y) => y && tree.has(y);
     const hasMonth = (y, m) => {
       if (!y || !m) return false;
@@ -219,24 +211,24 @@ export function wireImportDialog(dom, state, helpers, opts = {}) {
     try { selD = String(state && state.importSelD ? state.importSelD : ""); } catch (_) { selD = ""; }
 
     if (!hasYear(selY)) {
-      selY = pickFirst(years);
+      selY = pickLast(years);
       selM = "";
       selD = "";
       try { state.importSelY = selY; state.importSelM = ""; state.importSelD = ""; } catch (_) {}
     }
 
     const monthsMap = hasYear(selY) ? tree.get(selY) : null;
-    const months = monthsMap ? Array.from(monthsMap.keys()).sort(desc) : [];
+    const months = monthsMap ? Array.from(monthsMap.keys()).sort(asc) : [];
     if (!hasMonth(selY, selM)) {
-      selM = pickFirst(months);
+      selM = pickLast(months);
       selD = "";
       try { state.importSelM = selM; state.importSelD = ""; } catch (_) {}
     }
 
     const daysMap = hasMonth(selY, selM) ? tree.get(selY).get(selM) : null;
-    const days = daysMap ? Array.from(daysMap.keys()).sort(desc) : [];
+    const days = daysMap ? Array.from(daysMap.keys()).sort(asc) : [];
     if (!hasDay(selY, selM, selD)) {
-      selD = pickFirst(days);
+      selD = pickLast(days);
       try { state.importSelD = selD; } catch (_) {}
     }
 
@@ -248,6 +240,7 @@ export function wireImportDialog(dom, state, helpers, opts = {}) {
       const active = !!a.active;
       if (active) btn.classList.add("is-active");
       try { btn.setAttribute("aria-pressed", active ? "true" : "false"); } catch (_) {}
+      try { btn.setAttribute("aria-label", `${String(label || "")}（${Number(count) || 0}个文件）`); } catch (_) {}
       try { btn.dataset.action = String(a.action || ""); } catch (_) {}
       if (a.year) try { btn.dataset.year = String(a.year); } catch (_) {}
       if (a.month) try { btn.dataset.month = String(a.month); } catch (_) {}
@@ -256,11 +249,6 @@ export function wireImportDialog(dom, state, helpers, opts = {}) {
       text.className = "imp-chip-text";
       text.textContent = String(label || "");
       btn.appendChild(text);
-      try {
-        const pill = makePill(count);
-        pill.style.marginLeft = "6px";
-        btn.appendChild(pill);
-      } catch (_) {}
       return btn;
     };
 
@@ -278,7 +266,8 @@ export function wireImportDialog(dom, state, helpers, opts = {}) {
       const monthsRow = document.createElement("div");
       monthsRow.className = "imp-row imp-months";
       for (const m of months) {
-        const chip = makeChip(String(m), countMonth(selY, m), { action: "selMonth", month: m, active: m === selM });
+        const mm = String(Number(m) || m);
+        const chip = makeChip(`${mm}月`, countMonth(selY, m), { action: "selMonth", month: m, active: m === selM });
         monthsRow.appendChild(chip);
       }
       root.appendChild(monthsRow);
@@ -291,26 +280,32 @@ export function wireImportDialog(dom, state, helpers, opts = {}) {
       for (const d of days) {
         let n = 0;
         try { n = (daysMap && daysMap.get(d)) ? (daysMap.get(d) || []).length : 0; } catch (_) { n = 0; }
-        const chip = makeChip(String(d), n, { action: "selDay", day: d, active: d === selD });
+        const dd = String(Number(d) || d);
+        const chip = makeChip(`${dd}日`, n, { action: "selDay", day: d, active: d === selD });
         daysGrid.appendChild(chip);
       }
       root.appendChild(daysGrid);
     }
 
-    const pathLine = document.createElement("div");
-    pathLine.className = "meta imp-path";
-    pathLine.textContent = (selY && selM && selD) ? `sessions/${selY}/${selM}/${selD}` : "sessions/";
-    root.appendChild(pathLine);
-
-    const filesHost = document.createElement("div");
-    filesHost.className = "tabs imp-files";
-    try { filesHost.dataset.loaded = "0"; } catch (_) {}
     let selectedItems = [];
     try {
       selectedItems = (selY && selM && selD && daysMap && daysMap.get(selD)) ? (daysMap.get(selD) || []) : [];
     } catch (_) {
       selectedItems = [];
     }
+
+    const pathLine = document.createElement("div");
+    pathLine.className = "meta imp-path";
+    if (selY && selM && selD) {
+      pathLine.textContent = `sessions/${selY}/${selM}/${selD} · ${selectedItems.length} 个文件`;
+    } else {
+      pathLine.textContent = "sessions/";
+    }
+    root.appendChild(pathLine);
+
+    const filesHost = document.createElement("div");
+    filesHost.className = "tabs imp-files";
+    try { filesHost.dataset.loaded = "0"; } catch (_) {}
     renderFileRowsInto(filesHost, selectedItems);
     root.appendChild(filesHost);
 
