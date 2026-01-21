@@ -95,6 +95,10 @@
 	              <polyline points="7 10 12 15 17 10"></polyline>
 	              <line x1="12" y1="15" x2="12" y2="3"></line>
 	            </symbol>
+	            <symbol id="i-inbox" viewBox="0 0 24 24">
+	              <path d="M3 13h5l2 3h4l2-3h5"></path>
+	              <path d="M5 21h14a2 2 0 0 0 2-2v-7l-3-7H6L3 12v7a2 2 0 0 0 2 2z"></path>
+	            </symbol>
 	          </svg>
 				    <div id="main">
 		      <div class="row" id="topbar">
@@ -107,6 +111,7 @@
 
 										    										    <div id="rightbar" class="rightbar" aria-label="actions">
 										      <button id="configToggleBtn" class="icon-btn" type="button" aria-label="设置"><svg class="ico" aria-hidden="true"><use href="#i-settings"></use></svg></button>
+										      <button id="importBtn" class="icon-btn" type="button" aria-label="导入对话"><svg class="ico" aria-hidden="true"><use href="#i-inbox"></use></svg></button>
 											      <button id="quickViewBtn" class="icon-btn" type="button" aria-label="精简显示：已关闭（长按打开精简显示设置）"><svg class="ico" aria-hidden="true"><use href="#i-bolt"></use></svg></button>
 										      <button id="translateToggleBtn" class="icon-btn" type="button" aria-label="翻译"><svg class="ico" aria-hidden="true"><use href="#i-globe"></use></svg></button>
 										      <button id="watchToggleBtn" class="icon-btn" type="button" aria-label="开始监听"><svg class="ico" aria-hidden="true"><use href="#i-play"></use></svg></button>
@@ -314,17 +319,6 @@
 								        <details id="offlineDetails" class="drawer-details" style="margin-top:10px;">
 								          <summary class="meta">展示中 <span id="offlineShowCount" class="pill">0</span></summary>
 								          <div id="offlineShowList" class="tabs" style="margin-top:10px;"></div>
-								          <div class="meta" style="margin-top:10px;">添加展示</div>
-								          <div class="grid grid-compact" style="margin-top:10px;">
-								            <div class="meta">指定 rel</div>
-								            <div class="profile-row">
-								              <input id="offlineRel" placeholder="sessions/YYYY/MM/DD/rollout-*.jsonl" style="flex:1;" />
-								              <button id="offlineOpenBtn" class="mini-btn" type="button" aria-label="加入展示并打开"><svg class="ico" aria-hidden="true"><use href="#i-plus"></use></svg></button>
-								              <button id="offlineRefreshBtn" class="mini-btn" type="button" aria-label="刷新最近文件"><svg class="ico" aria-hidden="true"><use href="#i-refresh"></use></svg></button>
-								            </div>
-								          </div>
-								          <div id="offlineList" class="tabs" style="margin-top:10px;"></div>
-								          <div id="offlineErrorText" class="meta form-error" style="margin-top:6px;"></div>
 								        </details>
 								        <details id="bookmarkHiddenDetails" class="drawer-details" style="margin-top:10px;">
 								          <summary class="meta">关闭监听 <span id="bookmarkHiddenCount" class="pill">0</span></summary>
@@ -344,6 +338,25 @@
 						        </div>
 						        <div id="quickBlockList" class="qk-panel" style="margin-top:10px;"></div>
 						        <div id="quickBlocksErrorText" class="meta form-error" style="margin-top:6px;"></div>
+						      </div>
+						    </dialog>
+						    <dialog id="importDialog" class="popup-dialog" role="dialog" aria-label="导入对话">
+						      <div class="popup-dialog-form">
+						        <div class="popup-head">
+						          <div class="popup-title">导入对话</div>
+						          <button id="importDialogCloseBtn" class="drawer-close" type="button" aria-label="关闭">×</button>
+						        </div>
+						        <div class="meta" style="margin-top:10px;">仅支持 <code>sessions/**/rollout-*.jsonl</code>（只读导入，不影响监听/未读/提示音）</div>
+						        <div class="grid grid-compact" style="margin-top:10px;">
+						          <div class="meta">指定 rel</div>
+						          <div class="profile-row">
+						            <input id="importRel" placeholder="sessions/YYYY/MM/DD/rollout-*.jsonl" style="flex:1;" />
+						            <button id="importOpenBtn" class="mini-btn" type="button" aria-label="加入展示并打开"><svg class="ico" aria-hidden="true"><use href="#i-plus"></use></svg></button>
+						            <button id="importRefreshBtn" class="mini-btn" type="button" aria-label="刷新最近文件"><svg class="ico" aria-hidden="true"><use href="#i-refresh"></use></svg></button>
+						          </div>
+						        </div>
+						        <div id="importList" style="margin-top:10px;"></div>
+						        <div id="importErrorText" class="meta form-error" style="margin-top:6px;"></div>
 						      </div>
 						    </dialog>
 						    <dialog id="exportPrefsDialog" class="popup-dialog" role="dialog" aria-label="导出设置">
