@@ -878,6 +878,15 @@
 				      .pref-row:active { transform: translateY(1px); }
 				      .pref-row:focus-visible { outline: none; box-shadow: var(--ring); }
 				      .pref-check { width: 18px; height: 18px; border-radius: 999px; border: 1px solid var(--c-border-strong); display:flex; align-items:center; justify-content:center; font-size: 12px; font-weight: 900; flex: 0 0 auto; color: var(--c-accent); }
+
+				      /* 导入对话：索引树更紧凑，减少滚动负担。 */
+				      #importDialog .drawer-details { margin-top: 6px; }
+				      #importDialog .drawer-details > summary { padding: 6px 8px; border-radius: 10px; font-weight: 700; background: transparent; }
+				      #importDialog .drawer-details[open] > summary { background: var(--c-soft-2); box-shadow: none; }
+				      #importDialog .tabs { margin-top: 6px !important; }
+				      #importDialog .tab { padding: 6px 8px; border-radius: 10px; }
+				      #importDialog .tab-dot { width: 8px; height: 8px; }
+				      #importDialog .pill { font-variant-numeric: tabular-nums; }
 				      .pref-row[aria-pressed="false"] .pref-check { color: transparent; }
 				      .pref-check::before { content: "✓"; }
 				      .pref-row[aria-pressed="false"] .pref-check::before { content: ""; }
