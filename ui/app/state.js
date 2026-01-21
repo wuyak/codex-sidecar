@@ -84,6 +84,10 @@ export function createState() {
     // 离线“展示中”会话（来自本机 localStorage），用于展示标签栏与抽屉列表。
     offlineShow: [],
 
+    // 离线可选文件（来自 /api/offline/files），用于“导入对话”弹窗。
+    offlineFiles: [],
+    offlineFilesLastSyncMs: 0,
+
     // 离线译文缓存（mid -> { zh, err }），仅用于 offline:* 会话视图。
     offlineZhById: new Map(),
   };

@@ -602,6 +602,35 @@ export function wireControlEvents(dom, state, helpers) {
     } catch (_) { openDrawer(dom); }
   });
 
+  const _openImportDialog = () => {
+    const btn = dom && dom.importBtn ? dom.importBtn : null;
+    const dlg = dom && dom.importDialog ? dom.importDialog : null;
+    const canPopup = !!(btn && dlg && typeof dlg.show === "function");
+    if (!canPopup) return;
+    try {
+      if (dlg.open) { dlg.close(); return; }
+    } catch (_) {}
+
+    // Keep UI clean: import popover is exclusive with drawers.
+    try { closeDrawer(dom); } catch (_) {}
+    try { closeTranslateDrawer(dom); } catch (_) {}
+    try { closeBookmarkDrawer(dom); } catch (_) {}
+    try { if (dom.exportPrefsDialog && dom.exportPrefsDialog.open) dom.exportPrefsDialog.close(); } catch (_) {}
+    try { if (dom.quickViewDialog && dom.quickViewDialog.open) dom.quickViewDialog.close(); } catch (_) {}
+
+    const ok = _openPopupNearEl(dlg, btn, { prefer: "left", align: "start", gap: 10, pad: 12 });
+    if (!ok) return;
+
+    try { _setImportError(""); } catch (_) {}
+    try { _renderImportList(); } catch (_) {}
+    try { _refreshOfflineFiles(false); } catch (_) {}
+    try {
+      setTimeout(() => {
+        try { if (dom.importRel && typeof dom.importRel.focus === "function") dom.importRel.focus(); } catch (_) {}
+      }, 0);
+    } catch (_) {}
+  };
+
   const _isBookmarkDrawerOpen = () => {
     try {
       return !!(dom.bookmarkDrawer && dom.bookmarkDrawer.classList && !dom.bookmarkDrawer.classList.contains("hidden"));
@@ -1018,21 +1047,19 @@ export function wireControlEvents(dom, state, helpers) {
 
       // 离线“展示中”（固定列表）
       try { _renderOfflineShowList(); } catch (_) {}
-      // 离线展示名单（最近 rollout 文件）
-      try { _renderOfflineDrawerList(); } catch (_) {}
 	  };
 
-  const _offlineRelFromInput = () => {
+  const _importRelFromInput = () => {
     try {
-      const el = dom && dom.offlineRel ? dom.offlineRel : null;
+      const el = dom && dom.importRel ? dom.importRel : null;
       return el ? String(el.value || "").trim() : "";
     } catch (_) {
       return "";
     }
   };
 
-  const _setOfflineError = (msg) => {
-    const el = dom && dom.offlineErrorText ? dom.offlineErrorText : null;
+  const _setImportError = (msg) => {
+    const el = dom && dom.importErrorText ? dom.importErrorText : null;
     if (!el) return;
     try { el.textContent = String(msg || "").trim(); } catch (_) {}
   };
@@ -1055,7 +1082,7 @@ export function wireControlEvents(dom, state, helpers) {
       empty.className = "meta";
       empty.style.opacity = "0.7";
       empty.style.padding = "6px 2px";
-      empty.textContent = "暂无展示会话（从下方“最近文件”加入）";
+      empty.textContent = "暂无展示会话（点击右侧“导入对话”加入）";
       frag.appendChild(empty);
       host.appendChild(frag);
       return;
@@ -1199,12 +1226,15 @@ export function wireControlEvents(dom, state, helpers) {
     host.appendChild(frag);
   };
 
-  const _renderOfflineDrawerList = () => {
-    const host = dom && dom.offlineList ? dom.offlineList : null;
+  const _isImportDialogOpen = () => {
+    try { return !!(dom && dom.importDialog && dom.importDialog.open); } catch (_) { return false; }
+  };
+
+  const _renderImportList = () => {
+    const host = dom && dom.importList ? dom.importList : null;
     if (!host) return;
-    // 仅在抽屉打开时渲染
-    if (!_isBookmarkDrawerOpen()) return;
-    if (_isBookmarkDrawerEditing()) return;
+    if (!_isImportDialogOpen()) return;
+
     const files = Array.isArray(state && state.offlineFiles) ? state.offlineFiles : [];
 
     try { host.replaceChildren(); } catch (_) { while (host.firstChild) host.removeChild(host.firstChild); }
@@ -1215,51 +1245,102 @@ export function wireControlEvents(dom, state, helpers) {
       empty.className = "meta";
       empty.style.opacity = "0.7";
       empty.style.padding = "6px 2px";
-      empty.textContent = "暂无可选文件（检查监视目录或稍等写入）";
+      empty.textContent = "暂无可选文件（可手动输入 rel，或稍等写入）";
       frag.appendChild(empty);
       host.appendChild(frag);
       return;
     }
 
+    const groups = new Map(); // dir -> { dir, items: [] }
+    const order = [];
     for (const it of files) {
       const rel = String((it && it.rel) ? it.rel : "").trim();
-      const file = String((it && it.file) ? it.file : "").trim();
-      const tid = String((it && it.thread_id) ? it.thread_id : "").trim();
       if (!rel) continue;
-      const stamp = rolloutStampFromFile(file || rel);
-      const idPart = tid ? shortId(tid) : shortId((file.split("/").slice(-1)[0]) || rel);
-      const labelText = (stamp && idPart) ? `${stamp} · ${idPart}` : (idPart || stamp || rel);
+      const dir = rel.includes("/") ? rel.split("/").slice(0, -1).join("/") : "sessions";
+      if (!groups.has(dir)) { groups.set(dir, { dir, items: [] }); order.push(dir); }
+      try { groups.get(dir).items.push(it); } catch (_) {}
+    }
 
-      const row = document.createElement("div");
-      row.className = "tab";
-      row.dataset.rel = rel;
-      row.dataset.file = file;
-      row.dataset.threadId = tid;
-      row.setAttribute("role", "button");
-      row.tabIndex = 0;
-      try { row.removeAttribute("title"); } catch (_) {}
+    let first = true;
+    for (const dir of order) {
+      const g = groups.get(dir);
+      const items = g && Array.isArray(g.items) ? g.items : [];
+      if (!items.length) continue;
 
-      const dot = document.createElement("span");
-      dot.className = "tab-dot";
-      try { dot.style.background = String(colorForKey(offlineKeyFromRel(rel)).fg || "#64748b"); } catch (_) {}
+      const details = document.createElement("details");
+      details.className = "drawer-details";
+      if (first) details.open = true;
+      first = false;
 
-      const main = document.createElement("div");
-      main.className = "tab-main";
+      const summary = document.createElement("summary");
+      summary.className = "meta";
+      summary.textContent = dir;
 
-      const label = document.createElement("span");
-      label.className = "tab-label";
-      label.textContent = labelText;
+      try {
+        const pill = document.createElement("span");
+        pill.className = "pill";
+        pill.style.marginLeft = "8px";
+        pill.textContent = String(items.length);
+        summary.appendChild(pill);
+      } catch (_) {}
 
-      const sub = document.createElement("span");
-      sub.className = "tab-sub";
-      sub.textContent = "点击加入展示";
+      const list = document.createElement("div");
+      list.className = "tabs";
+      list.style.marginTop = "10px";
 
-      main.appendChild(label);
-      main.appendChild(sub);
+      for (const it of items) {
+        const rel = String((it && it.rel) ? it.rel : "").trim();
+        const file = String((it && it.file) ? it.file : "").trim();
+        const tid = String((it && it.thread_id) ? it.thread_id : "").trim();
+        if (!rel) continue;
 
-      row.appendChild(dot);
-      row.appendChild(main);
-      frag.appendChild(row);
+        const stamp = rolloutStampFromFile(file || rel);
+        const idPart = tid ? shortId(tid) : shortId((file.split("/").slice(-1)[0]) || rel);
+        const labelText = (stamp && idPart) ? `${stamp} · ${idPart}` : (idPart || stamp || rel);
+
+        const row = document.createElement("div");
+        row.className = "tab";
+        row.dataset.rel = rel;
+        row.dataset.file = file;
+        row.dataset.threadId = tid;
+        row.setAttribute("role", "button");
+        row.tabIndex = 0;
+        try { row.removeAttribute("title"); } catch (_) {}
+
+        const dot = document.createElement("span");
+        dot.className = "tab-dot";
+        try { dot.style.background = String(colorForKey(offlineKeyFromRel(rel)).fg || "#64748b"); } catch (_) {}
+
+        const main = document.createElement("div");
+        main.className = "tab-main";
+
+        const label = document.createElement("span");
+        label.className = "tab-label";
+        label.textContent = labelText;
+
+        const sub = document.createElement("span");
+        sub.className = "tab-sub";
+        const base = (String(file || rel).split("/").slice(-1)[0]) || rel;
+        let extra = "";
+        try {
+          const show = Array.isArray(state && state.offlineShow) ? state.offlineShow : [];
+          for (const s of show) {
+            if (!s || typeof s !== "object") continue;
+            if (String(s.rel || "").trim() === rel) { extra = " · 已在展示"; break; }
+          }
+        } catch (_) {}
+        sub.textContent = `${base}${extra}`;
+
+        main.appendChild(label);
+        main.appendChild(sub);
+        row.appendChild(dot);
+        row.appendChild(main);
+        list.appendChild(row);
+      }
+
+      details.appendChild(summary);
+      details.appendChild(list);
+      frag.appendChild(details);
     }
 
     host.appendChild(frag);
@@ -1268,34 +1349,40 @@ export function wireControlEvents(dom, state, helpers) {
   let _offlineFetchInFlight = false;
   const _refreshOfflineFiles = async (force = false) => {
     if (_offlineFetchInFlight) return;
-    if (!_isBookmarkDrawerOpen()) return;
+    if (!_isImportDialogOpen()) return;
     const now = Date.now();
     const last = Number(state && state.offlineFilesLastSyncMs) || 0;
     if (!force && last && (now - last) < 5000) return;
     _offlineFetchInFlight = true;
     try {
-      _setOfflineError("");
+      _setImportError("");
       const url = `/api/offline/files?limit=120&t=${now}`;
       const r = await fetch(url, { cache: "no-store" }).then((x) => x.json()).catch(() => null);
       const files = Array.isArray(r && r.files) ? r.files : [];
       state.offlineFiles = files;
       state.offlineFilesLastSyncMs = now;
-      _renderOfflineDrawerList();
+      _renderImportList();
     } catch (e) {
       state.offlineFiles = [];
       state.offlineFilesLastSyncMs = now;
-      _setOfflineError("离线文件列表加载失败");
-      _renderOfflineDrawerList();
+      _setImportError("离线文件列表加载失败");
+      _renderImportList();
     } finally {
       _offlineFetchInFlight = false;
     }
   };
 
   const _openOfflineRel = async (rel, meta = {}) => {
-    const rel0 = String(rel || "").trim();
+    let rel0 = String(rel || "").trim().replaceAll("\\", "/");
+    while (rel0.startsWith("/")) rel0 = rel0.slice(1);
     if (!rel0) return;
+    if (!rel0.startsWith("sessions/")) {
+      try { _setImportError("rel 必须以 sessions/ 开头"); } catch (_) {}
+      return;
+    }
     const file = String(meta.file || "").trim();
     const tid = String(meta.thread_id || meta.threadId || "").trim();
+    try { _setImportError(""); } catch (_) {}
     try {
       const next = upsertOfflineShow(state.offlineShow, { rel: rel0, file, thread_id: tid });
       state.offlineShow = next;
@@ -1305,6 +1392,7 @@ export function wireControlEvents(dom, state, helpers) {
     try { _renderBookmarkDrawerList(); } catch (_) {}
     const key = offlineKeyFromRel(rel0);
     await onSelectKey(key);
+    try { if (dom && dom.importDialog && dom.importDialog.open) dom.importDialog.close(); } catch (_) {}
     closeBookmarkDrawer(dom);
   };
 
@@ -1312,7 +1400,6 @@ export function wireControlEvents(dom, state, helpers) {
     openBookmarkDrawer(dom);
     _syncBookmarkTabsToggle();
     _renderBookmarkDrawerList();
-    _refreshOfflineFiles(false);
   };
 
 	  if (dom.bookmarkDrawerToggleBtn) {
@@ -1722,9 +1809,20 @@ export function wireControlEvents(dom, state, helpers) {
   if (dom.offlineShowList) dom.offlineShowList.addEventListener("click", async (e) => { try { await _handleOfflineShowListClick(e); } catch (_) {} });
   if (dom.offlineShowList) dom.offlineShowList.addEventListener("keydown", async (e) => { try { await _handleOfflineShowListKeydown(e); } catch (_) {} });
 
-  if (dom.offlineRefreshBtn) dom.offlineRefreshBtn.addEventListener("click", async () => { try { await _refreshOfflineFiles(true); } catch (_) {} });
-  if (dom.offlineOpenBtn) dom.offlineOpenBtn.addEventListener("click", async () => { try { await _openOfflineRel(_offlineRelFromInput()); } catch (_) {} });
-  if (dom.offlineList) dom.offlineList.addEventListener("click", async (e) => {
+  // 导入对话（离线展示入口）
+  if (dom.importBtn) dom.importBtn.addEventListener("click", () => { try { _openImportDialog(); } catch (_) {} });
+  if (dom.importDialogCloseBtn) dom.importDialogCloseBtn.addEventListener("click", () => { try { if (dom.importDialog && dom.importDialog.open) dom.importDialog.close(); } catch (_) {} });
+  if (dom.importRefreshBtn) dom.importRefreshBtn.addEventListener("click", async () => { try { await _refreshOfflineFiles(true); } catch (_) {} });
+  if (dom.importOpenBtn) dom.importOpenBtn.addEventListener("click", async () => { try { await _openOfflineRel(_importRelFromInput()); } catch (_) {} });
+  if (dom.importRel) dom.importRel.addEventListener("keydown", async (e) => {
+    try {
+      const keyName = String(e && e.key ? e.key : "");
+      if (keyName !== "Enter") return;
+      try { e.preventDefault(); } catch (_) {}
+      await _openOfflineRel(_importRelFromInput());
+    } catch (_) {}
+  });
+  if (dom.importList) dom.importList.addEventListener("click", async (e) => {
     try {
       const row = e && e.target && e.target.closest ? e.target.closest(".tab[data-rel]") : null;
       if (!row) return;
@@ -1735,7 +1833,7 @@ export function wireControlEvents(dom, state, helpers) {
       await _openOfflineRel(rel, { file, thread_id });
     } catch (_) {}
   });
-  if (dom.offlineList) dom.offlineList.addEventListener("keydown", async (e) => {
+  if (dom.importList) dom.importList.addEventListener("keydown", async (e) => {
     try {
       const keyName = String(e && e.key ? e.key : "");
       if (keyName !== "Enter" && keyName !== " ") return;

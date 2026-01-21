@@ -65,6 +65,18 @@ def main(argv=None) -> int:
     raw_argv = list(sys.argv[1:] if argv is None else argv)
     args = _parse_args(raw_argv)
 
+    def _argv_has(flag: str) -> bool:
+        for a in raw_argv:
+            if a == flag or a.startswith(flag + "="):
+                return True
+        return False
+
+    def _argv_has_prefix(flag_prefix: str) -> bool:
+        for a in raw_argv:
+            if a == flag_prefix or a.startswith(flag_prefix + "=") or a.startswith(flag_prefix):
+                return True
+        return False
+
     codex_home = Path(args.codex_home).expanduser()
     config_home = Path(args.config_home).expanduser()
     server_url = args.server_url
@@ -106,6 +118,28 @@ def main(argv=None) -> int:
         server_url = server_url or f"http://{args.host}:{args.port}"
         server = SidecarServer(host=args.host, port=args.port, max_messages=args.max_messages)
         controller = SidecarController(config_home=config_home, server_url=server_url, state=server.state)
+        # Apply CLI runtime overrides before the HTTP server starts, so /api/config and
+        # offline endpoints immediately reflect the desired CODEX_HOME even in --ui mode.
+        try:
+            patch = {}
+            if _argv_has_prefix("--codex-home"):
+                patch["watch_codex_home"] = str(codex_home)
+            if _argv_has("--replay-last-lines"):
+                patch["replay_last_lines"] = int(args.replay_last_lines)
+            if _argv_has("--poll-interval"):
+                patch["poll_interval"] = float(args.poll_interval)
+            if _argv_has("--file-scan-interval"):
+                patch["file_scan_interval"] = float(args.file_scan_interval)
+            if _argv_has("--follow-codex-process"):
+                patch["follow_codex_process"] = True
+            if _argv_has("--codex-process-regex"):
+                patch["codex_process_regex"] = str(args.codex_process_regex or "codex")
+            if _argv_has("--allow-follow-without-process"):
+                patch["only_follow_when_process"] = False
+            if patch:
+                controller.apply_runtime_overrides(patch)
+        except Exception:
+            pass
         server.set_controller(controller)
         server.start_in_background()
 
@@ -156,37 +190,7 @@ def main(argv=None) -> int:
         elif server is not None:
             # Start watching immediately. When the user doesn't pass CLI flags, prefer
             # the persisted config (saved via UI) instead of overwriting with defaults.
-            def _argv_has(flag: str) -> bool:
-                for a in raw_argv:
-                    if a == flag or a.startswith(flag + "="):
-                        return True
-                return False
-
-            def _argv_has_prefix(flag_prefix: str) -> bool:
-                for a in raw_argv:
-                    if a == flag_prefix or a.startswith(flag_prefix + "=") or a.startswith(flag_prefix):
-                        return True
-                return False
-
             if controller is not None:
-                patch = {}
-                # If user explicitly specifies --codex-home, also watch that directory.
-                if _argv_has_prefix("--codex-home"):
-                    patch["watch_codex_home"] = str(codex_home)
-                if _argv_has("--replay-last-lines"):
-                    patch["replay_last_lines"] = int(args.replay_last_lines)
-                if _argv_has("--poll-interval"):
-                    patch["poll_interval"] = float(args.poll_interval)
-                if _argv_has("--file-scan-interval"):
-                    patch["file_scan_interval"] = float(args.file_scan_interval)
-                if _argv_has("--follow-codex-process"):
-                    patch["follow_codex_process"] = True
-                if _argv_has("--codex-process-regex"):
-                    patch["codex_process_regex"] = str(args.codex_process_regex or "codex")
-                if _argv_has("--allow-follow-without-process"):
-                    patch["only_follow_when_process"] = False
-                if patch:
-                    controller.apply_runtime_overrides(patch)
                 controller.start()
             stop_event.wait()
         else:
