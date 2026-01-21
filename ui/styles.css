@@ -904,8 +904,8 @@
 					        --adp-color-disabled: rgba(148,163,184,.85);
 					        --adp-day-name-color: var(--c-muted);
 					        --adp-day-name-color-hover: var(--c-text);
-					        --adp-day-cell-width: 38px;
-					        --adp-day-cell-height: 36px;
+					        --adp-day-cell-width: 44px;
+					        --adp-day-cell-height: 44px;
 					        --adp-month-cell-height: 44px;
 					        --adp-year-cell-height: 44px;
 					        --adp-nav-height: 42px;
@@ -923,8 +923,22 @@
 					        --adp-day-name-color: rgba(148,163,184,.92);
 					        --adp-color-disabled: rgba(148,163,184,.70);
 					      }
-					      #importDialog .imp-cal .air-datepicker-cell.-day- { justify-content:flex-start; align-items:flex-start; padding: 7px 6px; font-weight: 900; font-variant-numeric: tabular-nums; }
-					      #importDialog .imp-cal .air-datepicker-cell[data-count]::after { content: attr(data-count); position:absolute; top: 5px; right: 5px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: rgba(148,163,184,.14); border: 1px solid rgba(148,163,184,.35); color: var(--c-muted); font-size: 11px; font-variant-numeric: tabular-nums; display:flex; align-items:center; justify-content:center; line-height: 18px; pointer-events: none; }
+					      #importDialog .imp-cal .air-datepicker-nav--title { font-weight: 900; color: var(--c-text); }
+					      #importDialog .imp-cal .air-datepicker-nav--title i { font-style: normal; }
+					      #importDialog .imp-cal .air-datepicker-nav--title .imp-adp-title { display:inline-flex; align-items:baseline; gap: 2px; font-variant-numeric: tabular-nums; }
+					      #importDialog .imp-cal .air-datepicker-nav--title .imp-adp-title-y,
+					      #importDialog .imp-cal .air-datepicker-nav--title .imp-adp-title-y1,
+					      #importDialog .imp-cal .air-datepicker-nav--title .imp-adp-title-y2 { font-weight: 900; }
+					      #importDialog .imp-cal .air-datepicker-nav--title .imp-adp-title-m { font-weight: 900; }
+
+					      #importDialog .imp-cal .air-datepicker-cell.-day- { justify-content:flex-start; align-items:flex-start; padding: 8px 8px 10px 8px; font-weight: 900; font-variant-numeric: tabular-nums; }
+					      #importDialog .imp-cal .air-datepicker-cell.-month-,
+					      #importDialog .imp-cal .air-datepicker-cell.-year- { font-variant-numeric: tabular-nums; }
+
+					      #importDialog .imp-cal .air-datepicker-cell[data-count]::after { content: attr(data-count); position:absolute; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: rgba(148,163,184,.14); border: 1px solid rgba(148,163,184,.35); color: var(--c-muted); font-size: 11px; font-variant-numeric: tabular-nums; display:flex; align-items:center; justify-content:center; line-height: 18px; pointer-events: none; }
+					      #importDialog .imp-cal .air-datepicker-cell.-day-[data-count]::after { right: 7px; bottom: 7px; top: auto; }
+					      #importDialog .imp-cal .air-datepicker-cell.-month-[data-count]::after,
+					      #importDialog .imp-cal .air-datepicker-cell.-year-[data-count]::after { right: 8px; top: 8px; }
 					      body[data-bm-skin="dark"] #importDialog .imp-cal .air-datepicker-cell[data-count]::after { background: rgba(148,163,184,.16); border-color: rgba(148,163,184,.22); color: rgba(226,232,240,.92); }
 					      #importDialog .imp-cal .air-datepicker-cell.-selected-[data-count]::after { background: rgba(255,255,255,.18); border-color: rgba(255,255,255,.35); color: #fff; }
 					      #importDialog .imp-cal .air-datepicker-cell.imp-adp-empty { opacity: .46; }

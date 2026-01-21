@@ -696,7 +696,11 @@ export function wireImportDialog(dom, state, helpers, opts = {}) {
         maxDate: maxDate || "",
         startDate: start,
         selectedDates: start ? [start] : [],
-        navTitles: { days: "yyyy年 MMMM", months: "yyyy年", years: "yyyy1 - yyyy2" },
+        navTitles: {
+          days: '<span class="imp-adp-title"><span class="imp-adp-title-y">yyyy</span>年<span class="imp-adp-title-m">M</span>月</span>',
+          months: '<span class="imp-adp-title"><span class="imp-adp-title-y">yyyy</span>年</span>',
+          years: '<span class="imp-adp-title"><span class="imp-adp-title-y1">yyyy1</span>-<span class="imp-adp-title-y2">yyyy2</span>年</span>',
+        },
         onRenderCell: ({ date, cellType }) => {
           try {
             if (!(date instanceof Date)) return {};
