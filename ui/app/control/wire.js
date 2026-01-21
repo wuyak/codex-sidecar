@@ -999,13 +999,13 @@ export function wireControlEvents(dom, state, helpers) {
 	                pressT = window.setTimeout(() => {
 	                  if (!pressed || moved) return;
 	                  longFired = true;
-	                  try { row.dataset.lp = String(Date.now()); } catch (_) {}
-	                  try { _hideUiHoverTip(); } catch (_) {}
-	                  copyToClipboard(filePath)
-	                    .then(() => {})
-	                    .catch(() => {});
-	                }, LONG_MS);
-	              });
+		                  try { row.dataset.lp = String(Date.now()); } catch (_) {}
+		                  try { _hideUiHoverTip(); } catch (_) {}
+		                  copyToClipboard(filePath)
+		                    .then(() => { try { _toastFromEl(row, "已复制源json路径", { durationMs: 1200 }); } catch (_) {} })
+		                    .catch(() => { try { _toastFromEl(row, "复制失败", { durationMs: 1200 }); } catch (_) {} });
+		                }, LONG_MS);
+		              });
 	              row.addEventListener("pointermove", (e) => {
 	                if (!pressed) return;
 	                const x = Number(e && e.clientX) || 0;
@@ -1298,11 +1298,13 @@ export function wireControlEvents(dom, state, helpers) {
             pressT = window.setTimeout(() => {
               if (!pressed || moved) return;
               longFired = true;
-              try { row.dataset.lp = String(Date.now()); } catch (_) {}
-              try { _hideUiHoverTip(); } catch (_) {}
-              copyToClipboard(filePath).then(() => {}).catch(() => {});
-            }, LONG_MS);
-          });
+	              try { row.dataset.lp = String(Date.now()); } catch (_) {}
+	              try { _hideUiHoverTip(); } catch (_) {}
+	              copyToClipboard(filePath)
+	                .then(() => { try { _toastFromEl(row, "已复制源json路径", { durationMs: 1200 }); } catch (_) {} })
+	                .catch(() => { try { _toastFromEl(row, "复制失败", { durationMs: 1200 }); } catch (_) {} });
+	            }, LONG_MS);
+	          });
           row.addEventListener("pointermove", (e) => {
             if (!pressed) return;
             const x = Number(e && e.clientX) || 0;
@@ -1878,15 +1880,25 @@ export function wireControlEvents(dom, state, helpers) {
 	    if (btn && btn.dataset) {
 	      const action = String(btn.dataset.action || "");
 	      try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
-		      if (action === "rename") { _enterInlineRename(row, key); return; }
-			      if (action === "export") {
-		        const p = getExportPrefsForKey(key);
-		        const mode = p.quick ? "quick" : "full";
-		        const reasoningLang = p.translate ? "zh" : "en";
-		        const r = await exportThreadMarkdown(state, key, { mode, reasoningLang });
-			        _toastFromEl(btn, r && r.ok ? "已导出" : "导出失败");
-			        return;
-			      }
+			      if (action === "rename") { _enterInlineRename(row, key); return; }
+				      if (action === "export") {
+			        const p = getExportPrefsForKey(key);
+			        const mode = p.quick ? "quick" : "full";
+			        const reasoningLang = p.translate ? "zh" : "en";
+			        try { btn.disabled = true; } catch (_) {}
+			        _toastFromEl(btn, "导出中…", { durationMs: 1400 });
+			        let r = null;
+			        try {
+			          r = await exportThreadMarkdown(state, key, { mode, reasoningLang });
+			        } catch (_) {
+			          r = null;
+			        }
+			        if (r && r.ok) _toastFromEl(btn, "已导出");
+			        else if (r && r.error === "export_in_flight") _toastFromEl(btn, "已有导出在进行中", { durationMs: 1400 });
+			        else _toastFromEl(btn, "导出失败", { durationMs: 1400 });
+			        try { btn.disabled = false; } catch (_) {}
+				        return;
+				      }
 			      if (action === "delete") {
 			        const labelText = row && row.dataset ? String(row.dataset.label || "") : "";
 			        const ok = await confirmDialog(dom, {
@@ -2019,8 +2031,18 @@ export function wireControlEvents(dom, state, helpers) {
         const p = getExportPrefsForKey(key);
         const mode = p.quick ? "quick" : "full";
         const reasoningLang = p.translate ? "zh" : "en";
-        const r = await exportThreadMarkdown(state, key, { mode, reasoningLang });
-        _toastFromEl(btn, r && r.ok ? "已导出" : "导出失败");
+        try { btn.disabled = true; } catch (_) {}
+        _toastFromEl(btn, "导出中…", { durationMs: 1400 });
+        let r = null;
+        try {
+          r = await exportThreadMarkdown(state, key, { mode, reasoningLang });
+        } catch (_) {
+          r = null;
+        }
+        if (r && r.ok) _toastFromEl(btn, "已导出");
+        else if (r && r.error === "export_in_flight") _toastFromEl(btn, "已有导出在进行中", { durationMs: 1400 });
+        else _toastFromEl(btn, "导出失败", { durationMs: 1400 });
+        try { btn.disabled = false; } catch (_) {}
         return;
       }
       if (action === "removeShow") {

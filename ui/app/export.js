@@ -20,6 +20,10 @@ import {
 
 const _EXPORT_ENGINE_TAG = "md_fence_v2_20260120_1650";
 
+// Export is side-effectful (triggers a file download). To avoid “点击多个导出后卡住，
+// 过几十秒突然下载一大批”的体验，默认只允许同时进行 1 个导出任务。
+let _exportInFlight = null; // { key, startedMs }
+
 function _extractUuid(s) {
   const raw = String(s || "");
   if (!raw) return "";
@@ -477,17 +481,17 @@ async function _ensureReasoningTranslatedDirect({ messages, maxN = 12 }) {
       }
     };
 
+    // Prefer the unified translate_text endpoint.
+    // Fallback to /api/offline/translate only when translate_text is truly missing (404).
     let outItems = [];
-    try {
-      const r1 = await _postItems("/api/control/translate_text");
-      outItems = r1.outItems;
-      if (!r1.ok && r1.status === 404) {
+    let r1 = null;
+    try { r1 = await _postItems("/api/control/translate_text"); } catch (_) { r1 = null; }
+    if (r1 && Array.isArray(r1.outItems)) outItems = r1.outItems;
+    if (r1 && !r1.ok && r1.status === 404) {
+      try {
         const r2 = await _postItems("/api/offline/translate");
         outItems = r2.outItems;
-      }
-    } catch (_) {
-      const r2 = await _postItems("/api/offline/translate");
-      outItems = r2.outItems;
+      } catch (_) {}
     }
 
     const byId = new Map(outItems.map((x) => [String(x && x.id ? x.id : ""), x]));
@@ -551,17 +555,16 @@ async function _ensureReasoningTranslatedOffline({ state, rel, messages, maxN = 
       }
     };
 
+    // Prefer unified translate_text; only fallback when endpoint is missing (404).
     let outItems = [];
-    try {
-      const r1 = await _postItems("/api/control/translate_text");
-      outItems = r1.outItems;
-      if (!r1.ok && r1.status === 404) {
+    let r1 = null;
+    try { r1 = await _postItems("/api/control/translate_text"); } catch (_) { r1 = null; }
+    if (r1 && Array.isArray(r1.outItems)) outItems = r1.outItems;
+    if (r1 && !r1.ok && r1.status === 404) {
+      try {
         const r2 = await _postItems("/api/offline/translate");
         outItems = r2.outItems;
-      }
-    } catch (_) {
-      const r2 = await _postItems("/api/offline/translate");
-      outItems = r2.outItems;
+      } catch (_) {}
     }
 
     const byId = new Map(outItems.map((x) => [String(x && x.id ? x.id : ""), x]));
@@ -632,6 +635,19 @@ function _download(name, text) {
 export async function exportThreadMarkdown(state, key, opts = {}) {
   const k = String(key || "").trim();
   if (!k || k === "all") return { ok: false, error: "select_thread" };
+
+  if (_exportInFlight) {
+    return {
+      ok: false,
+      error: "export_in_flight",
+      in_flight: {
+        key: String(_exportInFlight.key || ""),
+        waited_ms: Math.max(0, Date.now() - (Number(_exportInFlight.startedMs) || Date.now())),
+      },
+    };
+  }
+  _exportInFlight = { key: k, startedMs: Date.now() };
+  try {
   // 兼容：调用方未传 opts 时，使用会话级导出偏好（精简/译文）。
   try {
     if (opts && (opts.mode == null || opts.reasoningLang == null)) {
@@ -905,6 +921,9 @@ export async function exportThreadMarkdown(state, key, opts = {}) {
 
   _download(name, bodyLines.join("\n") + "\n");
   return { ok: true, mode, count: sections.length, translated: translateStat };
+  } finally {
+    _exportInFlight = null;
+  }
 }
 
 export async function exportCurrentThreadMarkdown(state, opts = {}) {
