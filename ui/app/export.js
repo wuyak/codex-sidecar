@@ -438,6 +438,77 @@ async function _ensureReasoningTranslated({ messages, threadId, maxN = 6, waitMs
   return { ok: true, queued, filled, waited_ms: Date.now() - start };
 }
 
+async function _ensureReasoningTranslatedDirect({ messages, maxN = 12 }) {
+  const arr = Array.isArray(messages) ? messages : [];
+  const needs = arr
+    .filter((m) => {
+      const kind = String(m && m.kind ? m.kind : "");
+      if (kind !== "reasoning_summary") return false;
+      const id = String(m && m.id ? m.id : "").trim();
+      if (!id) return false;
+      const zh = String(m && m.zh ? m.zh : "").trim();
+      return !zh;
+    })
+    .slice(0, Math.max(0, Number(maxN) || 0));
+
+  if (!needs.length) return { ok: true, queued: 0, filled: 0, waited_ms: 0 };
+
+  const start = Date.now();
+  let filled = 0;
+  try {
+    const items = needs.map((m) => ({ id: String(m.id || ""), text: String(m.text || "") }));
+
+    const _postItems = async (url) => {
+      const ac = typeof AbortController !== "undefined" ? new AbortController() : null;
+      const timeoutMs = Math.min(30000, 6000 + items.length * 900);
+      const t = ac ? setTimeout(() => { try { ac.abort(); } catch (_) {} }, timeoutMs) : 0;
+      try {
+        const r = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items }),
+          ...(ac ? { signal: ac.signal } : {}),
+        });
+        const resp = await r.json().catch(() => null);
+        const outItems = Array.isArray(resp && resp.items) ? resp.items : [];
+        return { ok: !!(r && r.ok && resp && resp.ok !== false), status: Number(r && r.status) || 0, outItems };
+      } finally {
+        if (t) { try { clearTimeout(t); } catch (_) {} }
+      }
+    };
+
+    let outItems = [];
+    try {
+      const r1 = await _postItems("/api/control/translate_text");
+      outItems = r1.outItems;
+      if (!r1.ok && r1.status === 404) {
+        const r2 = await _postItems("/api/offline/translate");
+        outItems = r2.outItems;
+      }
+    } catch (_) {
+      const r2 = await _postItems("/api/offline/translate");
+      outItems = r2.outItems;
+    }
+
+    const byId = new Map(outItems.map((x) => [String(x && x.id ? x.id : ""), x]));
+    for (const m of needs) {
+      const id = String(m && m.id ? m.id : "").trim();
+      if (!id) continue;
+      const r = byId.get(id);
+      const zh = String(r && (r.zh || r.text) ? (r.zh || r.text) : "").trimEnd();
+      const err = String(r && r.error ? r.error : "").trim();
+      if (zh) {
+        m.zh = zh;
+        filled += 1;
+      } else if (err) {
+        try { m.translate_error = err; } catch (_) {}
+      }
+    }
+  } catch (_) {}
+
+  return { ok: true, queued: needs.length, filled, waited_ms: Date.now() - start };
+}
+
 async function _ensureReasoningTranslatedOffline({ state, rel, messages, maxN = 12 }) {
   const arr = Array.isArray(messages) ? messages : [];
   const rel0 = String(rel || "").trim();
@@ -462,14 +533,22 @@ async function _ensureReasoningTranslatedOffline({ state, rel, messages, maxN = 
     const items = needs.map((m) => ({ id: String(m.id || ""), text: String(m.text || "") }));
 
     const _postItems = async (url) => {
-      const r = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items }),
-      });
-      const resp = await r.json().catch(() => null);
-      const outItems = Array.isArray(resp && resp.items) ? resp.items : [];
-      return { ok: !!(r && r.ok && resp && resp.ok !== false), status: Number(r && r.status) || 0, outItems };
+      const ac = typeof AbortController !== "undefined" ? new AbortController() : null;
+      const timeoutMs = Math.min(30000, 6000 + items.length * 900);
+      const t = ac ? setTimeout(() => { try { ac.abort(); } catch (_) {} }, timeoutMs) : 0;
+      try {
+        const r = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items }),
+          ...(ac ? { signal: ac.signal } : {}),
+        });
+        const resp = await r.json().catch(() => null);
+        const outItems = Array.isArray(resp && resp.items) ? resp.items : [];
+        return { ok: !!(r && r.ok && resp && resp.ok !== false), status: Number(r && r.status) || 0, outItems };
+      } finally {
+        if (t) { try { clearTimeout(t); } catch (_) {} }
+      }
     };
 
     let outItems = [];
@@ -656,22 +735,11 @@ export async function exportThreadMarkdown(state, key, opts = {}) {
       // Export is a “one-shot”: be more aggressive than normal UI translation so the output
       // actually reflects the user's choice (译文/原文).
       const maxN = Math.min(missing, mode === "quick" ? 18 : 48);
-      const waitMs = Math.min(20000, 5200 + maxN * 420);
 
       if (offline) {
         translateStat = await _ensureReasoningTranslatedOffline({ state, rel, messages: selected, maxN });
       } else {
-        translateStat = await _ensureReasoningTranslated({ messages: selected, threadId, maxN, waitMs });
-        if (translateStat && translateStat.filled >= 1) {
-          const url = threadId ? `/api/messages?thread_id=${encodeURIComponent(threadId)}&t=${Date.now()}` : `/api/messages?t=${Date.now()}`;
-          const r2 = await fetch(url, { cache: "no-store" }).then(r => r.json()).catch(() => null);
-          const ms2 = Array.isArray(r2 && r2.messages) ? r2.messages : [];
-          messages = ms2;
-          const sel2 = threadId ? messages : messages.filter(m => keyOf(m) === k);
-          sel2.sort((a, b) => (Number(a && a.seq) || 0) - (Number(b && b.seq) || 0));
-          selected.length = 0;
-          for (const x of sel2) selected.push(x);
-        }
+        translateStat = await _ensureReasoningTranslatedDirect({ messages: selected, maxN });
       }
     }
   } catch (_) {}

@@ -450,17 +450,16 @@ class SidecarHandler(BaseHTTPRequestHandler):
 
             items = obj.get("items")
             if isinstance(items, list):
+                try:
+                    r = self._controller.translate_items(items)
+                except Exception:
+                    r = {"ok": False, "error": "translate_failed", "items": []}
                 out_items = []
-                for it in items[:64]:
-                    if not isinstance(it, dict):
-                        continue
-                    mid = str(it.get("id") or "").strip()
-                    text = str(it.get("text") or "")
-                    r = self._controller.translate_text(text)
-                    rr = r if isinstance(r, dict) else {"ok": False, "error": "translate_failed"}
-                    rr2 = dict(rr)
-                    rr2["id"] = mid
-                    out_items.append(rr2)
+                try:
+                    out_items = r.get("items") if isinstance(r, dict) and isinstance(r.get("items"), list) else []
+                except Exception:
+                    out_items = []
+                # Keep legacy shape: always return {ok:true, items:[...]} and surface per-item errors.
                 self._send_json(HTTPStatus.OK, {"ok": True, "items": out_items})
                 return
 
@@ -553,17 +552,15 @@ class SidecarHandler(BaseHTTPRequestHandler):
 
             items = obj.get("items")
             if isinstance(items, list):
+                try:
+                    r = self._controller.translate_items(items)
+                except Exception:
+                    r = {"ok": False, "error": "translate_failed", "items": []}
                 out_items = []
-                for it in items[:64]:
-                    if not isinstance(it, dict):
-                        continue
-                    mid = str(it.get("id") or "").strip()
-                    text = str(it.get("text") or "")
-                    r = self._controller.translate_text(text)
-                    rr = r if isinstance(r, dict) else {"ok": False, "error": "translate_failed"}
-                    rr2 = dict(rr)
-                    rr2["id"] = mid
-                    out_items.append(rr2)
+                try:
+                    out_items = r.get("items") if isinstance(r, dict) and isinstance(r.get("items"), list) else []
+                except Exception:
+                    out_items = []
                 self._send_json(HTTPStatus.OK, {"ok": True, "items": out_items})
                 return
 

@@ -1088,6 +1088,17 @@ export function wireControlEvents(dom, state, helpers) {
       return;
     }
 
+    const canHoverTip = (e) => {
+      try {
+        const pt = e && e.pointerType ? String(e.pointerType) : "";
+        if (pt && pt !== "mouse") return false;
+      } catch (_) {}
+      try {
+        if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) return false;
+      } catch (_) {}
+      return true;
+    };
+
     for (const it of list) {
       if (!it || typeof it !== "object") continue;
       const rel = String(it.rel || "").trim();
@@ -1097,7 +1108,8 @@ export function wireControlEvents(dom, state, helpers) {
       const tid = String(it.thread_id || "").trim();
 
       const tmeta = { key, thread_id: tid, file: file || rel };
-      const labelText = getCustomLabel(key) || _threadDefaultLabel(tmeta);
+      const defaultLabel = _threadDefaultLabel(tmeta);
+      const labelText = getCustomLabel(key) || defaultLabel;
 
       const row = document.createElement("div");
       row.className = "tab" + (String(state.currentKey || "all") === key ? " active" : "");
@@ -1117,17 +1129,28 @@ export function wireControlEvents(dom, state, helpers) {
       label.className = "tab-label";
       label.textContent = labelText;
 
-      const sub = document.createElement("span");
-      sub.className = "tab-sub";
-      sub.textContent = rel;
+      const input = document.createElement("input");
+      input.className = "tab-edit";
+      input.type = "text";
+      input.autocomplete = "off";
+      input.spellcheck = false;
+      input.value = labelText;
 
       const main = document.createElement("div");
       main.className = "tab-main";
       main.appendChild(label);
-      main.appendChild(sub);
+      main.appendChild(input);
 
       const actions = document.createElement("div");
       actions.className = "tab-actions";
+
+      const renameBtn = document.createElement("button");
+      renameBtn.className = "mini-btn";
+      renameBtn.type = "button";
+      renameBtn.dataset.action = "rename";
+      renameBtn.setAttribute("aria-label", "重命名");
+      try { renameBtn.removeAttribute("title"); } catch (_) {}
+      renameBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="#i-edit"></use></svg>`;
 
       const exportBtn = document.createElement("button");
       exportBtn.className = "mini-btn";
@@ -1214,6 +1237,7 @@ export function wireControlEvents(dom, state, helpers) {
       try { removeBtn.removeAttribute("title"); } catch (_) {}
       removeBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="#i-trash"></use></svg>`;
 
+      actions.appendChild(renameBtn);
       actions.appendChild(exportBtn);
       actions.appendChild(removeBtn);
 
@@ -1221,6 +1245,86 @@ export function wireControlEvents(dom, state, helpers) {
       row.appendChild(main);
       row.appendChild(actions);
       frag.appendChild(row);
+
+      // Hover hint (only when hovering the left area; hovering action buttons should not trigger).
+      try {
+        const filePath = String(file || "").trim();
+        if (filePath) {
+          let tracking = false;
+          const hintText = "长按复制源json路径";
+          const update = (e) => {
+            if (!tracking) return;
+            if (row.classList && row.classList.contains("editing")) return;
+            _showUiHoverTip(row, hintText, { insetX: 10, gap: 6, pad: 10, prefer: "below" });
+          };
+          main.addEventListener("pointerenter", (e) => { if (!canHoverTip(e)) return; tracking = true; update(e); });
+          main.addEventListener("pointermove", update);
+          main.addEventListener("pointerleave", (e) => { if (!canHoverTip(e)) return; tracking = false; _hideUiHoverTip(); });
+        }
+      } catch (_) {}
+
+      // Long-press: copy JSON source path.
+      try {
+        const filePath = String(file || "").trim();
+        if (filePath) {
+          let pressT = 0;
+          let pressed = false;
+          let moved = false;
+          let longFired = false;
+          let startX = 0;
+          let startY = 0;
+          const LONG_MS = 520;
+          const MOVE_PX = 8;
+
+          const clear = () => {
+            pressed = false;
+            moved = false;
+            if (pressT) { try { clearTimeout(pressT); } catch (_) {} }
+            pressT = 0;
+          };
+
+          row.addEventListener("pointerdown", (e) => {
+            try { if (e && typeof e.button === "number" && e.button !== 0) return; } catch (_) {}
+            try {
+              const t = e && e.target;
+              if (t && t.closest && t.closest("button")) return;
+            } catch (_) {}
+            pressed = true;
+            moved = false;
+            longFired = false;
+            startX = Number(e && e.clientX) || 0;
+            startY = Number(e && e.clientY) || 0;
+            if (pressT) { try { clearTimeout(pressT); } catch (_) {} }
+            pressT = window.setTimeout(() => {
+              if (!pressed || moved) return;
+              longFired = true;
+              try { row.dataset.lp = String(Date.now()); } catch (_) {}
+              try { _hideUiHoverTip(); } catch (_) {}
+              copyToClipboard(filePath).then(() => {}).catch(() => {});
+            }, LONG_MS);
+          });
+          row.addEventListener("pointermove", (e) => {
+            if (!pressed) return;
+            const x = Number(e && e.clientX) || 0;
+            const y = Number(e && e.clientY) || 0;
+            const dx = x - startX;
+            const dy = y - startY;
+            if ((dx * dx + dy * dy) > (MOVE_PX * MOVE_PX)) {
+              moved = true;
+              if (pressT) { try { clearTimeout(pressT); } catch (_) {} }
+              pressT = 0;
+            }
+          });
+          row.addEventListener("pointerup", clear);
+          row.addEventListener("pointercancel", clear);
+          row.addEventListener("pointerleave", clear);
+          row.addEventListener("click", (e) => {
+            if (!longFired) return;
+            longFired = false;
+            try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+          });
+        }
+      } catch (_) {}
     }
 
     host.appendChild(frag);
@@ -1715,13 +1819,15 @@ export function wireControlEvents(dom, state, helpers) {
     } catch (_) {}
   });
 
-  const _enterInlineRename = (row, key) => {
+  const _enterInlineRename = (row, key, opts = {}) => {
     const k = String(key || "");
     if (!row || !k) return;
     if (_bookmarkDrawerEditingKey && _bookmarkDrawerEditingKey !== k) return;
     const input = row.querySelector ? row.querySelector("input.tab-edit") : null;
     const labelEl = row.querySelector ? row.querySelector(".tab-label") : null;
     if (!input || !labelEl) return;
+    const o = (opts && typeof opts === "object") ? opts : {};
+    const defaultLabel = String(o.defaultLabel || "").trim();
     _bookmarkDrawerEditingKey = k;
     try { row.classList.add("editing"); } catch (_) {}
 
@@ -1730,7 +1836,7 @@ export function wireControlEvents(dom, state, helpers) {
       if (done) return;
       done = true;
       const t = state.threadIndex.get(k) || { key: k, thread_id: "", file: "" };
-      const def = _threadDefaultLabel(t);
+      const def = defaultLabel || _threadDefaultLabel(t);
       const raw = String(input.value || "");
       const v = raw.trim();
       if (commit) setCustomLabel(k, v);
@@ -1751,7 +1857,7 @@ export function wireControlEvents(dom, state, helpers) {
     input.onblur = () => finish(true);
 
     try {
-      const cur = getCustomLabel(k) || _threadDefaultLabel(state.threadIndex.get(k) || {});
+      const cur = getCustomLabel(k) || defaultLabel || _threadDefaultLabel(state.threadIndex.get(k) || {});
       input.value = cur;
       setTimeout(() => { try { input.focus(); input.select(); } catch (_) {} }, 0);
     } catch (_) {}
@@ -1892,10 +1998,23 @@ export function wireControlEvents(dom, state, helpers) {
     const row = e && e.target && e.target.closest ? e.target.closest(".tab[data-key]") : null;
     const key = row && row.dataset ? String(row.dataset.key || "") : "";
     if (!row || !key) return;
+    if (row.classList && row.classList.contains("editing")) return;
+    try {
+      const lp = row.dataset ? Number(row.dataset.lp || 0) : 0;
+      if (lp && (Date.now() - lp) < 900) return;
+    } catch (_) {}
 
     if (btn && btn.dataset) {
       const action = String(btn.dataset.action || "");
       try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+      if (action === "rename") {
+        const rel = row.dataset ? String(row.dataset.rel || "") : "";
+        const file = row.dataset ? String(row.dataset.file || "") : "";
+        const tid = row.dataset ? String(row.dataset.threadId || "") : "";
+        const def = _threadDefaultLabel({ key, thread_id: tid, file: file || rel });
+        _enterInlineRename(row, key, { defaultLabel: def });
+        return;
+      }
       if (action === "export") {
         const p = getExportPrefsForKey(key);
         const mode = p.quick ? "quick" : "full";
