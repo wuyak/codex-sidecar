@@ -260,15 +260,20 @@ export function wireImportDialog(dom, state, helpers, opts = {}) {
       if (a.day) try { btn.dataset.day = String(a.day); } catch (_) {}
       const text = document.createElement("span");
       text.className = "imp-chip-text";
-      text.textContent = String(label || "");
+      try {
+        if (Object.prototype.hasOwnProperty.call(a, "displayLabel")) text.textContent = String(a.displayLabel || "");
+        else text.textContent = String(label || "");
+      } catch (_) {
+        text.textContent = String(label || "");
+      }
       btn.appendChild(text);
       try {
         const v = formatCount(count);
         if (!v) return btn;
         const act = String(a.action || "");
-        if (act === "selDay") return btn; // keep day grid clean; day count is shown in the path line
         const badge = document.createElement("span");
-        badge.className = "imp-chip-count";
+        if (act === "selDay") badge.className = "imp-day-count";
+        else badge.className = "imp-chip-count";
         badge.textContent = v;
         btn.appendChild(badge);
       } catch (_) {}
@@ -304,7 +309,7 @@ export function wireImportDialog(dom, state, helpers, opts = {}) {
         let n = 0;
         try { n = (daysMap && daysMap.get(d)) ? (daysMap.get(d) || []).length : 0; } catch (_) { n = 0; }
         const dd = String(Number(d) || d);
-        const chip = makeChip(`${dd}日`, n, { action: "selDay", day: d, active: d === selD });
+        const chip = makeChip(`${dd}日`, n, { action: "selDay", day: d, active: d === selD, displayLabel: dd });
         daysGrid.appendChild(chip);
       }
       root.appendChild(daysGrid);
