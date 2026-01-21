@@ -195,14 +195,21 @@ export async function saveConfig(dom, state) {
     auto_start: (dom.autoStart && dom.autoStart.value) === "1",
     notify_sound_assistant: (dom.notifySoundAssistant && dom.notifySoundAssistant.value) ? dom.notifySoundAssistant.value : "none",
     notify_sound_tool_gate: (dom.notifySoundToolGate && dom.notifySoundToolGate.value) ? dom.notifySoundToolGate.value : "none",
-    follow_codex_process: (dom.followProc && dom.followProc.value) === "1",
-    only_follow_when_process: (dom.onlyWhenProc && dom.onlyWhenProc.value) === "1",
-    codex_process_regex: ((dom.procRegex && dom.procRegex.value) ? dom.procRegex.value : "codex").trim(),
     watch_max_sessions: Number((dom.maxSessions && dom.maxSessions.value) ? dom.maxSessions.value : 3),
     replay_last_lines: Number((dom.replayLines && dom.replayLines.value) ? dom.replayLines.value : 0),
-    poll_interval: Number((dom.pollInterval && dom.pollInterval.value) ? dom.pollInterval.value : 0.5),
-    file_scan_interval: Number((dom.scanInterval && dom.scanInterval.value) ? dom.scanInterval.value : 2.0),
   };
+  // Advanced watch settings are intentionally optional in the UI.
+  // If the inputs are not present, do not send these fields so server keeps existing values.
+  try {
+    if (dom.followProc) patch.follow_codex_process = (dom.followProc.value === "1");
+    if (dom.onlyWhenProc) patch.only_follow_when_process = (dom.onlyWhenProc.value === "1");
+    if (dom.procRegex) {
+      const raw = String(dom.procRegex.value || "").trim();
+      patch.codex_process_regex = raw || "codex";
+    }
+    if (dom.pollInterval) patch.poll_interval = Number((dom.pollInterval.value) ? dom.pollInterval.value : 0.5);
+    if (dom.scanInterval) patch.file_scan_interval = Number((dom.scanInterval.value) ? dom.scanInterval.value : 2.0);
+  } catch (_) {}
 
   setStatus(dom, "正在保存配置…");
   const saved = await api("POST", "/api/config", patch);
