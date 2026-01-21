@@ -9,7 +9,7 @@ export function renderMarkdown(md) {
   let inCode = false;
   let codeLines = [];
   let para = [];
-  let list = null; // { type: "ul"|"ol", items: string[] }
+  let list = null; // { type: "ul"|"ol", items: Array<string | { text: string, value?: number }> }
 
   const flushPara = () => {
     if (!para.length) return;
@@ -21,8 +21,14 @@ export function renderMarkdown(md) {
 
   const flushList = () => {
     if (!list || !Array.isArray(list.items) || list.items.length === 0) { list = null; return; }
-    const tag = (list.type === "ol") ? "ol" : "ul";
-    const lis = list.items.map((it) => `<li>${renderInlineMarkdown(it)}</li>`).join("");
+    const isOl = list.type === "ol";
+    const tag = isOl ? "ol" : "ul";
+    const lis = list.items.map((it) => {
+      if (typeof it === "string") return `<li>${renderInlineMarkdown(it)}</li>`;
+      const text = renderInlineMarkdown(String(it.text ?? ""));
+      if (isOl && Number.isSafeInteger(it.value)) return `<li value="${it.value}">${text}</li>`;
+      return `<li>${text}</li>`;
+    }).join("");
     blocks.push(`<${tag}>${lis}</${tag}>`);
     list = null;
   };
@@ -124,11 +130,12 @@ export function renderMarkdown(md) {
       continue;
     }
 
-    const oli = t.match(/^\s*\d+[.)]\s+(.*)$/);
+    const oli = t.match(/^\s*(\d+)[.)]\s+(.*)$/);
     if (oli) {
       flushPara();
       if (!list || list.type !== "ol") { flushList(); list = { type: "ol", items: [] }; }
-      list.items.push(String(oli[1] ?? "").trim());
+      const value = Number.parseInt(String(oli[1] ?? ""), 10);
+      list.items.push({ value, text: String(oli[2] ?? "").trim() });
       continue;
     }
 
@@ -140,9 +147,15 @@ export function renderMarkdown(md) {
       const isIndented = /^\s{2,}\S/.test(ln);
       const isAnotherItem = /^\s*(?:[-*]|[•◦]|\d+[.)])\s+\S/.test(t);
       if (isIndented && !isAnotherItem) {
-        const prev = String(list.items[list.items.length - 1] || "");
-        const joined = smartJoinParts([prev, t.trim()]);
-        list.items[list.items.length - 1] = joined.trim();
+        const lastIndex = list.items.length - 1;
+        const prevItem = list.items[lastIndex];
+        const prevText = (typeof prevItem === "string") ? prevItem : String(prevItem?.text ?? "");
+        const joined = smartJoinParts([prevText, t.trim()]).trim();
+        if (typeof prevItem === "string") {
+          list.items[lastIndex] = joined;
+        } else if (prevItem) {
+          prevItem.text = joined;
+        }
         continue;
       }
     }
@@ -156,4 +169,3 @@ export function renderMarkdown(md) {
   flushList();
   return blocks.join("\n");
 }
-
