@@ -139,6 +139,7 @@ function _hideBmHoverTip() {
 export function clearTabs(dom) {
   const host = dom.bookmarks;
   if (!host) return;
+  try { _hideBmHoverTip(); } catch (_) {}
   while (host.firstChild) host.removeChild(host.firstChild);
 }
 
@@ -360,6 +361,10 @@ function _wireBookmarkInteractions(btn) {
       if (t && t.closest && t.closest(".bm-close")) {
         const onClose = btn.__bmOnClose;
         if (typeof onClose === "function") {
+          // The close icon click often removes the bookmark immediately, so no pointerleave
+          // will fire to clean up the hover tip. Hide it proactively to avoid stale tips.
+          _clearTipTimer();
+          _hideBmHoverTip();
           try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
           await onClose(t);
         }
