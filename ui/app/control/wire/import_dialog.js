@@ -265,6 +265,8 @@ export function wireImportDialog(dom, state, helpers, opts = {}) {
       try {
         const v = formatCount(count);
         if (!v) return btn;
+        const act = String(a.action || "");
+        if (act === "selDay") return btn; // keep day grid clean; day count is shown in the path line
         const badge = document.createElement("span");
         badge.className = "imp-chip-count";
         badge.textContent = v;
