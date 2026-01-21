@@ -1,5 +1,6 @@
 		      *, *::before, *::after { box-sizing: border-box; }
-			      body { font-family: var(--ui-font-family, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji"); font-size: var(--ui-font-size, 14px); margin: 0; background: var(--c-bg, #fff); background-image: var(--bg-pattern, none); background-size: var(--bg-size, auto); background-position: var(--bg-pos, 0 0); background-attachment: fixed; color: var(--c-text, #0f172a); }
+				      body { font-family: var(--ui-font-family, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji"); font-size: var(--ui-font-size, 14px); margin: 0; background: var(--c-bg, #fff); background-image: var(--bg-pattern, none); background-size: var(--bg-size, auto); background-position: var(--bg-pos, 0 0); background-attachment: fixed; color: var(--c-text, #0f172a); }
+				      body.popup-open { overflow: hidden; }
 					      :root {
                   --ui-font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
                   --ui-font-size: 14px;
@@ -852,10 +853,15 @@
 				      }
 				      /* 导入对话：固定贴顶，且预留底部空间避免遮挡文件列表。 */
 				      #importDialog.popup-dialog {
+				        width: min(560px, calc(100vw - 24px - var(--safe-left) - var(--safe-right)));
 				        top: calc(var(--safe-top) + 12px) !important;
 				        bottom: auto !important;
 				        max-height: calc(100vh - 24px - var(--safe-top) - var(--safe-bottom) - var(--tabs-bar-h) - var(--tabs-stack-gap));
+				        overflow: hidden;
 				      }
+				      #importDialog.popup-dialog .popup-dialog-form { display:flex; flex-direction:column; gap: 10px; height: 100%; }
+				      #importDialog #importList { margin-top: 0 !important; flex: 1 1 auto; min-height: 0; overflow: hidden; }
+				      #importDialog #importErrorText { margin-top: 0 !important; }
 				      .popup-dialog::backdrop { background: rgba(15,23,42,.22); }
 				      .popup-dialog-form { padding: 12px 12px 10px; }
 				      .popup-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
@@ -886,11 +892,11 @@
 				      .pref-check { width: 18px; height: 18px; border-radius: 999px; border: 1px solid var(--c-border-strong); display:flex; align-items:center; justify-content:center; font-size: 12px; font-weight: 900; flex: 0 0 auto; color: var(--c-accent); }
 
 					      /* 导入对话：日历组件（Air Datepicker）+ 会话文件列表。 */
-					      #importDialog .imp-import { display:flex; flex-direction:column; gap: 10px; }
-					      #importDialog .imp-cal-wrap { border: 1px solid var(--c-border); border-radius: 14px; background: var(--c-soft-2); padding: 8px; }
-					      #importDialog .imp-pane { display:flex; flex-direction:column; gap: 8px; }
-					      #importDialog .imp-head { display:flex; align-items:center; gap: 8px; }
-					      #importDialog .imp-files { margin-top: 0; max-height: min(46vh, 360px); overflow:auto; }
+						      #importDialog .imp-import { display:flex; flex-direction:column; gap: 10px; flex: 1 1 auto; min-height: 0; }
+						      #importDialog .imp-cal-wrap { border: 1px solid var(--c-border); border-radius: 14px; background: var(--c-soft-2); padding: 8px; }
+						      #importDialog .imp-pane { display:flex; flex-direction:column; gap: 8px; flex: 1 1 auto; min-height: 0; }
+						      #importDialog .imp-head { display:flex; align-items:center; gap: 8px; }
+						      #importDialog .imp-files { margin-top: 0; flex: 1 1 auto; min-height: 0; overflow:auto; }
 					      #importDialog .tab { padding: 6px 8px; border-radius: 10px; }
 					      #importDialog .tab-dot { width: 8px; height: 8px; }
 
@@ -1122,6 +1128,9 @@
 		      .qk-name { flex: 1; font-weight: 800; color: var(--c-text); }
 		      .qk-kind { font-family: inherit; opacity: 1; }
 			      .mini-btn { position: relative; width: 30px; height: 30px; padding: 0; border-radius: 10px; border: 1px solid var(--c-border); background: var(--c-surface); color: var(--c-text); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size: 14px; line-height: 1; box-shadow: 0 1px 0 rgba(15,23,42,.04); }
+			      .mini-btn.mini-btn-wide { width: auto; padding: 0 10px; gap: 6px; }
+			      .mini-btn .mini-btn-text { font-size: 12px; font-weight: 900; color: var(--c-muted); }
+			      body[data-bm-skin="dark"] .mini-btn .mini-btn-text { color: rgba(148,163,184,.92); }
 			      .mini-btn:hover { background: var(--c-soft); }
 			      .mini-btn:active { transform: translateY(1px); }
 			      .mini-btn:focus-visible { outline: none; box-shadow: var(--ring); border-color: rgba(14,165,233,.55); }

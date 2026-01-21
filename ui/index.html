@@ -339,13 +339,18 @@
 						          <div class="popup-title">导入对话</div>
 						          <button id="importDialogCloseBtn" class="drawer-close" type="button" aria-label="关闭">×</button>
 						        </div>
-						        <div class="meta" style="margin-top:10px;">只读导入（不会自动追更）：仅支持 <code>sessions/**/rollout-*.jsonl</code>（不影响监听/未读/提示音）</div>
 						        <div class="grid grid-compact" style="margin-top:10px;">
-						          <div class="meta">指定 rel</div>
+						          <div class="meta">指定会话文件</div>
 						          <div class="profile-row">
-						            <input id="importRel" placeholder="sessions/YYYY/MM/DD/rollout-*.jsonl" style="flex:1;" />
-						            <button id="importOpenBtn" class="mini-btn" type="button" aria-label="导入并打开"><svg class="ico" aria-hidden="true"><use href="#i-plus"></use></svg></button>
-						            <button id="importRefreshBtn" class="mini-btn" type="button" aria-label="刷新最近文件"><svg class="ico" aria-hidden="true"><use href="#i-refresh"></use></svg></button>
+						            <input id="importRel" aria-label="会话文件" placeholder="sessions/2026/01/20/rollout-*.jsonl" style="flex:1; min-width: 280px;" />
+						            <button id="importOpenBtn" class="mini-btn mini-btn-wide" type="button" aria-label="导入">
+						              <svg class="ico" aria-hidden="true"><use href="#i-plus"></use></svg>
+						              <span class="mini-btn-text">导入</span>
+						            </button>
+						            <button id="importRefreshBtn" class="mini-btn mini-btn-wide" type="button" aria-label="刷新文件列表">
+						              <svg class="ico" aria-hidden="true"><use href="#i-refresh"></use></svg>
+						              <span class="mini-btn-text">刷新</span>
+						            </button>
 						          </div>
 						        </div>
 						        <div id="importList" class="tabs" style="margin-top:10px;"></div>

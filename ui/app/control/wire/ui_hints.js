@@ -6,6 +6,14 @@ const clamp = (n, a, b) => {
   return Math.min(b, Math.max(a, x));
 };
 
+const syncPopupOpenClass = () => {
+  try {
+    const anyOpen = document && document.querySelector && document.querySelector("dialog.popup-dialog[open]");
+    if (anyOpen) document.body.classList.add("popup-open");
+    else document.body.classList.remove("popup-open");
+  } catch (_) {}
+};
+
 export function toastFromEl(el, text, opts = {}) {
   const isLight = ("isLight" in opts) ? !!opts.isLight : true;
   const durationMs = Number.isFinite(Number(opts.durationMs)) ? Number(opts.durationMs) : 1100;
@@ -99,6 +107,7 @@ export function openPopupNearEl(dlg, anchorEl, opts = {}) {
   try { dialog.style.left = "0px"; dialog.style.top = "0px"; } catch (_) {}
   try { if (dialog.open) dialog.close(); } catch (_) {}
   try { dialog.show(); } catch (_) { return false; }
+  syncPopupOpenClass();
 
   let cleanup = null;
   try {
@@ -143,6 +152,7 @@ export function openPopupNearEl(dlg, anchorEl, opts = {}) {
     };
     const onClose = () => {
       try { document.removeEventListener("pointerdown", onDown, true); } catch (_) {}
+      try { syncPopupOpenClass(); } catch (_) {}
     };
     cleanup = onClose;
     try { document.addEventListener("pointerdown", onDown, true); } catch (_) {}
@@ -153,4 +163,3 @@ export function openPopupNearEl(dlg, anchorEl, opts = {}) {
   void cleanup;
   return true;
 }
-
