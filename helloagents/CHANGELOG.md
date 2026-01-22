@@ -5,6 +5,7 @@
 - 修复(启动脚本)：端口被旧 sidecar 占用且健康检查失败时，`./run.sh` / `./ui.sh` 会安全终止旧 codex_sidecar 并重启（占用者非 codex_sidecar 则提示退出，避免误杀）。
 - 优化(UI)：预留滚动条槽位（`scrollbar-gutter: stable`），减少弹窗/精简切换导致的右侧抖动。
 - 修复(UI)：长代码块展开后滚动，收起时视口不再漂移到代码块下方（基于点击位置的滚动校正）。
+- 修复(UI)：终端确认提示（tool_gate：含权限升级提示/真实 waiting 状态）现在会触发通知与提示音，并计入会话标签未读角标。
 - UI：新增“导入对话”入口（右侧工具栏）；弹窗内支持输入 `rel`（可直接粘贴完整路径自动提取）或用日历组件（Air Datepicker）按年月日浏览 `sessions/YYYY/MM/DD` 选择 `rollout-*.jsonl` 加入展示并打开；日/月/年单元格展示文件数量角标，空日期/空月份/空年份禁用。
 - 新增：通用翻译接口 `POST /api/control/translate_text`（支持批量 items）；离线思考翻译与导出补齐译文写入本机缓存 `offlineZh:${rel}`。
 - 后端：抽离并复用“从文件尾部读取最后 N 行”的实现（watcher/offline/tui 共用），同时 poll 在无增量时跳过打开文件，降低空转开销。

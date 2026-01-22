@@ -17,6 +17,14 @@ function _toolGateReleased(text) {
   return s.includes("已确认") || s.toLowerCase().includes("tool gate released");
 }
 
+function _toolGateHint(text) {
+  const s = String(text || "");
+  const sl = s.toLowerCase();
+  // Rollout-derived hint (approval escalation) is not a definitive "waiting" state,
+  // but should still surface as a terminal-confirmation notification.
+  return s.includes("终端确认") || s.includes("权限升级") || sl.includes("terminal approval");
+}
+
 function _isReplay(msg) {
   try {
     if (!msg || typeof msg !== "object") return false;
@@ -202,19 +210,42 @@ export function connectEventStream(dom, state, upsertThread, renderTabs, renderM
       // 右下角提醒（不依赖当前会话可见性：通过“未读”汇总，避免错过多会话输出）
       try {
         const kind = String((msg && msg.kind) ? msg.kind : "").trim();
-        if (!isHidden && kind === "tool_gate") {
+        if (kind === "tool_gate") {
           const txt = String(msg.text || "");
-          if (_toolGateWaiting(txt)) {
-            notifyCorner("tool_gate", "终端等待确认", _summarizeToolGate(txt) || "请回到终端完成确认/授权后继续。", { level: "warn", sticky: true });
-            // tool_gate 属于“显式通知”：无论当前是否在对应会话，都应提示；但回放/历史补齐不应响铃。
-            if (!isReplay) {
-              const mid = String((msg && msg.id) ? msg.id : "").trim();
-              if (_shouldRingForId(state, mid)) {
+          const mid = String((msg && msg.id) ? msg.id : "").trim();
+          const summary = _summarizeToolGate(txt) || "请回到终端完成确认/授权后继续。";
+
+          if (_toolGateReleased(txt)) {
+            notifyCorner("tool_gate", "终端已确认", _summarizeToolGate(txt) || "tool gate 已解除。", { level: "success", ttlMs: 1600 });
+          } else if (_toolGateWaiting(txt)) {
+            notifyCorner("tool_gate", "终端等待确认", summary, { level: "warn", sticky: true });
+            // tool_gate 属于“显式通知”：无论当前是否在对应会话，都应提示；但回放/历史补齐不应响铃/不计未读。
+            if (!isReplay && _shouldRingForId(state, mid)) {
+              const r = markUnread(state, msg, { queue: true });
+              if (r && r.added) {
+                updateUnreadButton(dom, state);
                 try { maybePlayNotifySound(dom, state, { kind: "tool_gate" }); } catch (_) {}
               }
             }
-          } else if (_toolGateReleased(txt)) {
-            notifyCorner("tool_gate", "终端已确认", _summarizeToolGate(txt) || "tool gate 已解除。", { level: "success", ttlMs: 1600 });
+          } else if (_toolGateHint(txt)) {
+            notifyCorner("tool_gate", "终端可能需要确认", summary, { level: "warn", ttlMs: 5200 });
+            if (!isReplay && _shouldRingForId(state, mid)) {
+              const r = markUnread(state, msg, { queue: true });
+              if (r && r.added) {
+                updateUnreadButton(dom, state);
+                try { maybePlayNotifySound(dom, state, { kind: "tool_gate" }); } catch (_) {}
+              }
+            }
+          } else {
+            // Unknown tool_gate variants: still surface as attention-worthy.
+            notifyCorner("tool_gate", "终端提示", summary, { level: "warn", ttlMs: 3600 });
+            if (!isReplay && _shouldRingForId(state, mid)) {
+              const r = markUnread(state, msg, { queue: true });
+              if (r && r.added) {
+                updateUnreadButton(dom, state);
+                try { maybePlayNotifySound(dom, state, { kind: "tool_gate" }); } catch (_) {}
+              }
+            }
           }
         }
         // “未读”仅对用户关心的类型：回答输出 / 审批提示。
