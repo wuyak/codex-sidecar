@@ -3,6 +3,7 @@
 > 该目录存放已执行的方案包（从 `helloagents/plan/` 迁移而来）。
 
 ## 2026-01
+- 202601221918_arch_refactor_phase43_import_dialog_open_offline_rel
 - 202601221911_arch_refactor_phase42_bookmark_drawer_interactions
 - 202601221858_arch_refactor_phase41_bookmark_drawer_module
 - 202601221814_arch_refactor_phase40_export_prefs_panel
