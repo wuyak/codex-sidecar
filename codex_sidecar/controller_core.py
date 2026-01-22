@@ -5,11 +5,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
 from .config import SidecarConfig, load_config, save_config
+from .control.config_patch import apply_config_patch
 from .control.watcher_factory import build_rollout_watcher
-from .control.translator_build import build_translator as _build_translator_impl, count_valid_http_profiles, select_http_profile
+from .control.translator_build import build_translator as _build_translator_impl
 from .control.translate_api import translate_items as _translate_items, translate_probe as _translate_probe, translate_text as _translate_text
 from .control.translator_specs import TRANSLATORS
-from .security import restore_masked_secrets_in_patch
 from .translator import Translator
 from .watcher import HttpIngestClient, RolloutWatcher
 
@@ -200,48 +200,18 @@ class SidecarController:
         return self._patch_config(patch, persist=False, allow_empty_translator_config=True)
 
     def _patch_config(self, patch: Dict[str, Any], persist: bool, allow_empty_translator_config: bool) -> Dict[str, Any]:
-        prev_tm = "auto"
-        prev_provider = "openai"
-        touched_translator = False
         out_cfg: Dict[str, Any] = {}
         with self._lock:
-            cur = self._cfg.to_dict()
-            # UI may send masked placeholders back; restore existing secrets to avoid persisting "********".
-            patch = restore_masked_secrets_in_patch(patch, current_cfg=cur)
-            prev_tm = str(cur.get("translate_mode") or "auto").strip().lower()
-            prev_provider = str(cur.get("translator_provider") or "openai").strip().lower()
-            touched_translator = ("translator_provider" in patch) or ("translator_config" in patch)
-            # merge shallow
-            for k, v in patch.items():
-                if k == "translator_config":
-                    if isinstance(v, dict):
-                        # One-level merge to preserve other provider configs (e.g. keep http profiles
-                        # when saving openai config, and vice versa).
-                        prev = cur.get(k)
-                        if isinstance(prev, dict):
-                            merged = dict(prev)
-                            merged.update(v)
-                            cur[k] = merged
-                        else:
-                            cur[k] = v
-                    continue
-                cur[k] = v
-            # config_home is immutable (controls where the config is stored)
-            cur["config_home"] = str(self._config_home)
-            # Guard: avoid accidentally clearing HTTP profiles (user can recover or switch provider).
-            try:
-                provider = str(cur.get("translator_provider") or "openai").strip().lower()
-                if provider == "http":
-                    tc = cur.get("translator_config") or {}
-                    if count_valid_http_profiles(tc) <= 0 and not allow_empty_translator_config:
-                        raise ValueError("empty_http_profiles")
-            except ValueError:
-                raise
-            except Exception:
-                # On unexpected validation errors, do not block saving.
-                pass
-
-            self._cfg = SidecarConfig.from_dict(cur)
+            res = apply_config_patch(
+                current_cfg=self._cfg,
+                config_home=self._config_home,
+                patch=patch,
+                allow_empty_translator_config=allow_empty_translator_config,
+            )
+            prev_tm = res.prev_translate_mode
+            prev_provider = res.prev_provider
+            touched_translator = bool(res.touched_translator)
+            self._cfg = res.cfg
             if persist:
                 save_config(self._config_home, self._cfg)
             out_cfg = self._cfg.to_dict()
