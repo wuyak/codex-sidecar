@@ -5,11 +5,11 @@
 ---
 
 ## 1. SSE 模块化与断线补齐（Phase54.1）
-- [ ] 1.1 抽离 SSE 辅助逻辑到 `codex_sidecar/http/sse.py`（解析 `Last-Event-ID`、构造 event bytes、可选补齐）。
-- [ ] 1.2 调整 `codex_sidecar/http/handler.py` 复用新模块：
+- [√] 1.1 抽离 SSE 辅助逻辑到 `codex_sidecar/http/sse.py`（解析 `Last-Event-ID`、构造 event bytes、可选补齐）。
+- [√] 1.2 调整 `codex_sidecar/http/handler.py` 复用新模块：
   - 仅对非 `op=update` 事件写入 `id:`（避免 update 事件回填导致游标倒退）。
   - 仅当客户端带 `Last-Event-ID` 时进行补齐（首连不回放历史）。
-- [ ] 1.3 更新/新增单测：SSE 正常推送 + 断线补齐行为（Last-Event-ID）。
+- [√] 1.3 更新/新增单测：SSE 正常推送 + 断线补齐行为（Last-Event-ID）。
 
 ## 2. 启动脚本去重（Phase54.2）
 - [ ] 2.1 新增 `scripts/_common.sh`：集中 `open_browser`、health check、lock pid 读取等公共逻辑。

@@ -10,6 +10,7 @@ from .routes_post import dispatch_post
 from .ui_assets import load_ui_text, resolve_ui_path, ui_content_type, ui_dir
 from .json_helpers import json_bytes, parse_json_object
 from .config_payload import apply_config_display_fields, build_config_payload, decorate_status_payload
+from .sse import parse_last_event_id, sse_message_event_bytes
 
 
 class SidecarHandler(BaseHTTPRequestHandler):
@@ -210,6 +211,10 @@ class SidecarHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": "not_found"})
 
     def _handle_sse(self) -> None:
+        # If present, resume from Last-Event-ID (EventSource reconnect).
+        last_event_id = parse_last_event_id(self.headers)
+        last_sent_add_seq = int(last_event_id or 0)
+
         q = self._state.subscribe()
         try:
             self.send_response(HTTPStatus.OK)
@@ -222,6 +227,26 @@ class SidecarHandler(BaseHTTPRequestHandler):
             self.wfile.write(b":ok\n\n")
             self.wfile.flush()
 
+            # Best-effort catch-up: only when the client provides Last-Event-ID.
+            # Avoid replaying full history on first connect (UI already does /api/messages).
+            if last_event_id is not None:
+                try:
+                    for m in self._state.list_messages():
+                        try:
+                            seq = int(m.get("seq") or 0)
+                        except Exception:
+                            continue
+                        if seq <= int(last_event_id or 0):
+                            continue
+                        id_line, out = sse_message_event_bytes(m)
+                        if id_line is not None:
+                            self.wfile.write(id_line)
+                        self.wfile.write(out)
+                        last_sent_add_seq = max(last_sent_add_seq, int(seq or 0))
+                    self.wfile.flush()
+                except Exception:
+                    pass
+
             while True:
                 try:
                     msg = q.get(timeout=10.0)
@@ -231,11 +256,24 @@ class SidecarHandler(BaseHTTPRequestHandler):
                     self.wfile.flush()
                     continue
 
-                data = json_bytes(msg)
-                self.wfile.write(b"event: message\n")
-                self.wfile.write(b"data: ")
-                self.wfile.write(data)
-                self.wfile.write(b"\n\n")
+                # Skip duplicates already delivered via resume catch-up.
+                try:
+                    op = str(msg.get("op") or "").strip().lower()
+                except Exception:
+                    op = ""
+                if op != "update":
+                    try:
+                        seq = int(msg.get("seq") or 0)
+                    except Exception:
+                        seq = 0
+                    if seq and seq <= last_sent_add_seq:
+                        continue
+                    last_sent_add_seq = max(last_sent_add_seq, int(seq or 0))
+
+                id_line, out = sse_message_event_bytes(msg)
+                if id_line is not None:
+                    self.wfile.write(id_line)
+                self.wfile.write(out)
                 self.wfile.flush()
         except (BrokenPipeError, ConnectionResetError):
             return
