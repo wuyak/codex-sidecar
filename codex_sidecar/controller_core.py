@@ -428,7 +428,8 @@ class SidecarController:
         try:
             next_provider = str(getattr(cfg, "translator_provider", "") or "").strip().lower()
             if bool(touched_translator) or next_provider != str(prev_provider or ""):
-                watcher.set_translator(build_translator(cfg))
+                tr = self._build_translator(cfg) or _build_translator_impl(cfg)
+                watcher.set_translator(tr)
         except Exception:
             pass
 
@@ -519,7 +520,7 @@ class SidecarController:
             watcher = RolloutWatcher(
                 codex_home=Path(cfg.watch_codex_home).expanduser(),
                 ingest=HttpIngestClient(server_url=self._server_url),
-                translator=build_translator(cfg),
+                translator=self._build_translator(cfg) or _build_translator_impl(cfg),
                 replay_last_lines=int(cfg.replay_last_lines),
                 watch_max_sessions=int(getattr(cfg, "watch_max_sessions", 3) or 3),
                 translate_mode=str(getattr(cfg, "translate_mode", "auto") or "auto"),
