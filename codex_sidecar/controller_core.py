@@ -13,6 +13,7 @@ from .control.translate_api import translate_items as _translate_items, translat
 from .control.translator_specs import TRANSLATORS
 from .translator import Translator
 from .watcher import HttpIngestClient, RolloutWatcher
+from .watch.follow_control_helpers import clean_exclude_keys as _clean_exclude_keys
 
 
 class SidecarController:
@@ -340,29 +341,8 @@ class SidecarController:
         raw_keys = keys if isinstance(keys, list) else []
         raw_files = files if isinstance(files, list) else []
 
-        cleaned_keys: Set[str] = set()
-        for x in raw_keys:
-            try:
-                s = str(x or "").strip()
-            except Exception:
-                s = ""
-            if not s:
-                continue
-            cleaned_keys.add(s[:256])
-            if len(cleaned_keys) >= 1000:
-                break
-
-        cleaned_files: Set[str] = set()
-        for x in raw_files:
-            try:
-                s = str(x or "").strip()
-            except Exception:
-                s = ""
-            if not s:
-                continue
-            cleaned_files.add(s[:2048])
-            if len(cleaned_files) >= 1000:
-                break
+        cleaned_keys = _clean_exclude_keys(raw_keys, max_items=1000, max_len=256)
+        cleaned_files = _clean_exclude_keys(raw_files, max_items=1000, max_len=2048)
 
         watcher = None
         running = False
