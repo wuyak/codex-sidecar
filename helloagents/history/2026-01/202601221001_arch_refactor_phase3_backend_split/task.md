@@ -13,11 +13,11 @@
 - [√] 2.1 将 `translate_probe/translate_text/translate_items` 抽为独立 helper（不改对外 API），并保持测试可 patch 的入口策略不变
 
 ## 3. 安全检查
-- [ ] 3.1 执行安全检查（按G9: 输入验证、敏感信息处理、权限控制、EHRB风险规避）
+- [√] 3.1 执行安全检查（按G9: 输入验证、敏感信息处理、权限控制、EHRB风险规避）
 
 ## 4. 文档更新
-- [ ] 4.1 更新 `helloagents/wiki/modules/rollout_sidecar.md`（记录本轮拆分点与模块边界）
-- [ ] 4.2 更新 `helloagents/CHANGELOG.md` 与 `helloagents/history/index.md`
+- [√] 4.1 更新 `helloagents/wiki/modules/rollout_sidecar.md`（记录本轮拆分点与模块边界）
+- [√] 4.2 更新 `helloagents/CHANGELOG.md` 与 `helloagents/history/index.md`
 
 ## 5. 测试
 - [√] 5.1 运行单测：`python3 -m unittest discover -s tests`

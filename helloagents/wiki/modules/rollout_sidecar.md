@@ -36,10 +36,13 @@
 - 只读解析 JSONL（不改写原始日志）
 - 轮询 + 增量读取（按 offset tail），支持启动时回放尾部 N 行
 - 多会话并行 tail：默认同时跟随最近 N 个会话文件（配置项 `watch_max_sessions`，默认 3），用于“至少 3 个会话同时实时更新”；锁定（pin）会固定主跟随；在启用“进程跟随”时 pin 模式仅从**当前进程打开的 rollout 文件**补齐并行会话（不再按 sessions mtime 补齐，避免“僵尸会话”）
-- 代码分层：`watch/rollout_watcher.py` 聚焦主流程（`watcher.py` 仅作为向后兼容的 facade）；`watch/*` 承载“跟随策略/进程扫描/翻译批处理与队列”等可复用组件
-  - 其中 `watch/rollout_extract.py` 负责“单条 JSONL 记录 → UI 事件块”提取（assistant/user/tool/reasoning）
+- 代码分层：`watch/rollout_watcher.py` 聚焦主流程（`watcher.py` 仅作为向后兼容的 facade）；`watch/*` 承载“跟随策略/进程扫描/解析/去重/tail/翻译队列”等可复用组件
+  - `watch/rollout_extract.py`：单条 JSONL 记录 → UI 事件块提取（assistant/user/tool/reasoning）
+  - `watch/dedupe_cache.py`：轻量去重缓存（rollout 与 TUI gate 共享一套去重语义）
+  - `watch/rollout_ingest.py`：rollout 单行解析/去重/工具门禁提示/翻译入队（watcher 只负责调度）
+  - `watch/rollout_tailer.py`：文件 replay/poll 的通用 tail 逻辑（按 offset 增量读取）
 - 服务端分层：`server.py` 仅负责启动/绑定；HTTP 路由、SSE 与静态资源拆分到 `http/*`
-- 控制面分层：`controller_core.py` 聚焦线程生命周期/配置入口（`controller.py` 仅作为向后兼容的 facade）；translator schema/构建与校验拆分到 `control/*`
+- 控制面分层：`controller_core.py` 聚焦线程生命周期/配置入口（`controller.py` 仅作为向后兼容的 facade）；translator schema/构建与校验拆分到 `control/*`，翻译控制面公共逻辑抽到 `control/translate_api.py`
 - UI 控制层：`ui/app/control/wire.js` 作为事件 wiring 入口，按功能域拆分到 `ui/app/control/wire/*`（例如 `ui_hints.js`、`import_dialog.js`），降低单文件耦合与复杂度。
 
 > 注：下文涉及 `ui/app/*` 的“分层/模块拆分”描述对应当前默认 UI（`ui/`）；此前尝试过 UI v2（Vue 3 + Vite + Pinia），现已归档到 `old/`（不再提供路由入口）。

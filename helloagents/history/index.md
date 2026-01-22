@@ -3,6 +3,7 @@
 > 该目录存放已执行的方案包（从 `helloagents/plan/` 迁移而来）。
 
 ## 2026-01
+- 202601221001_arch_refactor_phase3_backend_split
 - 202601181630_session_rail
 - 202601181507_ui_ui_skills_polish
 - 202601141118_config_xdg_recovery_ui
