@@ -3,6 +3,7 @@
 > 该目录存放已执行的方案包（从 `helloagents/plan/` 迁移而来）。
 
 ## 2026-01
+- 202601221729_arch_refactor_phase36_translator_meta
 - 202601221724_arch_refactor_phase35_translation_pump_translate
 - 202601221719_arch_refactor_phase34_rollout_watcher_loop_sync
 - 202601221713_arch_refactor_phase33_controller_stop_helper
