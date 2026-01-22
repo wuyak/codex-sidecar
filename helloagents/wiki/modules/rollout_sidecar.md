@@ -50,6 +50,7 @@
   - `watch/follow_control_helpers.py`：follow 控制面输入清洗（pin 文件解析 + excludes 清洗），供 `RolloutWatcher` 复用（行为保持不变）
   - `watch/process_follow_scan.py`：进程强匹配扫描/进程树收集/rollout fd 解析（供 `FollowPicker` 复用），降低 follow_picker 内联复杂度（行为保持不变）
   - `watch/translation_queue.py`：翻译队列状态机（seen/inflight/force_after + 背压丢弃时的 inflight 清理）
+  - `watch/translation_pump_translate.py`：单条翻译与错误归一化（纯逻辑），供 TranslationPump/批量 worker 复用（行为保持不变）
   - `watch/translation_batch_worker.py`：批量翻译执行/解包/回退逻辑抽离，`TranslationPump` 更聚焦队列调度与统计（行为保持不变）
   - `watch/translation_pump_batching.py`：从 lo 队列聚合 batch（同 key 批量翻译）与不同 key 回退 pending 的规则抽离，便于单测与维护（行为保持不变）
   - `watch/translation_pump_items.py`：TranslationPump 的 batch items 解析与过滤抽离（pairs/ids 提取），便于单测与维护（行为保持不变）

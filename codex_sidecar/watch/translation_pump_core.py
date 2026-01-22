@@ -10,6 +10,7 @@ from .translation_batch_worker import emit_translate_batch
 from .translation_queue import TranslationQueueState
 from .translation_pump_batching import collect_batch_from_lo
 from .translation_pump_items import collect_ids, collect_pairs
+from .translation_pump_translate import normalize_translate_error, translate_one
 
 
 class TranslationPump:
@@ -264,38 +265,6 @@ class TranslationPump:
             "last_error": last_err,
         }
 
-    def _translate_one(self, text: str) -> Tuple[str, str]:
-        """
-        Return (zh, error).
-
-        Important:
-        - 翻译失败时不要把告警文本写入 `zh`（否则 UI 会把失败当作“已就绪”，污染内容区）
-        - error 作为单独字段回填给 UI，用于状态 pill/重试提示
-        """
-        if not str(text or "").strip():
-            return ("", "")
-        try:
-            out = self._translator.translate(text)
-        except Exception as e:
-            return ("", f"翻译异常：{type(e).__name__}")
-        z = str(out or "").strip()
-        if z:
-            return (z, "")
-        return ("", self._normalize_err("翻译失败（返回空译文）"))
-
-    def _normalize_err(self, fallback: str) -> str:
-        err = str(getattr(self._translator, "last_error", "") or "").strip()
-        if err.startswith("WARN:"):
-            err = err[len("WARN:") :].strip()
-        if not err:
-            err = str(fallback or "").strip()
-        if not err:
-            err = "翻译失败"
-        # Keep it bounded (UI uses it as a tooltip; overlong strings are noisy).
-        if len(err) > 240:
-            err = err[:240] + "…"
-        return err
-
     def _emit_translate(self, mid: str, zh: str, err: str) -> None:
         try:
             self._emit_update({"op": "update", "id": mid, "zh": zh, "translate_error": err})
@@ -333,7 +302,7 @@ class TranslationPump:
             t0 = time.monotonic()
             try:
                 if len(batch) == 1:
-                    zh, err = self._translate_one(text)
+                    zh, err = translate_one(self._translator, text)
                     if stop_event.is_set():
                         continue
                     if (not str(zh or "").strip()) and str(err or "").strip():
@@ -358,7 +327,7 @@ class TranslationPump:
 
                 pairs = collect_pairs(batch)
                 if len(pairs) <= 1:
-                    zh, err = self._translate_one(text)
+                    zh, err = translate_one(self._translator, text)
                     if stop_event.is_set():
                         continue
                     self._emit_translate(mid, zh, err)
@@ -383,8 +352,8 @@ class TranslationPump:
                     pairs=pairs,
                     pack_translate_batch=_pack_translate_batch,
                     unpack_translate_batch=_unpack_translate_batch,
-                    translate_one=self._translate_one,
-                    normalize_err=self._normalize_err,
+                    translate_one=lambda t: translate_one(self._translator, t),
+                    normalize_err=lambda f: normalize_translate_error(self._translator, f),
                     emit_translate=self._emit_translate,
                     done_id=self._done_id,
                     stop_requested=stop_event.is_set,
