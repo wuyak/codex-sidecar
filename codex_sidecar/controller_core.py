@@ -2,7 +2,7 @@ import os
 import threading
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from .config import SidecarConfig, load_config, save_config
 from .control.config_patch import apply_config_patch
@@ -10,6 +10,7 @@ from .control.reveal_secret import reveal_secret as _reveal_secret
 from .control.watcher_factory import build_rollout_watcher
 from .control.translator_build import build_translator as _build_translator_impl
 from .control.translate_api import translate_items as _translate_items, translate_probe as _translate_probe, translate_text as _translate_text
+from .control.retranslate_api import retranslate_one as _retranslate_one
 from .control.translator_specs import TRANSLATORS
 from .translator import Translator
 from .watcher import HttpIngestClient, RolloutWatcher
@@ -229,53 +230,18 @@ class SidecarController:
         Force (re)translation for a single message id.
         Used by the UI "翻译/重译" button on thinking rows.
         """
-        m = str(mid or "").strip()
-        if not m:
-            return {"ok": False, "error": "missing_id"}
+        def _resolve() -> Tuple[Optional[RolloutWatcher], bool]:
+            with self._lock:
+                watcher = self._watcher
+                running = bool(self._thread is not None and self._thread.is_alive())
+            return watcher, running
 
-        try:
-            msg = self._state.get_message(m)
-        except Exception:
-            msg = None
-        if not isinstance(msg, dict):
-            return {"ok": False, "error": "not_found"}
-
-        kind = str(msg.get("kind") or "")
-        if kind != "reasoning_summary":
-            return {"ok": False, "error": "not_thinking"}
-
-        text = str(msg.get("text") or "")
-        if not text.strip():
-            return {"ok": False, "error": "empty_text"}
-
-        prev_zh = str(msg.get("zh") or "")
-
-        thread_id = str(msg.get("thread_id") or "")
-        file_path = str(msg.get("file") or "")
-        thread_key = thread_id or file_path or "unknown"
-
-        watcher = None
-        running = False
-        with self._lock:
-            watcher = self._watcher
-            running = bool(self._thread is not None and self._thread.is_alive())
-        if watcher is None or not running:
-            return {"ok": False, "error": "not_running"}
-
-        queued = False
-        try:
-            queued = bool(watcher.retranslate(m, text=text, thread_key=thread_key, fallback_zh=prev_zh))
-        except Exception:
-            queued = False
-        if not queued:
-            return {"ok": False, "id": m, "queued": False, "error": "enqueue_failed"}
-
-        # Clear existing error (but keep previous zh until the new translation succeeds).
-        try:
-            self._state.add({"op": "update", "id": m, "translate_error": ""})
-        except Exception:
-            pass
-        return {"ok": True, "id": m, "queued": True}
+        return _retranslate_one(
+            mid,
+            get_message=self._state.get_message,
+            clear_error=lambda m: self._state.add({"op": "update", "id": m, "translate_error": ""}),
+            resolve_watcher=_resolve,
+        )
 
     def start(self) -> Dict[str, Any]:
         with self._lock:
