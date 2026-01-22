@@ -8,6 +8,7 @@ from ..translator import Translator
 from .translate_batch import _pack_translate_batch, _unpack_translate_batch
 from .translation_batch_worker import emit_translate_batch
 from .translation_queue import TranslationQueueState
+from .translation_pump_batching import collect_batch_from_lo
 
 
 class TranslationPump:
@@ -326,22 +327,7 @@ class TranslationPump:
             if not mid or not text.strip():
                 continue
 
-            batch: List[Dict[str, Any]] = [item]
-            if batchable and key:
-                while len(batch) < self._batch_size:
-                    try:
-                        nxt = self._lo.get_nowait()
-                    except queue.Empty:
-                        break
-                    except Exception:
-                        break
-                    try:
-                        if bool(nxt.get("batchable")) and str(nxt.get("key") or "") == key:
-                            batch.append(nxt)
-                        else:
-                            pending.append(nxt)
-                    except Exception:
-                        pending.append(nxt)
+            batch = collect_batch_from_lo(item, lo_queue=self._lo, pending=pending, batch_size=self._batch_size)
 
             t0 = time.monotonic()
             try:
