@@ -31,6 +31,8 @@
 - NVIDIA Provider **不提供** `auth_header/auth_prefix` 这类可配置项（与 `openai/http` 不同）；如你的网关要求 `x-api-key` 等非标准头，请改用 `http` Provider 或在代码层适配。
 - 代码定位：
   - 请求头构造：`codex_sidecar/translators/nvidia_chat.py`
+  - 翻译器核心实现（HTTP 调用/重试/缓存/回退）：`codex_sidecar/translators/nvidia_chat_core.py`
+  - 辅助逻辑（响应抽取/错误解析/Markdown 门禁/超时启发式等）：`codex_sidecar/translators/nvidia_chat_helpers.py`
   - UI 字段定义：`codex_sidecar/control/translator_specs.py`
 
 ## 迁移到其他项目（Porting）

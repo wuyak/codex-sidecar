@@ -20,6 +20,7 @@
 - 清理(后端)：移除 `codex_sidecar/watch/rollout_watcher.py` 中遗留且已失效的 `_replay_tail()` 死代码，避免未来误调用触发运行时报错。
 - 重构(后端)：controller 分层（`codex_sidecar/controller.py` facade → `codex_sidecar/controller_core.py`），保留 `codex_sidecar.controller.build_translator` 可被测试/工具 patch 的兼容路径。
 - 重构(后端)：翻译控制面公共逻辑抽离到 `codex_sidecar/control/translate_api.py`，controller_core 仅保留协调与状态管理。
+- 重构(后端)：NVIDIA 翻译实现抽离辅助逻辑到 `codex_sidecar/translators/nvidia_chat_helpers.py`，`nvidia_chat_core` 更聚焦核心流程（行为保持不变）。
 - 重构(后端)：HTTP handler 抽取 `/api/config`、`/api/status`、`/api/sfx`、`/api/offline/*` 复用逻辑，并新增 HTTP 控制面回归测试（config/status）。
 - 重构(后端)：HTTP Handler 的 GET/POST 路由分发拆分为 `codex_sidecar/http/routes_get.py` 与 `codex_sidecar/http/routes_post.py`，`handler.py` 仅保留通用能力（响应/JSON 读取/SSE/静态资源）。
 - 修复(后端)：架构分层重构后启动侧 `controller.start()` 仍引用 `build_translator` 导致 `NameError`；已改为使用内部 `_build_translator`/fallback 构建 translator。
