@@ -21,9 +21,9 @@ from .tui_gate import TuiGateTailer
 from .dedupe_cache import DedupeCache
 from .rollout_ingest import RolloutLineIngestor, sha1_hex
 from .rollout_tailer import poll_one, replay_tail
-from .follow_targets import compute_follow_targets
 from .rollout_follow_state import apply_follow_targets, now_ts
 from .follow_control_helpers import clean_exclude_files, clean_exclude_keys, resolve_pinned_rollout_file
+from .rollout_follow_sync import FollowControls, build_follow_sync_plan
 
 @dataclass
 class _FileCursor:
@@ -434,36 +434,42 @@ class RolloutWatcher:
             excl_keys = set()
             excl_files = set()
 
-        pick = self._follow_picker.pick(selection_mode=sel, pinned_thread_id=pin_tid, pinned_file=pin_file)
-        picked = pick.picked
-        self._process_file = pick.process_file
-        try:
-            self._process_files = list(pick.process_files or [])
-        except Exception:
-            self._process_files = []
-        try:
-            self._codex_candidate_pids = list(getattr(pick, "candidate_pids", None) or [])
-        except Exception:
-            self._codex_candidate_pids = []
-        self._codex_detected = bool(pick.codex_detected)
-        self._codex_pids = list(pick.codex_pids or [])
-        self._follow_mode = str(pick.follow_mode or "")
+        plan = build_follow_sync_plan(
+            follow_picker=self._follow_picker,
+            controls=FollowControls(
+                selection_mode=sel,
+                pinned_thread_id=pin_tid,
+                pinned_file=pin_file,
+                exclude_keys=excl_keys,
+                exclude_files=excl_files,
+                watch_max_sessions=int(self._watch_max_sessions or 1),
+            ),
+            codex_home=self._codex_home,
+            latest_rollout_files=_latest_rollout_files,
+            parse_thread_id=_parse_thread_id_from_filename,
+        )
+
+        picked = plan.picked
+        self._process_file = plan.process_file
+        self._process_files = list(plan.process_files or [])
+        self._codex_candidate_pids = list(plan.candidate_pids or [])
+        self._codex_detected = bool(plan.codex_detected)
+        self._codex_pids = list(plan.codex_pids or [])
+        self._follow_mode = str(plan.follow_mode or "")
 
         # If UI pins by thread id only, resolve to a concrete file path for later.
         if sel == "pin" and picked is not None:
             try:
                 with self._follow_lock:
-                    if self._pinned_file is None:
-                        self._pinned_file = picked
-                    if not self._pinned_thread_id:
-                        tid = _parse_thread_id_from_filename(picked)
-                        if tid:
-                            self._pinned_thread_id = tid
+                    if self._pinned_file is None and plan.pinned_file is not None:
+                        self._pinned_file = plan.pinned_file
+                    if not self._pinned_thread_id and plan.pinned_thread_id:
+                        self._pinned_thread_id = plan.pinned_thread_id
             except Exception:
                 pass
 
         # When we are explicitly in "idle / wait_codex / wait_rollout" mode, do not follow any file.
-        if picked is None and self._follow_mode in ("idle", "wait_codex", "wait_rollout"):
+        if plan.idle:
             if force or self._follow_files:
                 self._follow_files = []
                 self._current_file = None
@@ -474,18 +480,7 @@ class RolloutWatcher:
                     cur.active = False
             return
 
-        targets = compute_follow_targets(
-            selection_mode=sel,
-            watch_max_sessions=int(self._watch_max_sessions or 1),
-            follow_mode=self._follow_mode,
-            picked=picked,
-            process_files=list(self._process_files or []),
-            codex_home=self._codex_home,
-            latest_rollout_files=_latest_rollout_files,
-            exclude_keys=excl_keys,
-            exclude_files=excl_files,
-            parse_thread_id=_parse_thread_id_from_filename,
-        )
+        targets = list(plan.targets or [])
 
         changed = force or (targets != self._follow_files)
         if not changed:
