@@ -160,7 +160,7 @@
 - UI: 移除 `update_plan` 状态图标中的 emoji（改为纯文本标记），避免视觉噪音与字体不一致。
 - UI: 右侧工具栏升级为 Dock 形态（半透明背景/阴影/圆角），并清理顶栏卡片样式与 badge/Markdown/table 细节。
 - UI: 配置抽屉增加“皮肤（default/flat/dark）”切换并本机记忆（localStorage），用于快速更换书签/Dock 观感。
-- 文档：新增 UI 模板/设计系统调研报告（`helloagents/wiki/modules/ui_template_research.md`），用于后续 UI 美化与渐进式改造评估。
+- 文档：新增 UI 模板/设计系统调研报告（`helloagents/modules/ui_template_research.md`），用于后续 UI 美化与渐进式改造评估。
 - UI: 右侧操作栏新增“🌐 自动翻译”快捷开关，切换 `auto/manual` 会对运行中的 watcher 立即生效（无需重启）。
 - UI：🌐 按钮支持“长按打开翻译设置”（单击仍切换自动翻译）；翻译设置支持保存后立即生效且无需重启进程/会话。
 - UI：新增 UI v2（Vue 3 + Vite）工程骨架（原位于 `tools/codex_thinking_sidecar/codex_thinking_sidecar/ui_v2/`；现已归档到 `old/` 默认不启用）。
