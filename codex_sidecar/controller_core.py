@@ -13,9 +13,14 @@ from .control.translate_api import translate_items as _translate_items, translat
 from .control.retranslate_api import retranslate_one as _retranslate_one
 from .control.translator_specs import TRANSLATORS
 from .control.watcher_hot_updates import apply_watcher_hot_updates as _apply_watcher_hot_updates
+from .control.follow_control_api import (
+    apply_follow_excludes_to_watcher as _apply_follow_excludes_to_watcher,
+    apply_follow_to_watcher as _apply_follow_to_watcher,
+    normalize_follow as _normalize_follow,
+    normalize_follow_excludes as _normalize_follow_excludes,
+)
 from .translator import Translator
 from .watcher import HttpIngestClient, RolloutWatcher
-from .watch.follow_control_helpers import clean_exclude_keys as _clean_exclude_keys
 
 
 class SidecarController:
@@ -257,23 +262,16 @@ class SidecarController:
         - auto: sidecar picks latest / process-based file
         - pin : lock to a specific thread_id / file (from UI sidebar selection)
         """
-        m = str(mode or "").strip().lower()
-        if m not in ("auto", "pin"):
-            m = "auto"
-        tid = str(thread_id or "").strip()
-        fp = str(file or "").strip()
+        follow = _normalize_follow(mode, thread_id=thread_id, file=file)
         watcher = None
         with self._lock:
-            self._selection_mode = m
-            self._pinned_thread_id = tid
-            self._pinned_file = fp
+            self._selection_mode = follow.mode
+            self._pinned_thread_id = follow.thread_id
+            self._pinned_file = follow.file
             watcher = self._watcher
         if watcher is not None:
-            try:
-                watcher.set_follow(m, thread_id=tid, file=fp)
-            except Exception:
-                pass
-        return {"ok": True, "mode": m, "thread_id": tid, "file": fp}
+            _apply_follow_to_watcher(watcher, follow)
+        return {"ok": True, "mode": follow.mode, "thread_id": follow.thread_id, "file": follow.file}
 
     def set_follow_excludes(self, keys: Optional[List[str]] = None, files: Optional[List[str]] = None) -> Dict[str, Any]:
         """
@@ -281,11 +279,7 @@ class SidecarController:
 
         This is runtime state and intentionally not persisted to config.json.
         """
-        raw_keys = keys if isinstance(keys, list) else []
-        raw_files = files if isinstance(files, list) else []
-
-        cleaned_keys = _clean_exclude_keys(raw_keys, max_items=1000, max_len=256)
-        cleaned_files = _clean_exclude_keys(raw_files, max_items=1000, max_len=2048)
+        cleaned_keys, cleaned_files = _normalize_follow_excludes(keys=keys, files=files, max_items=1000, max_key_len=256, max_file_len=2048)
 
         watcher = None
         running = False
@@ -295,10 +289,7 @@ class SidecarController:
             watcher = self._watcher
             running = bool(self._thread is not None and self._thread.is_alive())
         if watcher is not None and running:
-            try:
-                watcher.set_follow_excludes(keys=list(cleaned_keys), files=list(cleaned_files))
-            except Exception:
-                pass
+            _apply_follow_excludes_to_watcher(watcher, keys=cleaned_keys, files=cleaned_files)
 
         return {
             "ok": True,
