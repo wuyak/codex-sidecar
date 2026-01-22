@@ -6,6 +6,7 @@ import { downloadTextFile } from "./export/download.js";
 import { baseName, pickCustomLabel, sanitizeFileName } from "./export/naming.js";
 import { classifyToolCallText } from "./export/tool_calls.js";
 import { getQuickBlocks } from "./export/quick_blocks.js";
+import { balanceFences, convertKnownHtmlCodeBlocksToFences, safeCodeFence } from "./export/markdown_utils.js";
 import {
   extractExitCode,
   extractOutputBody,
@@ -56,65 +57,6 @@ function _fmtMaybeLocal(ts) {
     if (Number.isFinite(d.getTime())) return _fmtLocal(d);
   } catch (_) {}
   return s;
-}
-
-function _balanceFences(md) {
-  const src = String(md ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").trimEnd();
-  if (!src) return "";
-  const lines = src.split("\n");
-  let open = "";
-  for (const ln of lines) {
-    const t = String(ln ?? "").trimEnd();
-    const m = t.match(/^\s*(```+|~~~+)/);
-    if (!m) continue;
-    const fence = String(m[1] || "");
-    if (!fence) continue;
-    if (!open) {
-      open = fence;
-      continue;
-    }
-    // Only close when the fence char matches; other fences inside code blocks are just text.
-    if (open[0] === fence[0] && fence.length >= open.length) open = "";
-  }
-  if (open) return `${src}\n${open}`;
-  return src;
-}
-
-function _safeCodeFence(text, lang = "text") {
-  const src = String(text ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").trimEnd();
-  if (!src) return "";
-  let maxRun = 3;
-  try {
-    const runs = src.match(/`{3,}/g) || [];
-    for (const r of runs) maxRun = Math.max(maxRun, String(r || "").length);
-  } catch (_) {}
-  const fence = "`".repeat(Math.max(4, maxRun + 1));
-  const info = String(lang || "").trim();
-  return `${fence}${info ? info : ""}\n${src}\n${fence}`;
-}
-
-function _unescapeHtml(text) {
-  const s = String(text ?? "");
-  // Order matters: decode &amp; first so "&amp;lt;" becomes "&lt;" then "<".
-  return s
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, "\"")
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, " ");
-}
-
-function _convertKnownHtmlCodeBlocksToFences(md) {
-  const src = String(md ?? "");
-  if (!src || !src.includes("<pre")) return src;
-  // Some environments may persist UI-rendered blocks (e.g. <pre class="code">...</pre>).
-  // Export target is Markdown: convert back to fenced code blocks for portability.
-  return src.replace(/<pre\s+class=(["'])code\1\s*>([\s\S]*?)<\/pre>/gi, (_m, _q, body) => {
-    const raw = String(body ?? "").replace(/<br\s*\/?>/gi, "\n");
-    const decoded = _unescapeHtml(raw).replace(/\r\n/g, "\n").replace(/\r/g, "\n").trimEnd();
-    return _safeCodeFence(decoded, "text");
-  });
 }
 
 function _renderUpdatePlan(planArgs) {
@@ -178,7 +120,7 @@ function _renderToolCallMd(tc) {
   const pretty = tc.argsObj ? JSON.stringify(tc.argsObj, null, 2) : String(tc.argsRaw || "").trimEnd();
   const lang = tc.argsObj ? "json" : "text";
   const head = tool ? `**${tool}**\n\n` : "";
-  return `${head}${_safeCodeFence(pretty || "", lang)}`.trimEnd();
+  return `${head}${safeCodeFence(pretty || "", lang)}`.trimEnd();
 }
 
 function _renderToolOutputMd(outputRaw, meta) {
@@ -196,10 +138,10 @@ function _renderToolOutputMd(outputRaw, meta) {
     const runLong = formatShellRunExpanded(cmdFull, outputBody, exitCode);
     const patchText = _extractApplyPatchFromShellCommand(cmdFull);
     const blocks = [];
-    if (runShort) blocks.push(_safeCodeFence(runShort, "text"));
+    if (runShort) blocks.push(safeCodeFence(runShort, "text"));
     const detailParts = [];
-    if (runLong && runLong !== runShort) detailParts.push(_safeCodeFence(runLong, "text"));
-    if (patchText) detailParts.push(_safeCodeFence(patchText, "diff"));
+    if (runLong && runLong !== runShort) detailParts.push(safeCodeFence(runLong, "text"));
+    if (patchText) detailParts.push(safeCodeFence(patchText, "diff"));
     if (detailParts.length) blocks.push(_details("详情", detailParts.join("\n\n")));
     return blocks.join("\n\n").trimEnd();
   }
@@ -209,10 +151,10 @@ function _renderToolOutputMd(outputRaw, meta) {
     const runLong = formatApplyPatchRun(argsRaw, outputBody, 200);
     const patchText = String(argsRaw || "").trim();
     const blocks = [];
-    if (runShort) blocks.push(_safeCodeFence(runShort, "text"));
+    if (runShort) blocks.push(safeCodeFence(runShort, "text"));
     const detailParts = [];
-    if (runLong && runLong !== runShort) detailParts.push(_safeCodeFence(runLong, "text"));
-    if (patchText) detailParts.push(_safeCodeFence(patchText, "diff"));
+    if (runLong && runLong !== runShort) detailParts.push(safeCodeFence(runLong, "text"));
+    if (patchText) detailParts.push(safeCodeFence(patchText, "diff"));
     if (detailParts.length) blocks.push(_details("详情", detailParts.join("\n\n")));
     return blocks.join("\n\n").trimEnd();
   }
@@ -222,7 +164,7 @@ function _renderToolOutputMd(outputRaw, meta) {
     const base = (p.split(/[\\/]/).pop() || "").trim();
     const first = firstMeaningfulLine(outputBody) || "attached local image";
     const line = `• ${first}${base ? `: ${base}` : ``}`;
-    return _safeCodeFence(line, "text");
+    return safeCodeFence(line, "text");
   }
 
   const header = `• ${toolName || "tool_output"}`;
@@ -231,8 +173,8 @@ function _renderToolOutputMd(outputRaw, meta) {
   const runShort = formatOutputTree(header, lines, 10);
   const runLong = formatOutputTree(header, lines, 120);
   const blocks = [];
-  if (runShort) blocks.push(_safeCodeFence(runShort, "text"));
-  if (runLong && runLong !== runShort) blocks.push(_details("详情", _safeCodeFence(runLong, "text")));
+  if (runShort) blocks.push(safeCodeFence(runShort, "text"));
+  if (runLong && runLong !== runShort) blocks.push(_details("详情", safeCodeFence(runLong, "text")));
   return blocks.join("\n\n").trimEnd();
 }
 
@@ -446,10 +388,10 @@ function _renderReasoning(m, opts = {}) {
   const err = String((m && m.translate_error) ? m.translate_error : "").trim();
   const mode = String(opts.lang || "auto").trim().toLowerCase();
   const hasZh = !!(zh && !err);
-  if (mode === "en") return _balanceFences(en);
-  if (mode === "zh") return _balanceFences(hasZh ? zh : en);
+  if (mode === "en") return balanceFences(en);
+  if (mode === "zh") return balanceFences(hasZh ? zh : en);
   if (mode === "both" && hasZh && en) {
-    return _balanceFences([`### 中文`, "", zh, "", `### English`, "", en].join("\n").trimEnd());
+    return balanceFences([`### 中文`, "", zh, "", `### English`, "", en].join("\n").trimEnd());
   }
   if (mode === "toggle" && hasZh) {
     const parts = [];
@@ -460,10 +402,10 @@ function _renderReasoning(m, opts = {}) {
       parts.push("");
       parts.push(en.trimEnd());
     }
-    return _balanceFences(parts.join("\n").trimEnd());
+    return balanceFences(parts.join("\n").trimEnd());
   }
   // auto: prefer zh when available, otherwise keep original.
-  return _balanceFences(hasZh ? zh : en);
+  return balanceFences(hasZh ? zh : en);
 }
 
 export async function exportThreadMarkdown(state, key, opts = {}) {
@@ -688,7 +630,7 @@ export async function exportThreadMarkdown(state, key, opts = {}) {
       }
     } else {
       const raw = String((m && m.text) ? m.text : "").trimEnd();
-      text = _balanceFences(_convertKnownHtmlCodeBlocksToFences(raw));
+      text = balanceFences(convertKnownHtmlCodeBlocksToFences(raw));
     }
     idx += 1;
     const head = `## ${idx}. ${kindName}${tsLocal ? ` · ${tsLocal}` : ""}`;
