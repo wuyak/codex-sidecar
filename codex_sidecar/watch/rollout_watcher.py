@@ -22,6 +22,7 @@ from .dedupe_cache import DedupeCache
 from .rollout_ingest import RolloutLineIngestor, sha1_hex
 from .rollout_tailer import poll_one, replay_tail
 from .follow_targets import compute_follow_targets
+from .rollout_follow_state import apply_follow_targets, now_ts
 
 @dataclass
 class _FileCursor:
@@ -539,49 +540,27 @@ class RolloutWatcher:
             return
 
         self._follow_files = targets
-
-        keep = set(targets)
-        now = time.time()
-        for p, cur in list(self._cursors.items()):
-            cur.active = p in keep
-            if cur.active:
-                cur.last_active_ts = now
-
-        for p in targets:
-            cur = self._cursors.get(p)
-            if cur is None:
-                tid = _parse_thread_id_from_filename(p) or ""
-                cur = _FileCursor(path=p, thread_id=tid)
-                self._cursors[p] = cur
-            cur.active = True
-            cur.last_active_ts = now
-            if not cur.inited:
-                cur.inited = True
-                # Seek to end (follow only new writes), optionally replay last N lines.
-                try:
-                    cur.offset = int(p.stat().st_size)
-                except Exception:
-                    cur.offset = 0
-                if self._replay_last_lines > 0:
-                    replay_tail(
-                        cur,
-                        last_lines=self._replay_last_lines,
-                        read_tail_lines=read_tail_lines,
-                        stop_requested=self._stop_requested,
-                        on_line=self._on_rollout_line,
-                    )
+        now = now_ts()
+        cur_file, thread_id, primary_offset, primary_line_no = apply_follow_targets(
+            targets=targets,
+            cursors=self._cursors,
+            new_cursor=_FileCursor,
+            now=now,
+            replay_last_lines=self._replay_last_lines,
+            read_tail_lines=read_tail_lines,
+            replay_tail=replay_tail,
+            stop_requested=self._stop_requested,
+            on_line=self._on_rollout_line,
+            parse_thread_id=_parse_thread_id_from_filename,
+            prev_primary_offset=int(self._offset or 0),
+            prev_primary_line_no=int(self._line_no or 0),
+        )
 
         # Update "primary" fields for status and tool gate tagging.
-        self._current_file = targets[0] if targets else None
-        self._thread_id = _parse_thread_id_from_filename(targets[0]) if targets else None
-        if self._current_file is not None:
-            try:
-                cur = self._cursors.get(self._current_file)
-                if cur is not None:
-                    self._offset = int(cur.offset)
-                    self._line_no = int(cur.line_no)
-            except Exception:
-                pass
+        self._current_file = cur_file
+        self._thread_id = thread_id
+        self._offset = int(primary_offset or 0)
+        self._line_no = int(primary_line_no or 0)
 
         try:
             if targets:

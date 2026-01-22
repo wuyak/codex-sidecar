@@ -41,6 +41,7 @@
   - `watch/dedupe_cache.py`：轻量去重缓存（rollout 与 TUI gate 共享一套去重语义）
   - `watch/rollout_ingest.py`：rollout 单行解析/去重/工具门禁提示/翻译入队（watcher 只负责调度）
   - `watch/rollout_tailer.py`：文件 replay/poll 的通用 tail 逻辑（按 offset 增量读取）
+  - `watch/rollout_follow_state.py`：follow targets → cursors/primary 的落地逻辑（cursor 初始化/回放/active 标记），从 watcher 抽离保持行为不变
   - `watch/follow_targets.py`：follow targets 计算（process/pin/auto + excludes），降低 watcher 内联分支耦合
   - `watch/translation_queue.py`：翻译队列状态机（seen/inflight/force_after + 背压丢弃时的 inflight 清理）
 - 服务端分层：`server.py` 仅负责启动/绑定；HTTP Handler（SSE/静态资源/通用响应）与路由分发拆分到 `http/*`（GET/POST 路由分别在 `http/routes_get.py`、`http/routes_post.py`）

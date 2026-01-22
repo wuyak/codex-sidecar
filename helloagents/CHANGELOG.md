@@ -14,6 +14,7 @@
 - 修复(后端)：`update_config` 触发 controller 自锁死锁导致 `/api/config` / `/api/status` 永久卡死（`/health` 仍正常、UI 空白）；调整为热更新在锁外执行，并增加回归测试覆盖。
 - 重构(后端)：watch 层进一步分层（`codex_sidecar/watcher.py` facade → `codex_sidecar/watch/rollout_watcher.py`），并抽离 `ingest_client` / `approval_hint` 降低耦合。
 - 重构(后端)：watcher 继续拆分 `rollout_watcher`：抽离 `dedupe_cache` / `rollout_ingest` / `rollout_tailer`，让 watcher 更聚焦“选目标 + 调度”，降低耦合（行为保持不变）。
+- 重构(后端)：RolloutWatcher 的 follow targets 落地逻辑抽离到 `codex_sidecar/watch/rollout_follow_state.py`，watcher 更聚焦“选目标 + 调度”（行为保持不变）。
 - 重构(后端)：follow targets 计算从 watcher 中抽离到 `codex_sidecar/watch/follow_targets.py`，并新增单测覆盖 process/pin/auto 的关键分支。
 - 重构(后端)：controller 的 watcher 组装逻辑抽离到 `codex_sidecar/control/watcher_factory.py`，controller_core 更聚焦线程/状态管理（行为保持不变）。
 - 重构(后端)：TranslationPump 的队列状态（seen/inflight/force_after）抽离到 `codex_sidecar/watch/translation_queue.py`，并新增单测覆盖关键队列行为。
