@@ -18,4 +18,4 @@
 - [√] 4.2 运行 `python3 -m unittest discover -s tests`
 
 ## 5. 方案包迁移
-- [ ] 5.1 将本方案包迁移至 `helloagents/history/2026-01/202601221625_fix_phase29_http_sse_json_bytes/` 并更新 `helloagents/history/index.md`
+- [√] 5.1 将本方案包迁移至 `helloagents/history/2026-01/202601221625_fix_phase29_http_sse_json_bytes/` 并更新 `helloagents/history/index.md`
