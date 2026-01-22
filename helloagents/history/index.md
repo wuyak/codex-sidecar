@@ -3,6 +3,7 @@
 > 该目录存放已执行的方案包（从 `helloagents/plan/` 迁移而来）。
 
 ## 2026-01
+- 202601221157_arch_refactor_phase12_controller_config_patch
 - 202601221150_arch_refactor_phase11_translation_batch_worker
 - 202601221139_arch_refactor_phase10_rollout_follow_state
 - 202601221108_arch_refactor_phase9_nvidia_helpers
