@@ -6,6 +6,7 @@ from typing import Any, Callable, Deque, Dict, List, Optional, Set, Tuple
 
 from ..translator import Translator
 from .translate_batch import _pack_translate_batch, _unpack_translate_batch
+from .translation_queue import TranslationQueueState
 
 
 class TranslationPump:
@@ -40,16 +41,8 @@ class TranslationPump:
 
         self._thread: Optional[threading.Thread] = None
 
-        # Best-effort de-dupe: avoid queuing the same id repeatedly.
-        self._seen: Set[str] = set()
-        self._seen_order: Deque[str] = deque()
-        self._seen_max = max(1000, int(max_seen_ids or 6000))
-        # In-flight guard: prevent repeated manual "force" triggers from spamming requests.
-        self._inflight: Set[str] = set()
-        # Coalesce manual "force" retranslate requests when an id is already queued/running.
-        # key=id -> latest force item (will run once after current inflight completes).
-        self._force_after: Dict[str, Dict[str, Any]] = {}
-        self._lock = threading.Lock()
+        # Queue state machine: seen/inflight/force_after.
+        self._qstate = TranslationQueueState(max_seen_ids=max_seen_ids)
 
         # Observability (best-effort; approximate counters are fine for a sidecar).
         self._drop_old_hi = 0
@@ -106,33 +99,22 @@ class TranslationPump:
         # Dedupe (bounded).
         # - Normal auto-translate: skip if we've seen this message id before.
         # - Force retranslate: coalesce if already queued/running (run once after inflight).
-        try:
-            if force:
-                with self._lock:
-                    if m in self._inflight:
-                        item: Dict[str, Any] = {
-                            "id": m,
-                            "text": t,
-                            "key": str(thread_key or ""),
-                            "batchable": False,
-                        }
-                        fz = str(fallback_zh or "")
-                        if fz.strip():
-                            item["fallback_zh"] = fz
-                        self._force_after[m] = item
-                        return True
-            else:
-                with self._lock:
-                    if m in self._seen:
-                        return False
-                    self._seen.add(m)
-                    self._seen_order.append(m)
-                    while len(self._seen_order) > self._seen_max:
-                        old = self._seen_order.popleft()
-                        self._seen.discard(old)
-        except Exception:
-            # Best-effort: do not block enqueue on bookkeeping failures.
-            pass
+        if force:
+            follow_item: Dict[str, Any] = {"id": m, "text": t, "key": str(thread_key or ""), "batchable": False}
+            fz = str(fallback_zh or "")
+            if fz.strip():
+                follow_item["fallback_zh"] = fz
+            try:
+                if self._qstate.record_force_after_if_inflight(m, follow_item):
+                    return True
+            except Exception:
+                pass
+        else:
+            try:
+                if not self._qstate.accept_or_reject_seen(m):
+                    return False
+            except Exception:
+                pass
 
         item: Dict[str, Any] = {
             "id": m,
@@ -147,8 +129,7 @@ class TranslationPump:
 
         q = self._lo if batchable else self._hi
         try:
-            with self._lock:
-                self._inflight.add(m)
+            self._qstate.mark_inflight(m)
         except Exception:
             pass
         return bool(self._put_drop_oldest(q, item, is_hi=(not batchable)))
@@ -167,8 +148,7 @@ class TranslationPump:
         except Exception:
             if iid:
                 try:
-                    with self._lock:
-                        self._inflight.discard(iid)
+                    self._qstate.discard_inflight(iid)
                 except Exception:
                     pass
             return False
@@ -181,8 +161,7 @@ class TranslationPump:
                 oid = ""
             if oid:
                 try:
-                    with self._lock:
-                        self._inflight.discard(oid)
+                    self._qstate.discard_inflight(oid)
                 except Exception:
                     pass
             if is_hi:
@@ -192,8 +171,7 @@ class TranslationPump:
         except Exception:
             if iid:
                 try:
-                    with self._lock:
-                        self._inflight.discard(iid)
+                    self._qstate.discard_inflight(iid)
                 except Exception:
                     pass
             return False
@@ -207,8 +185,7 @@ class TranslationPump:
                 self._drop_new_lo += 1
             if iid:
                 try:
-                    with self._lock:
-                        self._inflight.discard(iid)
+                    self._qstate.discard_inflight(iid)
                 except Exception:
                     pass
             return False
@@ -222,29 +199,27 @@ class TranslationPump:
             return
         follow: Optional[Dict[str, Any]] = None
         try:
-            with self._lock:
-                self._inflight.discard(iid)
-                follow = self._force_after.pop(iid, None)
+            follow = self._qstate.done_id(iid)
         except Exception:
             follow = None
         if not isinstance(follow, dict) or not str(follow.get("text") or "").strip():
             return
         # Requeue follow-up as hi-priority (manual).
         try:
-            with self._lock:
-                if iid in self._inflight:
-                    # Still in flight; coalesce again.
-                    self._force_after[iid] = follow
-                    return
-                self._inflight.add(iid)
+            if not self._qstate.try_mark_inflight_for_follow(iid, follow):
+                return
         except Exception:
             pass
         try:
-            self._put_drop_oldest(self._hi, follow, is_hi=True)
+            ok = bool(self._put_drop_oldest(self._hi, follow, is_hi=True))
+            if not ok:
+                try:
+                    self._qstate.discard_inflight(iid)
+                except Exception:
+                    pass
         except Exception:
             try:
-                with self._lock:
-                    self._inflight.discard(iid)
+                self._qstate.discard_inflight(iid)
             except Exception:
                 pass
 
@@ -262,7 +237,7 @@ class TranslationPump:
         except Exception:
             pending = 0
         try:
-            seen = len(self._seen)
+            seen = int(self._qstate.seen_count())
         except Exception:
             seen = 0
         try:
