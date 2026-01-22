@@ -12,6 +12,7 @@ from .control.translator_build import build_translator as _build_translator_impl
 from .control.translate_api import translate_items as _translate_items, translate_probe as _translate_probe, translate_text as _translate_text
 from .control.retranslate_api import retranslate_one as _retranslate_one
 from .control.translator_specs import TRANSLATORS
+from .control.watcher_hot_updates import apply_watcher_hot_updates as _apply_watcher_hot_updates
 from .translator import Translator
 from .watcher import HttpIngestClient, RolloutWatcher
 from .watch.follow_control_helpers import clean_exclude_keys as _clean_exclude_keys
@@ -184,40 +185,16 @@ class SidecarController:
                 cfg = self._cfg
         except Exception:
             return
-        if watcher is None or not running or cfg is None:
-            return
-
-        # Hot-apply translate_mode for the running watcher (no restart required).
-        try:
-            next_tm = str(getattr(cfg, "translate_mode", "auto") or "auto").strip().lower()
-            if next_tm and next_tm != str(prev_tm or ""):
-                watcher.set_translate_mode(next_tm)
-        except Exception:
-            pass
-
-        # Hot-reload translator/provider config for the running watcher.
-        try:
-            next_provider = str(getattr(cfg, "translator_provider", "") or "").strip().lower()
-            if bool(touched_translator) or next_provider != str(prev_provider or ""):
-                tr = self._build_translator(cfg) or _build_translator_impl(cfg)
-                watcher.set_translator(tr)
-        except Exception:
-            pass
-
-        # Hot-apply watcher runtime settings where it's safe (no full restart required).
-        # Note: watch_codex_home still requires stop/start to take effect.
-        try:
-            watcher.set_watch_max_sessions(int(getattr(cfg, "watch_max_sessions", 3) or 3))
-            watcher.set_replay_last_lines(int(getattr(cfg, "replay_last_lines", 0) or 0))
-            watcher.set_poll_interval_s(float(getattr(cfg, "poll_interval", 0.5) or 0.5))
-            watcher.set_file_scan_interval_s(float(getattr(cfg, "file_scan_interval", 2.0) or 2.0))
-            watcher.set_follow_picker_config(
-                follow_codex_process=bool(getattr(cfg, "follow_codex_process", False)),
-                codex_process_regex=str(getattr(cfg, "codex_process_regex", "codex") or "codex"),
-                only_follow_when_process=bool(getattr(cfg, "only_follow_when_process", True)),
-            )
-        except Exception:
-            pass
+        _apply_watcher_hot_updates(
+            watcher=watcher,
+            running=running,
+            cfg=cfg,
+            prev_translate_mode=str(prev_tm or ""),
+            prev_provider=str(prev_provider or ""),
+            touched_translator=bool(touched_translator),
+            build_translator=self._build_translator,
+            build_translator_fallback=_build_translator_impl,
+        )
 
     def clear_messages(self) -> None:
         try:
