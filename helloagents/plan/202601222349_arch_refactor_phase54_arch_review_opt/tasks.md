@@ -12,9 +12,9 @@
 - [√] 1.3 更新/新增单测：SSE 正常推送 + 断线补齐行为（Last-Event-ID）。
 
 ## 2. 启动脚本去重（Phase54.2）
-- [ ] 2.1 新增 `scripts/_common.sh`：集中 `open_browser`、health check、lock pid 读取等公共逻辑。
-- [ ] 2.2 `scripts/run.sh`、`scripts/ui.sh` 改为 `source scripts/_common.sh` 并移除重复实现（行为不变）。
-- [ ] 2.3 基础验证：`bash -n scripts/run.sh scripts/ui.sh scripts/_common.sh`。
+- [√] 2.1 新增 `scripts/_common.sh`：集中 `open_browser`、health check、lock pid 读取等公共逻辑。
+- [√] 2.2 `scripts/run.sh`、`scripts/ui.sh` 改为 `source scripts/_common.sh` 并移除重复实现（行为不变）。
+- [√] 2.3 基础验证：`bash -n scripts/run.sh scripts/ui.sh scripts/_common.sh`。
 
 ## 3. Config 模型整理（Phase54.3）
 - [ ] 3.1 `SidecarConfig.translator_config` 改为 `field(default_factory=dict)`，清理 `None` 分支与序列化兜底（行为不变）。
