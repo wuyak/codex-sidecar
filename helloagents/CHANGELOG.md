@@ -10,6 +10,7 @@
 - 后端：抽离并复用“从文件尾部读取最后 N 行”的实现（watcher/offline/tui 共用），同时 poll 在无增量时跳过打开文件，降低空转开销。
 - 后端：HTTP handler 抽离通用 JSON 解析/错误响应，并让离线/在线翻译端点复用同一内部路径，减少重复与维护成本。
 - 后端：tui gate tail 在无新增时跳过打开文件读取，进一步降低空转 IO。
+- 重构(后端)：TuiGateTailer 的解析/渲染逻辑抽离到 `codex_sidecar/watch/tui_gate_helpers.py`，便于单测与维护（行为保持不变）。
 - 后端：controller 收敛翻译（probe/text/items）公共逻辑，并将 watcher 热更新应用集中到单一 helper，降低重复与分叉。
 - 修复(后端)：`update_config` 触发 controller 自锁死锁导致 `/api/config` / `/api/status` 永久卡死（`/health` 仍正常、UI 空白）；调整为热更新在锁外执行，并增加回归测试覆盖。
 - 重构(后端)：watch 层进一步分层（`codex_sidecar/watcher.py` facade → `codex_sidecar/watch/rollout_watcher.py`），并抽离 `ingest_client` / `approval_hint` 降低耦合。

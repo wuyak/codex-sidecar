@@ -39,6 +39,7 @@
 - 代码分层：`watch/rollout_watcher.py` 聚焦主流程（`watcher.py` 仅作为向后兼容的 facade）；`watch/*` 承载“跟随策略/进程扫描/解析/去重/tail/翻译队列”等可复用组件
   - `watch/rollout_extract.py`：单条 JSONL 记录 → UI 事件块提取（assistant/user/tool/reasoning）
   - `watch/dedupe_cache.py`：轻量去重缓存（rollout 与 TUI gate 共享一套去重语义）
+  - `watch/tui_gate_helpers.py`：TUI gate 的时间戳拆分/ToolCall 解析/脱敏/Markdown 生成（供 tailer 调用），便于单测与复用（行为保持不变）
   - `watch/rollout_ingest.py`：rollout 单行解析/去重/工具门禁提示/翻译入队（watcher 只负责调度）
   - `watch/rollout_tailer.py`：文件 replay/poll 的通用 tail 逻辑（按 offset 增量读取）
   - `watch/rollout_follow_state.py`：follow targets → cursors/primary 的落地逻辑（cursor 初始化/回放/active 标记），从 watcher 抽离保持行为不变
