@@ -590,26 +590,6 @@ class RolloutWatcher:
         except Exception:
             pass
 
-
-    def _replay_tail(self, cur: _FileCursor, last_lines: int) -> None:
-        path = cur.path
-        # Respect the user's configured replay window strictly.
-        replay_lines = max(0, int(last_lines))
-        if replay_lines == 0:
-            return
-        tail = read_tail_lines(path, last_lines=replay_lines)
-        for bline in tail:
-            if self._stop_requested():
-                break
-            cur.line_no += 1
-            self._handle_line(
-                bline,
-                file_path=path,
-                line_no=cur.line_no,
-                is_replay=True,
-                thread_id=cur.thread_id,
-            )
-
     def _poll_follow_files(self) -> None:
         for path in list(self._follow_files):
             if self._stop_requested():
