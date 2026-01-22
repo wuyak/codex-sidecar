@@ -10,7 +10,7 @@
 - [√] 1.3 拆出“文件 tail/replay/poll”到独立模块，保持 offset/line_no 行为不变
 
 ## 2. Controller 分层拆分（可选，视风险）
-- [ ] 2.1 将 `translate_probe/translate_text/translate_items` 抽为独立 helper（不改对外 API），并保持测试可 patch 的入口策略不变
+- [√] 2.1 将 `translate_probe/translate_text/translate_items` 抽为独立 helper（不改对外 API），并保持测试可 patch 的入口策略不变
 
 ## 3. 安全检查
 - [ ] 3.1 执行安全检查（按G9: 输入验证、敏感信息处理、权限控制、EHRB风险规避）
