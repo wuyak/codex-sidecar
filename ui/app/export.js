@@ -178,61 +178,6 @@ function _renderToolOutputMd(outputRaw, meta) {
   return blocks.join("\n\n").trimEnd();
 }
 
-async function _ensureReasoningTranslated({ messages, threadId, maxN = 6, waitMs = 4500 }) {
-  const arr = Array.isArray(messages) ? messages : [];
-  const needs = arr
-    .filter((m) => {
-      const kind = String(m && m.kind ? m.kind : "");
-      if (kind !== "reasoning_summary") return false;
-      const id = String(m && m.id ? m.id : "").trim();
-      if (!id) return false;
-      const zh = String(m && m.zh ? m.zh : "").trim();
-      return !zh;
-    })
-    .slice(0, Math.max(0, Number(maxN) || 0));
-
-  if (!needs.length) return { ok: true, queued: 0, filled: 0, waited_ms: 0 };
-
-  let queued = 0;
-  for (const m of needs) {
-    const id = String(m && m.id ? m.id : "").trim();
-    if (!id) continue;
-    try {
-      const r = await fetch("/api/control/retranslate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id }),
-      }).then((x) => x.json()).catch(() => null);
-      if (r && r.ok) queued += 1;
-    } catch (_) {}
-  }
-
-  // Best-effort wait for updates to land (avoid blocking too long).
-  const start = Date.now();
-  let filled = 0;
-  while ((Date.now() - start) < Math.max(0, Number(waitMs) || 0)) {
-    try {
-      const url = threadId
-        ? `/api/messages?thread_id=${encodeURIComponent(threadId)}&t=${Date.now()}`
-        : `/api/messages?t=${Date.now()}`;
-      const r = await fetch(url, { cache: "no-store" }).then((x) => x.json()).catch(() => null);
-      const ms = Array.isArray(r && r.messages) ? r.messages : [];
-      const byId = new Map(ms.map((x) => [String(x && x.id ? x.id : ""), x]));
-      filled = 0;
-      for (const m of needs) {
-        const id = String(m && m.id ? m.id : "").trim();
-        if (!id) continue;
-        const cur = byId.get(id);
-        const zh = String(cur && cur.zh ? cur.zh : "").trim();
-        if (zh) filled += 1;
-      }
-      if (filled >= needs.length) break;
-    } catch (_) {}
-    await new Promise((r) => setTimeout(r, 240));
-  }
-  return { ok: true, queued, filled, waited_ms: Date.now() - start };
-}
-
 async function _ensureReasoningTranslatedDirect({ messages, maxN = 12 }) {
   const arr = Array.isArray(messages) ? messages : [];
   const needs = arr
