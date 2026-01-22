@@ -1,8 +1,9 @@
-import { getCustomLabel } from "./sidebar/labels.js";
-import { extractJsonOutputString, keyOf, safeJsonParse, shortId } from "./utils.js";
+import { extractJsonOutputString, keyOf, shortId } from "./utils.js";
 import { getExportPrefsForKey } from "./export_prefs.js";
 import { isOfflineKey, offlineRelFromKey } from "./offline.js";
 import { loadOfflineZhMap, upsertOfflineZhBatch } from "./offline_zh.js";
+import { downloadTextFile } from "./export/download.js";
+import { baseName, pickCustomLabel, sanitizeFileName } from "./export/naming.js";
 import { classifyToolCallText } from "./export/tool_calls.js";
 import { getQuickBlocks } from "./export/quick_blocks.js";
 import {
@@ -23,69 +24,6 @@ const _EXPORT_ENGINE_TAG = "md_fence_v2_20260120_1650";
 // Export is side-effectful (triggers a file download). To avoid “点击多个导出后卡住，
 // 过几十秒突然下载一大批”的体验，默认只允许同时进行 1 个导出任务。
 let _exportInFlight = null; // { key, startedMs }
-
-function _extractUuid(s) {
-  const raw = String(s || "");
-  if (!raw) return "";
-  const m = raw.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/);
-  return m ? String(m[0] || "") : "";
-}
-
-function _sanitizeFileName(s) {
-  const raw = String(s || "").trim();
-  if (!raw) return "";
-  try {
-    return raw
-      // Cross-platform-safe: remove control chars + Windows reserved chars.
-      .replaceAll(/[\u0000-\u001f\u007f]+/g, " ")
-      .replaceAll(/[<>:"/\\|?*]+/g, " ")
-      .replaceAll(/\s+/g, " ")
-      .trim()
-      .slice(0, 80);
-  } catch (_) {
-    // Conservative fallback.
-    return raw
-      .replaceAll(/[\u0000-\u001f\u007f]+/g, " ")
-      .replaceAll(/[<>:"/\\|?*]+/g, " ")
-      .replaceAll(/\s+/g, " ")
-      .trim()
-      .slice(0, 80);
-  }
-}
-
-function _shortIdForFile(s) {
-  const raw = String(s || "").trim();
-  if (!raw) return "";
-  if (raw.length <= 10) return raw;
-  return raw.slice(0, 6) + "-" + raw.slice(-4);
-}
-
-function _pickCustomLabel(key, threadId, filePath) {
-  const k = String(key || "").trim();
-  const tid = String(threadId || "").trim();
-  const f = String(filePath || "").trim();
-
-  let v = "";
-  try { v = String(getCustomLabel(k) || "").trim(); } catch (_) { v = ""; }
-  if (v) return v;
-
-  if (tid && tid !== k) {
-    try { v = String(getCustomLabel(tid) || "").trim(); } catch (_) { v = ""; }
-    if (v) return v;
-  }
-  if (f && f !== k) {
-    try { v = String(getCustomLabel(f) || "").trim(); } catch (_) { v = ""; }
-    if (v) return v;
-  }
-
-  // Back-compat: some older UIs might have used a file-path key; try parse uuid from it.
-  const fromFile = _extractUuid(f || k);
-  if (fromFile && fromFile !== k && fromFile !== tid) {
-    try { v = String(getCustomLabel(fromFile) || "").trim(); } catch (_) { v = ""; }
-    if (v) return v;
-  }
-  return "";
-}
 
 function _kindLabel(kind) {
   const k = String(kind || "");
@@ -118,13 +56,6 @@ function _fmtMaybeLocal(ts) {
     if (Number.isFinite(d.getTime())) return _fmtLocal(d);
   } catch (_) {}
   return s;
-}
-
-function _baseName(p) {
-  const s = String(p || "");
-  if (!s) return "";
-  const parts = s.split(/[\\/]/g);
-  return parts[parts.length - 1] || s;
 }
 
 function _balanceFences(md) {
@@ -535,21 +466,6 @@ function _renderReasoning(m, opts = {}) {
   return _balanceFences(hasZh ? zh : en);
 }
 
-function _download(name, text) {
-  const blob = new Blob([String(text || "")], { type: "text/markdown;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = name;
-  a.style.display = "none";
-  document.body.appendChild(a);
-  try { a.click(); } catch (_) {}
-  setTimeout(() => {
-    try { URL.revokeObjectURL(url); } catch (_) {}
-    try { if (a.parentNode) a.parentNode.removeChild(a); } catch (_) {}
-  }, 120);
-}
-
 export async function exportThreadMarkdown(state, key, opts = {}) {
   const k = String(key || "").trim();
   if (!k || k === "all") return { ok: false, error: "select_thread" };
@@ -679,8 +595,8 @@ export async function exportThreadMarkdown(state, key, opts = {}) {
   } catch (_) {}
 
   const now = new Date();
-  const custom = _pickCustomLabel(k, threadId, file);
-  const fileBase = _baseName(file);
+  const custom = pickCustomLabel(k, threadId, file);
+  const fileBase = baseName(file);
   const title = custom || fileBase || (threadId ? shortId(threadId) : shortId(k)) || "导出";
 
   const lines = [];
@@ -780,7 +696,7 @@ export async function exportThreadMarkdown(state, key, opts = {}) {
   }
   lines.push(sections.join("\n\n---\n\n"));
 
-  const safeTitle = _sanitizeFileName(title) || "导出";
+  const safeTitle = sanitizeFileName(title) || "导出";
   const name = `${safeTitle}.md`;
   const _cls = (s) => {
     const t = (s ?? "").trim();
@@ -837,7 +753,7 @@ export async function exportThreadMarkdown(state, key, opts = {}) {
   while (bodyLines.length && !bodyLines[0].trim()) bodyLines.shift();
   while (bodyLines.length && !bodyLines[bodyLines.length - 1].trim()) bodyLines.pop();
 
-  _download(name, bodyLines.join("\n") + "\n");
+  downloadTextFile(name, bodyLines.join("\n") + "\n", "text/markdown;charset=utf-8");
   return { ok: true, mode, count: sections.length, translated: translateStat };
   } finally {
     _exportInFlight = null;
