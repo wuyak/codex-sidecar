@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from socket import timeout as _SocketTimeout
 
 from .utils import compose_auth_value, log_warn, normalize_url, sanitize_url
+from .batch_prompt import looks_like_translate_batch_prompt as _looks_like_translate_batch_prompt
 
 
 NVIDIA_CHAT_MODELS = (
@@ -38,15 +39,6 @@ _UNTRANSLATED_PATTERNS = (
 
 _MD_FENCE_RE = re.compile(r"^\s*```")
 _MD_HEADING_RE = re.compile(r"^\s*#{1,6}\s+\S")
-
-
-def _looks_like_translate_batch_prompt(text: str) -> bool:
-    s = str(text or "")
-    return (
-        "<<<SIDECAR_TRANSLATE_BATCH_V1>>>" in s
-        and "<<<SIDECAR_ITEM:" in s
-        and "<<<SIDECAR_END>>>" in s
-    )
 
 
 def _build_zh_translation_prompt(text: str) -> str:

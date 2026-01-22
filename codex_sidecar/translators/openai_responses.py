@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from socket import timeout as _SocketTimeout
 
 from .utils import compose_auth_value, log_warn, normalize_url, sanitize_url
+from .batch_prompt import looks_like_translate_batch_prompt as _looks_like_translate_batch_prompt
 
 
 def _model_supports_reasoning(model: str) -> bool:
@@ -38,25 +39,6 @@ def _build_zh_translation_prompt(text: str) -> str:
         "内容要求：中文原样保留、仅翻译英文；代码块/命令/路径/变量名/JSON 原样不翻译；专有名词（API/HTTP/JSON/Codex/Sidecar 等）原样保留；原文中文为主则原样返回。\n\n"
         f"{sentinel_a}\n{text}\n{sentinel_b}\n"
     )
-
-
-def _looks_like_translate_batch_prompt(text: str) -> bool:
-    """
-    Detect the packed batch-translation prompt used by `watch/translate_batch.py`.
-
-    Important:
-    - For batch prompts, the caller already includes strict marker-preservation
-      instructions. Wrapping it again with a generic "translate everything" prompt
-      would cause the model to translate the instruction header/markers, breaking
-      unpacking on the sidecar.
-    """
-    s = str(text or "")
-    return (
-        "<<<SIDECAR_TRANSLATE_BATCH_V1>>>" in s
-        and "<<<SIDECAR_ITEM:" in s
-        and "<<<SIDECAR_END>>>" in s
-    )
-
 
 def _extract_openai_responses_text(obj) -> str:
     """
