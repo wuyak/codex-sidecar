@@ -4,6 +4,7 @@ import { getExportPrefsForKey } from "./export_prefs.js";
 import { isOfflineKey, offlineRelFromKey } from "./offline.js";
 import { loadOfflineZhMap, upsertOfflineZhBatch } from "./offline_zh.js";
 import { classifyToolCallText } from "./export/tool_calls.js";
+import { getQuickBlocks } from "./export/quick_blocks.js";
 import {
   extractExitCode,
   extractOutputBody,
@@ -183,47 +184,6 @@ function _convertKnownHtmlCodeBlocksToFences(md) {
     const decoded = _unescapeHtml(raw).replace(/\r\n/g, "\n").replace(/\r/g, "\n").trimEnd();
     return _safeCodeFence(decoded, "text");
   });
-}
-
-const _LS_QUICK_VIEW_BLOCKS = "codex_sidecar_quick_view_blocks_v1";
-const _KNOWN_QUICK_BLOCKS = new Set(["user_message", "assistant_message", "reasoning_summary", "tool_gate", "tool_call", "tool_output", "update_plan"]);
-const _DEFAULT_QUICK_BLOCKS = new Set(["user_message", "assistant_message", "reasoning_summary", "tool_gate", "update_plan"]);
-
-function _sanitizeQuickBlocks(raw) {
-  const src = raw instanceof Set ? Array.from(raw) : (Array.isArray(raw) ? raw : []);
-  const out = new Set();
-  for (const x of src) {
-    const k = String(x || "").trim();
-    if (!k) continue;
-    if (!_KNOWN_QUICK_BLOCKS.has(k)) continue;
-    out.add(k);
-  }
-  return out.size > 0 ? out : null;
-}
-
-function _loadQuickBlocksFromLocalStorage() {
-  try {
-    if (typeof localStorage === "undefined") return null;
-    const raw = String(localStorage.getItem(_LS_QUICK_VIEW_BLOCKS) || "").trim();
-    if (!raw) return null;
-    const obj = JSON.parse(raw);
-    if (Array.isArray(obj)) return _sanitizeQuickBlocks(obj);
-    if (obj && typeof obj === "object" && Array.isArray(obj.enabled)) return _sanitizeQuickBlocks(obj.enabled);
-  } catch (_) {}
-  return null;
-}
-
-function _getQuickBlocks(state) {
-  try {
-    const raw = state && state.quickViewBlocks ? state.quickViewBlocks : null;
-    const fromState = _sanitizeQuickBlocks(raw);
-    if (fromState) return fromState;
-  } catch (_) {}
-  try {
-    const fromLs = _loadQuickBlocksFromLocalStorage();
-    if (fromLs) return fromLs;
-  } catch (_) {}
-  return new Set(_DEFAULT_QUICK_BLOCKS);
 }
 
 function _renderUpdatePlan(planArgs) {
@@ -617,7 +577,7 @@ export async function exportThreadMarkdown(state, key, opts = {}) {
 
   const mode = String(opts.mode || "").trim().toLowerCase() === "full" ? "full" : "quick";
   const reasoningLang = String(opts.reasoningLang || "auto").trim().toLowerCase();
-  const quickBlocks = _getQuickBlocks(state);
+  const quickBlocks = getQuickBlocks(state);
 
   let messages = [];
   const thread = (state && state.threadIndex && typeof state.threadIndex.get === "function")
