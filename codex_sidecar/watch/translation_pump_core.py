@@ -6,6 +6,7 @@ from typing import Any, Callable, Deque, Dict, List, Optional, Set, Tuple
 
 from ..translator import Translator
 from .translate_batch import _pack_translate_batch, _unpack_translate_batch
+from .translation_batch_worker import emit_translate_batch
 from .translation_queue import TranslationQueueState
 
 
@@ -402,56 +403,18 @@ class TranslationPump:
                             pass
                     continue
 
-                packed = _pack_translate_batch(pairs)
-                out = ""
-                try:
-                    out = self._translator.translate(packed)
-                except Exception:
-                    out = ""
-                if not str(out or "").strip():
-                    # Batch request failed; mark all as error (do not fallback to per-item to avoid request storms).
-                    berr = self._normalize_err("批量翻译失败")
-                    for iid, _itxt in pairs:
-                        if stop_event.is_set():
-                            break
-                        self._emit_translate(iid, "", berr)
-                        self._done_items += 1
-                        try:
-                            self._done_id(iid)
-                        except Exception:
-                            pass
-                    self._done_batches += 1
-                    self._last_batch_n = len(pairs)
-                    self._last_translate_ms = (time.monotonic() - t0) * 1000.0
-                    self._last_key = key
-                    self._last_ts = time.time()
-                    continue
-
-                mapping = _unpack_translate_batch(out, wanted_ids=wanted)
-                # If the model fails to follow the marker protocol, fallback to per-item translation
-                # (bounded by batch size) to avoid silent gaps in UI.
-                fallback_budget = max(1, len(pairs))
-
-                for iid, itxt in pairs:
-                    if stop_event.is_set():
-                        break
-                    raw = mapping.get(iid) if isinstance(mapping, dict) else None
-                    z = str(raw or "").strip()
-                    if z:
-                        self._emit_translate(iid, z, "")
-                    else:
-                        # Missing/empty unpack: do a very limited fallback; otherwise surface an error for manual retry.
-                        if fallback_budget > 0:
-                            fallback_budget -= 1
-                            z2, e2 = self._translate_one(itxt)
-                            self._emit_translate(iid, z2, e2)
-                        else:
-                            self._emit_translate(iid, "", "批量翻译解包缺失")
-                    self._done_items += 1
-                    try:
-                        self._done_id(iid)
-                    except Exception:
-                        pass
+                processed = emit_translate_batch(
+                    translator=self._translator,
+                    pairs=pairs,
+                    pack_translate_batch=_pack_translate_batch,
+                    unpack_translate_batch=_unpack_translate_batch,
+                    translate_one=self._translate_one,
+                    normalize_err=self._normalize_err,
+                    emit_translate=self._emit_translate,
+                    done_id=self._done_id,
+                    stop_requested=stop_event.is_set,
+                )
+                self._done_items += int(processed)
                 self._done_batches += 1
                 self._last_batch_n = len(pairs)
                 self._last_translate_ms = (time.monotonic() - t0) * 1000.0
