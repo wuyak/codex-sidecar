@@ -19,6 +19,7 @@ import { isOfflineKey, offlineKeyFromRel } from "../offline.js";
 import { removeOfflineShowByKey, saveOfflineShowList } from "../offline_show.js";
 import { wireImportDialog } from "./wire/import_dialog.js";
 import { hideUiHoverTip, openPopupNearEl, showUiHoverTip, toastFromEl } from "./wire/ui_hints.js";
+import { LS_UI_BTN, LS_UI_FONT, applyUiButtonSize, applyUiFontSize } from "./ui_prefs.js";
 
 export function wireControlEvents(dom, state, helpers) {
   const h = (helpers && typeof helpers === "object") ? helpers : {};
@@ -26,27 +27,7 @@ export function wireControlEvents(dom, state, helpers) {
   const onSelectKey = typeof h.onSelectKey === "function" ? h.onSelectKey : (async () => {});
   const renderTabs = typeof h.renderTabs === "function" ? h.renderTabs : (() => {});
   const MASK = "********";
-  const _LS_UI_FONT = "codex_sidecar_ui_font_size";
-  const _LS_UI_BTN = "codex_sidecar_ui_btn_size";
   const _LS_TABS_COLLAPSED = "codex_sidecar_tabs_collapsed_v1";
-
-  const _applyUiFontSize = (px) => {
-    const n = Number(px);
-    const v = Number.isFinite(n) && n >= 12 && n <= 24 ? n : 14;
-    try { document.documentElement.style.setProperty("--ui-font-size", `${v}px`); } catch (_) {}
-    return v;
-  };
-
-  const _applyUiButtonSize = (px) => {
-    const n = Number(px);
-    const v = Number.isFinite(n) && n >= 32 && n <= 72 ? n : 38;
-    try { document.documentElement.style.setProperty("--rightbar-w", `${v}px`); } catch (_) {}
-    try {
-      const ico = v >= 56 ? 24 : v >= 48 ? 22 : v >= 42 ? 20 : 18;
-      document.documentElement.style.setProperty("--ui-ico-size", `${ico}px`);
-    } catch (_) {}
-    return v;
-  };
 
   const syncTranslateToggle = () => {
     const btn = dom && dom.translateToggleBtn ? dom.translateToggleBtn : null;
@@ -274,7 +255,7 @@ export function wireControlEvents(dom, state, helpers) {
   const _applyUiFontInput = (silent = false) => {
     const el = dom && dom.uiFontSize ? dom.uiFontSize : null;
     if (!el) return;
-    const prev = _readSavedInt(_LS_UI_FONT, 14);
+    const prev = _readSavedInt(LS_UI_FONT, 14);
     const n = _parseIntStrict(el.value);
     if (n == null || n < 12 || n > 24) {
       _setInvalid(el, true);
@@ -282,8 +263,8 @@ export function wireControlEvents(dom, state, helpers) {
       return;
     }
     _setInvalid(el, false);
-    const v = _applyUiFontSize(n);
-    try { localStorage.setItem(_LS_UI_FONT, String(v)); } catch (_) {}
+    const v = applyUiFontSize(n);
+    try { localStorage.setItem(LS_UI_FONT, String(v)); } catch (_) {}
   };
 
   const _applyUiFontDraft = () => {
@@ -295,13 +276,13 @@ export function wireControlEvents(dom, state, helpers) {
     const n = Number.parseInt(s, 10);
     if (!Number.isFinite(n) || n < 12 || n > 24) { _setInvalid(el, true); return; }
     _setInvalid(el, false);
-    _applyUiFontSize(n);
+    applyUiFontSize(n);
   };
 
   const _applyUiBtnInput = (silent = false) => {
     const el = dom && dom.uiBtnSize ? dom.uiBtnSize : null;
     if (!el) return;
-    const prev = _readSavedInt(_LS_UI_BTN, 38);
+    const prev = _readSavedInt(LS_UI_BTN, 38);
     const n = _parseIntStrict(el.value);
     if (n == null || n < 32 || n > 72) {
       _setInvalid(el, true);
@@ -309,8 +290,8 @@ export function wireControlEvents(dom, state, helpers) {
       return;
     }
     _setInvalid(el, false);
-    const v = _applyUiButtonSize(n);
-    try { localStorage.setItem(_LS_UI_BTN, String(v)); } catch (_) {}
+    const v = applyUiButtonSize(n);
+    try { localStorage.setItem(LS_UI_BTN, String(v)); } catch (_) {}
   };
 
   const _applyUiBtnDraft = () => {
@@ -322,7 +303,7 @@ export function wireControlEvents(dom, state, helpers) {
     const n = Number.parseInt(s, 10);
     if (!Number.isFinite(n) || n < 32 || n > 72) { _setInvalid(el, true); return; }
     _setInvalid(el, false);
-    _applyUiButtonSize(n);
+    applyUiButtonSize(n);
   };
 
   if (dom.uiFontSize) {
