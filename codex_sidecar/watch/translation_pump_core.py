@@ -2,13 +2,14 @@ import queue
 import threading
 import time
 from collections import deque
-from typing import Any, Callable, Deque, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Deque, Dict, List, Optional, Tuple
 
 from ..translator import Translator
 from .translate_batch import _pack_translate_batch, _unpack_translate_batch
 from .translation_batch_worker import emit_translate_batch
 from .translation_queue import TranslationQueueState
 from .translation_pump_batching import collect_batch_from_lo
+from .translation_pump_items import collect_ids, collect_pairs
 
 
 class TranslationPump:
@@ -355,15 +356,7 @@ class TranslationPump:
                         pass
                     continue
 
-                pairs: List[Tuple[str, str]] = []
-                wanted: Set[str] = set()
-                for it in batch:
-                    iid = str(it.get("id") or "").strip()
-                    itxt = str(it.get("text") or "")
-                    if not iid or not itxt.strip():
-                        continue
-                    pairs.append((iid, itxt))
-                    wanted.add(iid)
+                pairs = collect_pairs(batch)
                 if len(pairs) <= 1:
                     zh, err = self._translate_one(text)
                     if stop_event.is_set():
@@ -376,12 +369,8 @@ class TranslationPump:
                     self._last_key = key
                     self._last_ts = time.time()
                     try:
-                        for it in batch:
-                            if not isinstance(it, dict):
-                                continue
-                            iid = str(it.get("id") or "").strip()
-                            if iid:
-                                self._done_id(iid)
+                        for iid in collect_ids(batch):
+                            self._done_id(iid)
                     except Exception:
                         try:
                             self._done_id(mid)
@@ -413,12 +402,8 @@ class TranslationPump:
                 except Exception:
                     pass
                 try:
-                    for it in batch:
-                        if not isinstance(it, dict):
-                            continue
-                        iid = str(it.get("id") or "").strip()
-                        if iid:
-                            self._done_id(iid)
+                    for iid in collect_ids(batch):
+                        self._done_id(iid)
                 except Exception:
                     pass
                 continue
