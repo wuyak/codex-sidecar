@@ -24,6 +24,7 @@ from .rollout_tailer import poll_one, replay_tail
 from .rollout_follow_state import apply_follow_targets, now_ts
 from .follow_control_helpers import clean_exclude_files, clean_exclude_keys, resolve_pinned_rollout_file
 from .rollout_follow_sync import FollowControls, build_follow_sync_plan
+from .rollout_watcher_loop import should_poll_tui
 
 @dataclass
 class _FileCursor:
@@ -387,18 +388,13 @@ class RolloutWatcher:
                 self._last_file_scan_ts = now
             self._poll_follow_files()
             try:
-                # When process-follow is enabled and no Codex process is detected, polling
-                # the Codex TUI log at the normal "poll" cadence is mostly wasted work.
-                # Throttle it to the scan cadence (still responsive enough, cheaper idle).
-                do_tui = True
-                if self._follow_mode in ("idle", "wait_codex") and (not self._codex_detected):
-                    try:
-                        last = float(self._last_tui_poll_ts or 0.0)
-                    except Exception:
-                        last = 0.0
-                    if (now - last) < float(self._file_scan_interval_s or 0.0):
-                        do_tui = False
-                if do_tui:
+                if should_poll_tui(
+                    follow_mode=self._follow_mode,
+                    codex_detected=bool(self._codex_detected),
+                    now_ts=float(now),
+                    last_poll_ts=float(self._last_tui_poll_ts or 0.0),
+                    file_scan_interval_s=float(self._file_scan_interval_s or 0.0),
+                ):
                     self._last_tui_poll_ts = now
                     self._tui.poll(
                         thread_id=self._thread_id or "",

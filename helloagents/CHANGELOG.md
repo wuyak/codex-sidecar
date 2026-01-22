@@ -26,6 +26,7 @@
 - 重构(后端)：TranslationPump 的批量翻译执行/解包/回退逻辑抽离到 `codex_sidecar/watch/translation_batch_worker.py`，降低 `_worker()` 复杂度并补充单测（行为保持不变）。
 - 重构(后端)：TranslationPump 的 lo 队列 batch 聚合与不同 key 回退逻辑抽离到 `codex_sidecar/watch/translation_pump_batching.py`，进一步降低 `_worker()` 内联分支（行为保持不变）。
 - 重构(后端)：TranslationPump 的 batch items 解析与过滤抽离到 `codex_sidecar/watch/translation_pump_items.py`，并新增单测覆盖（行为保持不变）。
+- 重构(后端)：RolloutWatcher 的 TUI 轮询节流判断抽离到 `codex_sidecar/watch/rollout_watcher_loop.py`，并新增单测覆盖（行为保持不变）。
 - 重构(后端)：HTTP Handler 的 JSON 解析与 config/status payload 组装抽离到 `codex_sidecar/http/json_helpers.py` 与 `codex_sidecar/http/config_payload.py`，并新增单测覆盖（行为保持不变）。
 - 重构(后端)：`/ingest` 的 JSON 解析复用 `parse_json_object` 并新增端到端 HTTP 测试覆盖（行为保持不变）。
 - 重构(后端)：Controller 的 follow_excludes 输入清洗复用 `watch/follow_control_helpers.clean_exclude_keys`，减少重复并补单测覆盖（行为保持不变）。
