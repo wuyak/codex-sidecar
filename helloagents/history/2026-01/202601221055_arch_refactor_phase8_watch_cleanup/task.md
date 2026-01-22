@@ -11,7 +11,7 @@
 - [√] 2.1 执行安全检查（按G9: 输入验证、敏感信息处理、权限控制、EHRB风险规避）
 
 ## 3. 文档更新
-- [ ] 3.1 更新 `helloagents/CHANGELOG.md` 与 `helloagents/history/index.md`（如有必要）
+- [√] 3.1 更新 `helloagents/CHANGELOG.md` 与 `helloagents/history/index.md`（如有必要）
 
 ## 4. 测试
 - [√] 4.1 运行单测：`python3 -m unittest discover -s tests`
