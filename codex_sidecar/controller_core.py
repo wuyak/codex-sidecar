@@ -19,6 +19,7 @@ from .control.follow_control_api import (
     normalize_follow as _normalize_follow,
     normalize_follow_excludes as _normalize_follow_excludes,
 )
+from .control.translator_meta import translator_error as _translator_error, translator_model as _translator_model
 from .control.watcher_lifecycle import request_stop_and_join as _request_stop_and_join
 from .translator import Translator
 from .watcher import HttpIngestClient, RolloutWatcher
@@ -69,26 +70,6 @@ class SidecarController:
     def translators(self) -> Dict[str, Any]:
         return {"translators": [t.__dict__ for t in TRANSLATORS]}
 
-    def _translator_error(self, tr: Translator) -> str:
-        err = ""
-        try:
-            err = str(getattr(tr, "last_error", "") or "").strip()
-        except Exception:
-            err = ""
-        if err.startswith("WARN:"):
-            err = err[len("WARN:") :].strip()
-        return err
-
-    def _translator_model(self, tr: Translator, provider_fallback: str) -> str:
-        model = ""
-        try:
-            model = str(getattr(tr, "_resolved_model", "") or getattr(tr, "model", "") or "").strip()
-        except Exception:
-            model = ""
-        if not model:
-            model = str(provider_fallback or "").strip()
-        return model
-
     def _build_translator(self, cfg: SidecarConfig) -> Optional[Translator]:
         try:
             # Late-bind build_translator via the public controller module so tests/tools
@@ -112,8 +93,8 @@ class SidecarController:
         return _translate_probe(
             cfg=cfg,
             build_translator=self._build_translator,
-            translator_error=self._translator_error,
-            translator_model=self._translator_model,
+            translator_error=_translator_error,
+            translator_model=_translator_model,
         )
 
     def translate_text(self, text: str) -> Dict[str, Any]:
@@ -122,8 +103,8 @@ class SidecarController:
         return _translate_text(
             cfg=cfg,
             build_translator=self._build_translator,
-            translator_error=self._translator_error,
-            translator_model=self._translator_model,
+            translator_error=_translator_error,
+            translator_model=_translator_model,
             text=text,
         )
 
@@ -133,8 +114,8 @@ class SidecarController:
         return _translate_items(
             cfg=cfg,
             build_translator=self._build_translator,
-            translator_error=self._translator_error,
-            translator_model=self._translator_model,
+            translator_error=_translator_error,
+            translator_model=_translator_model,
             items=items,
         )
 
