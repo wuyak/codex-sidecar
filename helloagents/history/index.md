@@ -3,6 +3,7 @@
 > 该目录存放已执行的方案包（从 `helloagents/plan/` 迁移而来）。
 
 ## 2026-01
+- 202601221248_arch_refactor_phase15_tui_gate_helpers
 - 202601221237_arch_refactor_phase14_follow_picker_helpers
 - 202601221205_arch_refactor_phase13_config_load_refactor
 - 202601221157_arch_refactor_phase12_controller_config_patch
