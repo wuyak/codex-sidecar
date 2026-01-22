@@ -62,6 +62,67 @@ export function wireBookmarkDrawer(dom, state, helpers = {}) {
     return true;
   };
 
+  const _wireExportPrefsLongPress = (btn, key) => {
+    if (!btn) return;
+    const k = String(key || "");
+    if (!k) return;
+    try {
+      let pressT = 0;
+      let startX = 0;
+      let startY = 0;
+      let moved = false;
+      let pressed = false;
+      let longFired = false;
+      const LONG_MS = 520;
+      const MOVE_PX = 8;
+
+      const clear = () => {
+        pressed = false;
+        if (pressT) { try { clearTimeout(pressT); } catch (_) {} }
+        pressT = 0;
+      };
+
+      btn.addEventListener("pointerdown", (e) => {
+        try { if (e && typeof e.button === "number" && e.button !== 0) return; } catch (_) {}
+        moved = false;
+        pressed = true;
+        longFired = false;
+        startX = Number(e && e.clientX) || 0;
+        startY = Number(e && e.clientY) || 0;
+        if (pressT) { try { clearTimeout(pressT); } catch (_) {} }
+        pressT = window.setTimeout(() => {
+          if (!pressed || moved) return;
+          longFired = true;
+          try {
+            const dlg = dom && dom.exportPrefsDialog ? dom.exportPrefsDialog : null;
+            if (dlg && dlg.open) { try { dlg.close(); } catch (_) {} return; }
+          } catch (_) {}
+          try { openExportPrefsPanel(k, btn); } catch (_) {}
+        }, LONG_MS);
+      });
+      btn.addEventListener("pointermove", (e) => {
+        if (!pressed) return;
+        const x = Number(e && e.clientX) || 0;
+        const y = Number(e && e.clientY) || 0;
+        const dx = x - startX;
+        const dy = y - startY;
+        if ((dx * dx + dy * dy) > (MOVE_PX * MOVE_PX)) {
+          moved = true;
+          if (pressT) { try { clearTimeout(pressT); } catch (_) {} }
+          pressT = 0;
+        }
+      });
+      btn.addEventListener("pointerup", clear);
+      btn.addEventListener("pointercancel", clear);
+      btn.addEventListener("pointerleave", clear);
+      btn.addEventListener("click", (e) => {
+        if (!longFired) return;
+        longFired = false;
+        try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+      });
+    } catch (_) {}
+  };
+
   const _isBookmarkDrawerOpen = () => {
     try {
       return !!(dom.bookmarkDrawer && dom.bookmarkDrawer.classList && !dom.bookmarkDrawer.classList.contains("hidden"));
@@ -222,61 +283,7 @@ export function wireBookmarkDrawer(dom, state, helpers = {}) {
       `;
 
       // Long-press: open export prefs panel (same as live list).
-      try {
-        let pressT = 0;
-        let startX = 0;
-        let startY = 0;
-        let moved = false;
-        let pressed = false;
-        let longFired = false;
-        const LONG_MS = 520;
-        const MOVE_PX = 8;
-
-        const clear = () => {
-          pressed = false;
-          if (pressT) { try { clearTimeout(pressT); } catch (_) {} }
-          pressT = 0;
-        };
-
-        exportBtn.addEventListener("pointerdown", (e) => {
-          try { if (e && typeof e.button === "number" && e.button !== 0) return; } catch (_) {}
-          moved = false;
-          pressed = true;
-          longFired = false;
-          startX = Number(e && e.clientX) || 0;
-          startY = Number(e && e.clientY) || 0;
-          if (pressT) { try { clearTimeout(pressT); } catch (_) {} }
-          pressT = window.setTimeout(() => {
-            if (!pressed || moved) return;
-            longFired = true;
-            try {
-              const dlg = dom && dom.exportPrefsDialog ? dom.exportPrefsDialog : null;
-              if (dlg && dlg.open) { try { dlg.close(); } catch (_) {} return; }
-            } catch (_) {}
-            try { openExportPrefsPanel(key, exportBtn); } catch (_) {}
-          }, LONG_MS);
-        });
-        exportBtn.addEventListener("pointermove", (e) => {
-          if (!pressed) return;
-          const x = Number(e && e.clientX) || 0;
-          const y = Number(e && e.clientY) || 0;
-          const dx = x - startX;
-          const dy = y - startY;
-          if ((dx * dx + dy * dy) > (MOVE_PX * MOVE_PX)) {
-            moved = true;
-            if (pressT) { try { clearTimeout(pressT); } catch (_) {} }
-            pressT = 0;
-          }
-        });
-        exportBtn.addEventListener("pointerup", clear);
-        exportBtn.addEventListener("pointercancel", clear);
-        exportBtn.addEventListener("pointerleave", clear);
-        exportBtn.addEventListener("click", (e) => {
-          if (!longFired) return;
-          longFired = false;
-          try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
-        });
-      } catch (_) {}
+      _wireExportPrefsLongPress(exportBtn, key);
 
       const removeBtn = document.createElement("button");
       removeBtn.className = "mini-btn danger";
@@ -534,61 +541,7 @@ export function wireBookmarkDrawer(dom, state, helpers = {}) {
           <span class="mini-flag flag-quick" aria-hidden="true"><svg class="ico ico-mini" aria-hidden="true"><use href="#i-bolt"></use></svg></span>
         `;
         wireMiniBtnHoverTip(exportBtn);
-        try {
-          let pressT = 0;
-          let startX = 0;
-          let startY = 0;
-          let moved = false;
-          let pressed = false;
-          let longFired = false;
-          const LONG_MS = 520;
-          const MOVE_PX = 8;
-
-          const clear = () => {
-            pressed = false;
-            if (pressT) { try { clearTimeout(pressT); } catch (_) {} }
-            pressT = 0;
-          };
-
-          exportBtn.addEventListener("pointerdown", (e) => {
-            try { if (e && typeof e.button === "number" && e.button !== 0) return; } catch (_) {}
-            moved = false;
-            pressed = true;
-            longFired = false;
-            startX = Number(e && e.clientX) || 0;
-            startY = Number(e && e.clientY) || 0;
-            if (pressT) { try { clearTimeout(pressT); } catch (_) {} }
-            pressT = window.setTimeout(() => {
-              if (!pressed || moved) return;
-              longFired = true;
-              try {
-                const dlg = dom && dom.exportPrefsDialog ? dom.exportPrefsDialog : null;
-                if (dlg && dlg.open) { try { dlg.close(); } catch (_) {} return; }
-              } catch (_) {}
-              try { openExportPrefsPanel(String(it.key || ""), exportBtn); } catch (_) {}
-            }, LONG_MS);
-          });
-          exportBtn.addEventListener("pointermove", (e) => {
-            if (!pressed) return;
-            const x = Number(e && e.clientX) || 0;
-            const y = Number(e && e.clientY) || 0;
-            const dx = x - startX;
-            const dy = y - startY;
-            if ((dx * dx + dy * dy) > (MOVE_PX * MOVE_PX)) {
-              moved = true;
-              if (pressT) { try { clearTimeout(pressT); } catch (_) {} }
-              pressT = 0;
-            }
-          });
-          exportBtn.addEventListener("pointerup", clear);
-          exportBtn.addEventListener("pointercancel", clear);
-          exportBtn.addEventListener("pointerleave", clear);
-          exportBtn.addEventListener("click", (e) => {
-            if (!longFired) return;
-            longFired = false;
-            try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
-          });
-        } catch (_) {}
+        _wireExportPrefsLongPress(exportBtn, String(it.key || ""));
 
         const toggleBtn = document.createElement("button");
         toggleBtn.className = "mini-btn";
