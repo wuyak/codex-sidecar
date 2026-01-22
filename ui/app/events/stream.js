@@ -219,8 +219,8 @@ export function connectEventStream(dom, state, upsertThread, renderTabs, renderM
             notifyCorner("tool_gate", "终端已确认", _summarizeToolGate(txt) || "tool gate 已解除。", { level: "success", ttlMs: 1600 });
           } else if (_toolGateWaiting(txt)) {
             notifyCorner("tool_gate", "终端等待确认", summary, { level: "warn", sticky: true });
-            // tool_gate 属于“显式通知”：无论当前是否在对应会话，都应提示；但回放/历史补齐不应响铃/不计未读。
-            if (!isReplay && _shouldRingForId(state, mid)) {
+            // tool_gate 属于“显式通知”：无论当前是否在对应会话、是否为回放/补齐，都应计入未读并提示音。
+            if (_shouldRingForId(state, mid)) {
               const r = markUnread(state, msg, { queue: true });
               if (r && r.added) {
                 updateUnreadButton(dom, state);
@@ -229,7 +229,7 @@ export function connectEventStream(dom, state, upsertThread, renderTabs, renderM
             }
           } else if (_toolGateHint(txt)) {
             notifyCorner("tool_gate", "终端可能需要确认", summary, { level: "warn", ttlMs: 5200 });
-            if (!isReplay && _shouldRingForId(state, mid)) {
+            if (_shouldRingForId(state, mid)) {
               const r = markUnread(state, msg, { queue: true });
               if (r && r.added) {
                 updateUnreadButton(dom, state);
@@ -239,7 +239,7 @@ export function connectEventStream(dom, state, upsertThread, renderTabs, renderM
           } else {
             // Unknown tool_gate variants: still surface as attention-worthy.
             notifyCorner("tool_gate", "终端提示", summary, { level: "warn", ttlMs: 3600 });
-            if (!isReplay && _shouldRingForId(state, mid)) {
+            if (_shouldRingForId(state, mid)) {
               const r = markUnread(state, msg, { queue: true });
               if (r && r.added) {
                 updateUnreadButton(dom, state);
