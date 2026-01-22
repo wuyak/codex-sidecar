@@ -13,7 +13,7 @@
 
 ## 3. 文档更新
 - [√] 3.1 更新 `helloagents/wiki/modules/rollout_sidecar.md`
-- [ ] 3.2 更新 `helloagents/CHANGELOG.md` 与 `helloagents/history/index.md`
+- [√] 3.2 更新 `helloagents/CHANGELOG.md` 与 `helloagents/history/index.md`
 
 ## 4. 测试
 - [√] 4.1 运行单测：`python3 -m unittest discover -s tests`
