@@ -24,7 +24,7 @@ from .rollout_tailer import poll_one, replay_tail
 from .rollout_follow_state import apply_follow_targets, now_ts
 from .follow_control_helpers import clean_exclude_files, clean_exclude_keys, resolve_pinned_rollout_file
 from .rollout_follow_sync import FollowControls, build_follow_sync_plan
-from .rollout_watcher_loop import should_poll_tui
+from .rollout_watcher_loop import decide_follow_sync_force, should_poll_tui
 from .rollout_watcher_status import build_watcher_status
 
 @dataclass
@@ -382,11 +382,14 @@ class RolloutWatcher:
                         force_switch = True
             except Exception:
                 force_switch = False
-            if force_switch:
-                self._sync_follow_targets(force=True)
-                self._last_file_scan_ts = now
-            if now - self._last_file_scan_ts >= self._file_scan_interval_s:
-                self._sync_follow_targets(force=False)
+            force = decide_follow_sync_force(
+                force_switch=force_switch,
+                now_ts=float(now),
+                last_scan_ts=float(self._last_file_scan_ts or 0.0),
+                file_scan_interval_s=float(self._file_scan_interval_s or 0.0),
+            )
+            if force is not None:
+                self._sync_follow_targets(force=bool(force))
                 self._last_file_scan_ts = now
             self._poll_follow_files()
             try:

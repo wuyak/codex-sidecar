@@ -1,6 +1,6 @@
 import unittest
 
-from codex_sidecar.watch.rollout_watcher_loop import should_poll_tui
+from codex_sidecar.watch.rollout_watcher_loop import decide_follow_sync_force, should_poll_tui
 
 
 class TestRolloutWatcherLoop(unittest.TestCase):
@@ -48,7 +48,36 @@ class TestRolloutWatcherLoop(unittest.TestCase):
                 msg=f"mode={mode}",
             )
 
+    def test_decide_follow_sync_force_immediate_when_force_switch(self) -> None:
+        self.assertEqual(
+            decide_follow_sync_force(
+                force_switch=True,
+                now_ts=10.0,
+                last_scan_ts=0.0,
+                file_scan_interval_s=2.0,
+            ),
+            True,
+        )
+
+    def test_decide_follow_sync_force_periodic_when_due(self) -> None:
+        self.assertEqual(
+            decide_follow_sync_force(
+                force_switch=False,
+                now_ts=10.0,
+                last_scan_ts=7.9,
+                file_scan_interval_s=2.0,
+            ),
+            False,
+        )
+        self.assertIsNone(
+            decide_follow_sync_force(
+                force_switch=False,
+                now_ts=9.0,
+                last_scan_ts=7.9,
+                file_scan_interval_s=2.0,
+            )
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
-

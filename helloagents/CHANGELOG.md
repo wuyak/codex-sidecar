@@ -17,6 +17,7 @@
 - 重构(后端)：watcher 热更新逻辑抽离到 `codex_sidecar/control/watcher_hot_updates.py`，并新增单测覆盖（行为保持不变）。
 - 重构(后端)：controller 的 follow 控制逻辑抽离到 `codex_sidecar/control/follow_control_api.py`，并新增单测覆盖（行为保持不变）。
 - 重构(后端)：RolloutWatcher 的 status payload 组装抽离到 `codex_sidecar/watch/rollout_watcher_status.py`，并新增单测覆盖（行为保持不变）。
+- 重构(后端)：RolloutWatcher 的 run loop 同步调度判断抽离到 `codex_sidecar/watch/rollout_watcher_loop.py`（并扩展单测覆盖，行为保持不变）。
 - 重构(后端)：controller 停止 watcher 线程的 stop/join 逻辑抽离到 `codex_sidecar/control/watcher_lifecycle.py`，并新增单测覆盖（行为保持不变）。
 - 修复(后端)：`update_config` 触发 controller 自锁死锁导致 `/api/config` / `/api/status` 永久卡死（`/health` 仍正常、UI 空白）；调整为热更新在锁外执行，并增加回归测试覆盖。
 - 重构(后端)：watch 层进一步分层（`codex_sidecar/watcher.py` facade → `codex_sidecar/watch/rollout_watcher.py`），并抽离 `ingest_client` / `approval_hint` 降低耦合。
