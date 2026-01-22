@@ -3,6 +3,7 @@
 > 该目录存放已执行的方案包（从 `helloagents/plan/` 迁移而来）。
 
 ## 2026-01
+- 202601221515_arch_refactor_phase24_controller_follow_excludes
 - 202601221509_arch_refactor_phase23_http_ingest_json
 - 202601221454_arch_refactor_phase22_http_handler_helpers
 - 202601221439_arch_refactor_phase21_translation_pump_items
