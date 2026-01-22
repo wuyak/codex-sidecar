@@ -1,16 +1,13 @@
-import { closeBookmarkDrawer, confirmDialog, openBookmarkDrawer } from "../ui.js";
+import { closeBookmarkDrawer, openBookmarkDrawer } from "../ui.js";
 import { copyToClipboard } from "../../utils/clipboard.js";
 import { colorForKey, rolloutStampFromFile, shortId } from "../../utils.js";
 import { getExportPrefsForKey } from "../../export_prefs.js";
-import { exportThreadMarkdown } from "../../export.js";
-import { getCustomLabel, setCustomLabel } from "../../sidebar/labels.js";
-import { saveClosedThreads } from "../../closed_threads.js";
-import { saveHiddenThreads } from "../../sidebar/hidden.js";
+import { getCustomLabel } from "../../sidebar/labels.js";
 import { getUnreadCount } from "../../unread.js";
 import { isOfflineKey, offlineKeyFromRel } from "../../offline.js";
-import { removeOfflineShowByKey, saveOfflineShowList } from "../../offline_show.js";
 import { hideUiHoverTip, showUiHoverTip, toastFromEl } from "./ui_hints.js";
 import { wireImportDialog } from "./import_dialog.js";
+import { wireBookmarkDrawerInteractions } from "./bookmark_drawer/interactions.js";
 
 const _LS_TABS_COLLAPSED = "codex_sidecar_tabs_collapsed_v1";
 
@@ -914,275 +911,15 @@ export function wireBookmarkDrawer(dom, state, helpers = {}) {
   if (dom && dom.bookmarkDrawerOverlay) dom.bookmarkDrawerOverlay.addEventListener("click", () => { closeBookmarkDrawer(dom); });
   if (dom && dom.bookmarkDrawerCloseBtn) dom.bookmarkDrawerCloseBtn.addEventListener("click", () => { closeBookmarkDrawer(dom); });
 
-  const _enterInlineRename = (row, key, opts = {}) => {
-    const k = String(key || "");
-    if (!row || !k) return;
-    if (_bookmarkDrawerEditingKey && _bookmarkDrawerEditingKey !== k) return;
-    const input = row.querySelector ? row.querySelector("input.tab-edit") : null;
-    const labelEl = row.querySelector ? row.querySelector(".tab-label") : null;
-    if (!input || !labelEl) return;
-    const o = (opts && typeof opts === "object") ? opts : {};
-    const defaultLabel = String(o.defaultLabel || "").trim();
-    _bookmarkDrawerEditingKey = k;
-    try { row.classList.add("editing"); } catch (_) {}
-
-    let done = false;
-    const finish = (commit) => {
-      if (done) return;
-      done = true;
-      const t = state.threadIndex.get(k) || { key: k, thread_id: "", file: "" };
-      const def = defaultLabel || _threadDefaultLabel(t);
-      const raw = String(input.value || "");
-      const v = raw.trim();
-      if (commit) setCustomLabel(k, v);
-      const nextLabel = getCustomLabel(k) || def;
-      try { labelEl.textContent = nextLabel; } catch (_) {}
-      try { input.value = nextLabel; } catch (_) {}
-      try { row.classList.remove("editing"); } catch (_) {}
-      _bookmarkDrawerEditingKey = "";
-      try { renderTabs(); } catch (_) {}
-      if (commit) _toastFromEl(input, v ? "已重命名" : "已恢复默认名");
-    };
-
-    input.onkeydown = (e) => {
-      const kk = String(e && e.key ? e.key : "");
-      if (kk === "Enter") { try { e.preventDefault(); e.stopPropagation(); } catch (_) {} finish(true); }
-      if (kk === "Escape") { try { e.preventDefault(); e.stopPropagation(); } catch (_) {} finish(false); }
-    };
-    input.onblur = () => finish(true);
-
-    try {
-      const cur = getCustomLabel(k) || defaultLabel || _threadDefaultLabel(state.threadIndex.get(k) || {});
-      input.value = cur;
-      setTimeout(() => { try { input.focus(); input.select(); } catch (_) {} }, 0);
-    } catch (_) {}
-  };
-
-  const _handleBookmarkListClick = async (e) => {
-    const btn = e && e.target && e.target.closest ? e.target.closest("button[data-action]") : null;
-    const row = e && e.target && e.target.closest ? e.target.closest(".tab[data-key]") : null;
-    const key = row && row.dataset ? String(row.dataset.key || "") : "";
-    if (!row || !key) return;
-    const isHiddenRow = !!(row.dataset && row.dataset.hidden === "1");
-    if (row.classList && row.classList.contains("editing")) return;
-    try {
-      const lp = row.dataset ? Number(row.dataset.lp || 0) : 0;
-      if (lp && (Date.now() - lp) < 900) return;
-    } catch (_) {}
-
-    if (btn && btn.dataset) {
-      const action = String(btn.dataset.action || "");
-      try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
-      if (action === "rename") { _enterInlineRename(row, key); return; }
-      if (action === "export") {
-        const p = getExportPrefsForKey(key);
-        const mode = p.quick ? "quick" : "full";
-        const reasoningLang = p.translate ? "zh" : "en";
-        try { btn.disabled = true; } catch (_) {}
-        _toastFromEl(btn, "导出中…", { durationMs: 1400 });
-        let r = null;
-        try {
-          r = await exportThreadMarkdown(state, key, { mode, reasoningLang });
-        } catch (_) {
-          r = null;
-        }
-        if (r && r.ok) _toastFromEl(btn, "已导出");
-        else if (r && r.error === "export_in_flight") _toastFromEl(btn, "已有导出在进行中", { durationMs: 1400 });
-        else _toastFromEl(btn, "导出失败", { durationMs: 1400 });
-        try { btn.disabled = false; } catch (_) {}
-        return;
-      }
-      if (action === "delete") {
-        const labelText = row && row.dataset ? String(row.dataset.label || "") : "";
-        const ok = await confirmDialog(dom, {
-          title: "清除该会话？",
-          desc: `将从会话列表清除：${labelText || key}\n（不会删除原始会话文件；有新输出或重启后会自动回来）`,
-          confirmText: "清除",
-          cancelText: "取消",
-          danger: true,
-        });
-        if (!ok) return;
-        // “清除对话”仅用于清理僵尸会话：不应永久落入“已关闭监听”。
-        try {
-          const hidden = _ensureHiddenSet();
-          if (hidden && typeof hidden.delete === "function" && hidden.has(key)) {
-            hidden.delete(key);
-            saveHiddenThreads(hidden);
-          }
-        } catch (_) {}
-        const t0 = state.threadIndex.get(key) || { last_seq: 0 };
-        const atSeq = Number(t0 && t0.last_seq) || 0;
-        const kk = (t0 && t0.kinds && typeof t0.kinds === "object") ? t0.kinds : {};
-        const m = (state.closedThreads && typeof state.closedThreads.set === "function") ? state.closedThreads : (state.closedThreads = new Map());
-        m.set(key, {
-          at_seq: atSeq,
-          at_count: Number(t0 && t0.count) || 0,
-          at_ts: String((t0 && t0.last_ts) ? t0.last_ts : ""),
-          at_ms: Date.now(),
-          at_kinds: {
-            assistant_message: Number(kk.assistant_message) || 0,
-            user_message: Number(kk.user_message) || 0,
-            reasoning_summary: Number(kk.reasoning_summary) || 0,
-          },
-        });
-        try { saveClosedThreads(m); } catch (_) {}
-        _toastFromEl(btn, "已清除（有新输出或重启后会自动回来）");
-        try { renderTabs(); } catch (_) {}
-        _renderBookmarkDrawerList();
-        if (String(state.currentKey || "all") === key) {
-          await onSelectKey("all");
-        }
-        return;
-      }
-      if (action === "listenOff") {
-        const hidden = _ensureHiddenSet();
-        if (!hidden.has(key)) hidden.add(key);
-        saveHiddenThreads(hidden);
-        try { renderTabs(); } catch (_) {}
-        _renderBookmarkDrawerList();
-        if (String(state.currentKey || "all") === key) {
-          await onSelectKey(_pickFallbackKey(key));
-        }
-        return;
-      }
-      if (action === "listenOn") {
-        const hidden = _ensureHiddenSet();
-        if (hidden.has(key)) hidden.delete(key);
-        saveHiddenThreads(hidden);
-        try { renderTabs(); } catch (_) {}
-        _renderBookmarkDrawerList();
-        return;
-      }
-      if (action === "remove") {
-        const hidden = _ensureHiddenSet();
-        if (!hidden.has(key)) hidden.add(key);
-        saveHiddenThreads(hidden);
-        try { renderTabs(); } catch (_) {}
-        _renderBookmarkDrawerList();
-        if (String(state.currentKey || "all") === key) {
-          await onSelectKey(_pickFallbackKey(key));
-        }
-        return;
-      }
-      if (action === "restore") {
-        const hidden = _ensureHiddenSet();
-        if (hidden.has(key)) hidden.delete(key);
-        saveHiddenThreads(hidden);
-        try { renderTabs(); } catch (_) {}
-        _renderBookmarkDrawerList();
-        return;
-      }
-      return;
-    }
-
-    // 点击条目：切换会话（若来自“已移除”，则先恢复）
-    if (isHiddenRow) {
-      const hidden = _ensureHiddenSet();
-      if (hidden.has(key)) hidden.delete(key);
-      saveHiddenThreads(hidden);
-      try { renderTabs(); } catch (_) {}
-      _renderBookmarkDrawerList();
-    }
-    await onSelectKey(key);
-    closeBookmarkDrawer(dom);
-  };
-
-  const _handleBookmarkListKeydown = async (e) => {
-    if (!e) return;
-    const keyName = String(e.key || "");
-    if (keyName !== "Enter" && keyName !== " ") return;
-    const row = e.target && e.target.closest ? e.target.closest(".tab[data-key]") : null;
-    const key = row && row.dataset ? String(row.dataset.key || "") : "";
-    if (!row || !key) return;
-    try { e.preventDefault(); } catch (_) {}
-    await _handleBookmarkListClick({ target: row });
-  };
-
-  const _handleOfflineShowListClick = async (e) => {
-    const btn = e && e.target && e.target.closest ? e.target.closest("button[data-action]") : null;
-    const row = e && e.target && e.target.closest ? e.target.closest(".tab[data-key]") : null;
-    const key = row && row.dataset ? String(row.dataset.key || "") : "";
-    if (!row || !key) return;
-    if (row.classList && row.classList.contains("editing")) return;
-    try {
-      const lp = row.dataset ? Number(row.dataset.lp || 0) : 0;
-      if (lp && (Date.now() - lp) < 900) return;
-    } catch (_) {}
-
-    if (btn && btn.dataset) {
-      const action = String(btn.dataset.action || "");
-      try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
-      if (action === "rename") {
-        const rel = row.dataset ? String(row.dataset.rel || "") : "";
-        const file = row.dataset ? String(row.dataset.file || "") : "";
-        const tid = row.dataset ? String(row.dataset.threadId || "") : "";
-        const def = _threadDefaultLabel({ key, thread_id: tid, file: file || rel });
-        _enterInlineRename(row, key, { defaultLabel: def });
-        return;
-      }
-      if (action === "export") {
-        const p = getExportPrefsForKey(key);
-        const mode = p.quick ? "quick" : "full";
-        const reasoningLang = p.translate ? "zh" : "en";
-        try { btn.disabled = true; } catch (_) {}
-        _toastFromEl(btn, "导出中…", { durationMs: 1400 });
-        let r = null;
-        try {
-          r = await exportThreadMarkdown(state, key, { mode, reasoningLang });
-        } catch (_) {
-          r = null;
-        }
-        if (r && r.ok) _toastFromEl(btn, "已导出");
-        else if (r && r.error === "export_in_flight") _toastFromEl(btn, "已有导出在进行中", { durationMs: 1400 });
-        else _toastFromEl(btn, "导出失败", { durationMs: 1400 });
-        try { btn.disabled = false; } catch (_) {}
-        return;
-      }
-      if (action === "removeShow") {
-        const next = removeOfflineShowByKey(state.offlineShow, key);
-        try { state.offlineShow = next; } catch (_) {}
-        try { saveOfflineShowList(next); } catch (_) {}
-        try { renderTabs(); } catch (_) {}
-        _renderBookmarkDrawerList();
-        if (String(state.currentKey || "all") === key) {
-          let pick = "";
-          try { pick = String(next && next[0] && next[0].key ? next[0].key : ""); } catch (_) { pick = ""; }
-          if (!pick) pick = _pickFallbackKey(key);
-          await onSelectKey(pick || "all");
-        }
-        return;
-      }
-      return;
-    }
-
-    await onSelectKey(key);
-    closeBookmarkDrawer(dom);
-  };
-
-  const _handleOfflineShowListKeydown = async (e) => {
-    if (!e) return;
-    const keyName = String(e.key || "");
-    if (keyName !== "Enter" && keyName !== " ") return;
-    const row = e.target && e.target.closest ? e.target.closest(".tab[data-key]") : null;
-    const key = row && row.dataset ? String(row.dataset.key || "") : "";
-    if (!row || !key) return;
-    try { e.preventDefault(); } catch (_) {}
-    await _handleOfflineShowListClick({ target: row });
-  };
-
-  if (dom && dom.bookmarkList) dom.bookmarkList.addEventListener("click", async (e) => { try { await _handleBookmarkListClick(e); } catch (_) {} });
-  if (dom && dom.bookmarkHiddenList) dom.bookmarkHiddenList.addEventListener("click", async (e) => { try { await _handleBookmarkListClick(e); } catch (_) {} });
-  if (dom && dom.bookmarkList) dom.bookmarkList.addEventListener("keydown", async (e) => { try { await _handleBookmarkListKeydown(e); } catch (_) {} });
-  if (dom && dom.bookmarkHiddenList) dom.bookmarkHiddenList.addEventListener("keydown", async (e) => { try { await _handleBookmarkListKeydown(e); } catch (_) {} });
-  if (dom && dom.offlineShowList) dom.offlineShowList.addEventListener("click", async (e) => { try { await _handleOfflineShowListClick(e); } catch (_) {} });
-  if (dom && dom.offlineShowList) dom.offlineShowList.addEventListener("keydown", async (e) => { try { await _handleOfflineShowListKeydown(e); } catch (_) {} });
-
-  // offline-show-changed：用于同步“展示中”列表（例如从展示标签栏关闭时）。
-  try {
-    window.addEventListener("offline-show-changed", () => {
-      try { _renderBookmarkDrawerList(); } catch (_) {}
-    });
-  } catch (_) {}
+  wireBookmarkDrawerInteractions(dom, state, {
+    onSelectKey,
+    renderTabs,
+    renderBookmarkDrawerList: _renderBookmarkDrawerList,
+    threadDefaultLabel: _threadDefaultLabel,
+    pickFallbackKey: _pickFallbackKey,
+    ensureHiddenSet: _ensureHiddenSet,
+    toastFromEl: _toastFromEl,
+  });
 
   return {
     renderBookmarkDrawerList: _renderBookmarkDrawerList,
@@ -1190,4 +927,3 @@ export function wireBookmarkDrawer(dom, state, helpers = {}) {
     isBookmarkDrawerOpen: _isBookmarkDrawerOpen,
   };
 }
-
