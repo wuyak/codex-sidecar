@@ -26,6 +26,7 @@
 - 重构(后端)：TranslationPump 的批量翻译执行/解包/回退逻辑抽离到 `codex_sidecar/watch/translation_batch_worker.py`，降低 `_worker()` 复杂度并补充单测（行为保持不变）。
 - 重构(后端)：TranslationPump 的 lo 队列 batch 聚合与不同 key 回退逻辑抽离到 `codex_sidecar/watch/translation_pump_batching.py`，进一步降低 `_worker()` 内联分支（行为保持不变）。
 - 重构(后端)：TranslationPump 的 batch items 解析与过滤抽离到 `codex_sidecar/watch/translation_pump_items.py`，并新增单测覆盖（行为保持不变）。
+- 重构(后端)：HTTP Handler 的 JSON 解析与 config/status payload 组装抽离到 `codex_sidecar/http/json_helpers.py` 与 `codex_sidecar/http/config_payload.py`，并新增单测覆盖（行为保持不变）。
 - 清理(后端)：移除 `codex_sidecar/watch/rollout_watcher.py` 中遗留且已失效的 `_replay_tail()` 死代码，避免未来误调用触发运行时报错。
 - 重构(后端)：controller 分层（`codex_sidecar/controller.py` facade → `codex_sidecar/controller_core.py`），保留 `codex_sidecar.controller.build_translator` 可被测试/工具 patch 的兼容路径。
 - 重构(后端)：controller 的配置 patch/校验逻辑抽离到 `codex_sidecar/control/config_patch.py`，controller_core 更聚焦锁/持久化与 watcher 热更新调度（行为保持不变）。

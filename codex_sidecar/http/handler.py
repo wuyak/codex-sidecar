@@ -1,4 +1,3 @@
-import json
 import queue
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
@@ -9,37 +8,8 @@ from .state import SidecarState
 from .routes_get import dispatch_get
 from .routes_post import dispatch_post
 from .ui_assets import load_ui_text, resolve_ui_path, ui_content_type, ui_dir
-from ..security import redact_sidecar_config
-
-
-def _json_bytes(obj: dict) -> bytes:
-    return json.dumps(obj, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-
-def _project_rel_path(p: str) -> str:
-    """
-    Best-effort: display a project-relative path (avoid leaking /home/<user>/... in UI).
-    """
-    s = str(p or "").strip()
-    if not s:
-        return ""
-    try:
-        cand = Path(s).expanduser()
-        cwd = Path.cwd()
-        try:
-            cand_r = cand.resolve()
-        except Exception:
-            cand_r = cand
-        try:
-            cwd_r = cwd.resolve()
-        except Exception:
-            cwd_r = cwd
-        try:
-            rel = cand_r.relative_to(cwd_r)
-            return str(rel) if str(rel) != "." else "."
-        except Exception:
-            return s
-    except Exception:
-        return s
+from .json_helpers import json_bytes, parse_json_object
+from .config_payload import apply_config_display_fields, build_config_payload, decorate_status_payload
 
 
 class SidecarHandler(BaseHTTPRequestHandler):
@@ -58,7 +28,7 @@ class SidecarHandler(BaseHTTPRequestHandler):
         return
 
     def _send_json(self, status: int, obj: dict) -> None:
-        body = _json_bytes(obj)
+        body = json_bytes(obj)
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Cache-Control", "no-store, max-age=0")
@@ -99,16 +69,9 @@ class SidecarHandler(BaseHTTPRequestHandler):
         """
         length = int(self.headers.get("Content-Length") or "0")
         raw = self.rfile.read(length) if length > 0 else b"{}"
-        try:
-            obj = json.loads(raw.decode("utf-8", errors="replace"))
-        except Exception:
-            if allow_invalid_json:
-                obj = {}
-            else:
-                self._send_error(HTTPStatus.BAD_REQUEST, "invalid_json")
-                return None
-        if not isinstance(obj, dict):
-            self._send_error(HTTPStatus.BAD_REQUEST, "invalid_payload")
+        obj, err = parse_json_object(raw, allow_invalid_json=allow_invalid_json)
+        if err:
+            self._send_error(HTTPStatus.BAD_REQUEST, err)
             return None
         return obj
 
@@ -151,32 +114,13 @@ class SidecarHandler(BaseHTTPRequestHandler):
             return Path.home() / ".codex"
 
     def _apply_config_display_fields(self, cfg: Dict[str, Any]) -> None:
-        # Display-only helpers (do not persist).
-        try:
-            cfg_home = str(cfg.get("config_home") or "")
-            cfg["config_home_display"] = _project_rel_path(cfg_home)
-            if cfg.get("config_home_display"):
-                cfg["config_file_display"] = str(Path(str(cfg["config_home_display"])) / "config.json")
-        except Exception:
-            pass
+        apply_config_display_fields(cfg)
 
     def _build_config_payload(self, raw_cfg: Any) -> Dict[str, Any]:
-        cfg = redact_sidecar_config(raw_cfg) if isinstance(raw_cfg, dict) else raw_cfg
-        if isinstance(cfg, dict):
-            self._apply_config_display_fields(cfg)
-        payload: Dict[str, Any] = {"ok": True, "config": cfg}
-        if isinstance(cfg, dict):
-            payload.update(cfg)
-        return payload
+        return build_config_payload(raw_cfg)
 
     def _decorate_status_payload(self, st: Any) -> Any:
-        try:
-            if isinstance(st, dict) and isinstance(st.get("config"), dict):
-                st["config"] = redact_sidecar_config(st["config"])
-                self._apply_config_display_fields(st["config"])
-        except Exception:
-            pass
-        return st
+        return decorate_status_payload(st)
 
     def _handle_translate_text(self, obj: Dict[str, Any]) -> None:
         items = obj.get("items")
