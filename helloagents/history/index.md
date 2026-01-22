@@ -3,6 +3,7 @@
 > 该目录存放已执行的方案包（从 `helloagents/plan/` 迁移而来）。
 
 ## 2026-01
+- 202601221948_arch_refactor_phase48_import_dialog_remove_legacy_renderer
 - 202601221942_arch_refactor_phase47_export_naming_download
 - 202601221937_arch_refactor_phase46_export_quick_blocks
 - 202601221929_arch_refactor_phase45_export_tool_call_utils
