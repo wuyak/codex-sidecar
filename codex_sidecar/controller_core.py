@@ -19,6 +19,7 @@ from .control.follow_control_api import (
     normalize_follow as _normalize_follow,
     normalize_follow_excludes as _normalize_follow_excludes,
 )
+from .control.watcher_lifecycle import request_stop_and_join as _request_stop_and_join
 from .translator import Translator
 from .watcher import HttpIngestClient, RolloutWatcher
 
@@ -322,12 +323,7 @@ class SidecarController:
         with self._lock:
             t = self._thread
             ev = self._stop_event
-        if ev is not None:
-            ev.set()
-        if t is not None and t.is_alive():
-            # NOTE: translation may be blocked by network; rely on per-request timeout.
-            t.join(timeout=2.0)
-        still_running = bool(t is not None and t.is_alive())
+        still_running = _request_stop_and_join(stop_event=ev, thread=t, join_timeout_s=2.0)
         if not still_running:
             with self._lock:
                 self._thread = None
