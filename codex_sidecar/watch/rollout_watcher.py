@@ -1,5 +1,3 @@
-import hashlib
-import json
 import threading
 import sys
 import time
@@ -9,7 +7,6 @@ from typing import Dict, List, Optional, Set
 
 from ..translator import Translator
 
-from .approval_hint import _format_approval_hint, _tool_call_needs_approval
 from .ingest_client import HttpIngestClient
 from .rollout_paths import (
     _ROLLOUT_RE,
@@ -17,14 +14,13 @@ from .rollout_paths import (
     _latest_rollout_files,
     _parse_thread_id_from_filename,
 )
-from .rollout_extract import extract_rollout_items
 from .translation_pump import TranslationPump
 from .follow_picker import FollowPicker
 from .tail_lines import read_tail_lines
 from .tui_gate import TuiGateTailer
-
-def _sha1_hex(s: str) -> str:
-    return hashlib.sha1(s.encode("utf-8", errors="replace")).hexdigest()
+from .dedupe_cache import DedupeCache
+from .rollout_ingest import RolloutLineIngestor, sha1_hex
+from .rollout_tailer import poll_one, replay_tail
 
 @dataclass
 class _FileCursor:
@@ -79,9 +75,7 @@ class RolloutWatcher:
         self._offset: int = 0
         self._line_no: int = 0
         self._thread_id: Optional[str] = None
-
-        self._seen: Set[str] = set()
-        self._seen_max = 5000
+        self._dedupe = DedupeCache(max_size=5000)
         self._last_file_scan_ts = 0.0
         self._warned_missing = False
         self._last_error: str = ""
@@ -114,6 +108,25 @@ class RolloutWatcher:
             emit_update=self._ingest.ingest,
             batch_size=5,
         )
+        self._line_ingestor = RolloutLineIngestor(
+            stop_requested=self._stop_requested,
+            dedupe=self._dedupe,
+            emit_ingest=self._ingest.ingest,
+            translate_enqueue=self._translate.enqueue,
+        )
+
+    def _on_rollout_line(self, bline: bytes, *, file_path: Path, line_no: int, is_replay: bool, thread_id: str) -> int:
+        try:
+            return self._line_ingestor.handle_line(
+                bline,
+                file_path=file_path,
+                line_no=int(line_no),
+                is_replay=bool(is_replay),
+                thread_id=str(thread_id or ""),
+                translate_mode=str(self._translate_mode or "auto"),
+            )
+        except Exception:
+            return 0
 
     def retranslate(self, mid: str, text: str, thread_key: str, fallback_zh: str = "") -> bool:
         """
@@ -436,7 +449,7 @@ class RolloutWatcher:
                     self._tui.poll(
                         thread_id=self._thread_id or "",
                         read_tail_lines=read_tail_lines,
-                        sha1_hex=_sha1_hex,
+                        sha1_hex=sha1_hex,
                         dedupe=self._dedupe,
                         ingest=self._ingest.ingest,
                     )
@@ -607,7 +620,13 @@ class RolloutWatcher:
                 except Exception:
                     cur.offset = 0
                 if self._replay_last_lines > 0:
-                    self._replay_tail(cur, self._replay_last_lines)
+                    replay_tail(
+                        cur,
+                        last_lines=self._replay_last_lines,
+                        read_tail_lines=read_tail_lines,
+                        stop_requested=self._stop_requested,
+                        on_line=self._on_rollout_line,
+                    )
 
         # Update "primary" fields for status and tool gate tagging.
         self._current_file = targets[0] if targets else None
@@ -655,127 +674,18 @@ class RolloutWatcher:
             cur = self._cursors.get(path)
             if cur is None or not cur.active:
                 continue
-            self._poll_one(cur)
+            is_primary = bool(self._current_file == path)
 
-    def _poll_one(self, cur: _FileCursor) -> None:
-        path = cur.path
-        try:
-            size = int(path.stat().st_size)
-        except Exception:
-            return
-        if size <= 0:
-            return
-        if cur.offset > size:
-            cur.offset = 0
-        if cur.offset == size:
-            return
-        try:
-            with path.open("rb") as f:
-                f.seek(cur.offset)
-                while True:
-                    if self._stop_requested():
-                        break
-                    bline = f.readline()
-                    if not bline:
-                        break
-                    cur.offset = int(f.tell())
-                    cur.line_no += 1
-                    if self._current_file == path:
-                        self._offset = cur.offset
-                        self._line_no = cur.line_no
-                    self._handle_line(
-                        bline.rstrip(b"\n"),
-                        file_path=path,
-                        line_no=cur.line_no,
-                        is_replay=False,
-                        thread_id=cur.thread_id,
-                    )
-        except Exception:
-            try:
-                self._last_error = "poll_failed"
-            except Exception:
-                pass
-            return
+            def _on_primary_progress(offset: int, line_no: int) -> None:
+                if not is_primary:
+                    return
+                self._offset = int(offset)
+                self._line_no = int(line_no)
 
-    def _handle_line(self, bline: bytes, file_path: Path, line_no: int, is_replay: bool, *, thread_id: str) -> int:
-        # If user clicked “停止监听”, avoid ingesting more lines even if we're still finishing in-flight work.
-        if self._stop_requested():
-            return 0
-        if not bline:
-            return 0
-        try:
-            obj = json.loads(bline.decode("utf-8", errors="replace"))
-        except Exception:
-            return 0
-
-        ts, extracted = extract_rollout_items(obj)
-
-        ingested = 0
-        for item in extracted:
-            kind = item["kind"]
-            text = item["text"]
-            # Dedup across replay expansions.
-            #
-            # - reasoning_summary: 通常每条是“最终摘要”，用 timestamp 参与 key 能更好地区分不同轮次
-            hid = _sha1_hex(f"{file_path}:{kind}:{ts}:{text}")
-            if self._dedupe(hid, kind=kind):
-                continue
-            if self._stop_requested():
-                return ingested
-            mid = hid[:16]
-            is_thinking = kind == "reasoning_summary"
-            msg = {
-                "id": mid,
-                "ts": ts,
-                "kind": kind,
-                "text": text,
-                "zh": "",
-                "replay": bool(is_replay),
-                "thread_id": str(thread_id or ""),
-                "file": str(file_path),
-                "line": line_no,
-            }
-            if self._ingest.ingest(msg):
-                ingested += 1
-                # Proactively hint when a tool call likely requires terminal approval (Codex CLI on-request).
-                if kind == "tool_call" and _tool_call_needs_approval(text):
-                    try:
-                        hint = _format_approval_hint(text)
-                        hid2 = _sha1_hex(f"{file_path}:approval_gate:{ts}:{hint}")
-                        if not self._dedupe(hid2, kind="tool_gate"):
-                            self._ingest.ingest(
-                                {
-                                    "id": hid2[:16],
-                                    "ts": ts,
-                                    "kind": "tool_gate",
-                                    "text": hint,
-                                    "zh": "",
-                                    "replay": bool(is_replay),
-                                    "thread_id": str(thread_id or ""),
-                                    "file": str(file_path),
-                                    "line": line_no,
-                                }
-                            )
-                    except Exception:
-                        pass
-                if is_thinking and text.strip():
-                    # 翻译走后台支路：
-                    # - auto：只自动翻译 reasoning_summary
-                    # - 回放阶段可聚合，实时阶段按单条慢慢补齐。
-                    if kind == "reasoning_summary" and self._translate_mode == "auto":
-                        thread_key = str(thread_id or "") or str(file_path)
-                        self._translate.enqueue(mid=mid, text=text, thread_key=thread_key, batchable=is_replay)
-        return ingested
-
-
-    def _dedupe(self, key: str, kind: str) -> bool:
-        if key in self._seen:
-            return True
-        self._seen.add(key)
-        if len(self._seen) > self._seen_max:
-            # Cheap pruning: approximate by clearing periodically.
-            # (OK for a sidecar; duplicates are benign and bounded.)
-            self._seen.clear()
-            # Keep a marker so we don't immediately re-add duplicates in the same run loop.
-            self._seen.add(key)
-        return False
+            poll_one(
+                cur,
+                stop_requested=self._stop_requested,
+                on_line=self._on_rollout_line,
+                on_primary_progress=_on_primary_progress if is_primary else None,
+                on_error=lambda: setattr(self, "_last_error", "poll_failed"),
+            )
