@@ -17,8 +17,8 @@
 - [√] 2.3 基础验证：`bash -n scripts/run.sh scripts/ui.sh scripts/_common.sh`。
 
 ## 3. Config 模型整理（Phase54.3）
-- [ ] 3.1 `SidecarConfig.translator_config` 改为 `field(default_factory=dict)`，清理 `None` 分支与序列化兜底（行为不变）。
-- [ ] 3.2 回归测试：确保 config load/migrations 相关测试通过。
+- [√] 3.1 `SidecarConfig.translator_config` 改为 `field(default_factory=dict)`，清理 `None` 分支与序列化兜底（行为不变）。
+- [√] 3.2 回归测试：确保 config load/migrations 相关测试通过。
 
 ## 4. 收尾与归档（Phase54.4）
 - [ ] 4.1 更新 `helloagents/CHANGELOG.md`（记录 Phase54 的结构性优化）。

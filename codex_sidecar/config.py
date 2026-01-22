@@ -2,7 +2,7 @@ import json
 import os
 import re
 import tempfile
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -71,13 +71,10 @@ class SidecarConfig:
     notify_sound_tool_gate: str = "none"
 
     translator_provider: str = "openai"  # http | openai | nvidia
-    translator_config: Dict[str, Any] = None  # provider-specific
+    translator_config: Dict[str, Any] = field(default_factory=dict)  # provider-specific
 
     def to_dict(self) -> Dict[str, Any]:
-        d = asdict(self)
-        if d.get("translator_config") is None:
-            d["translator_config"] = {}
-        return d
+        return asdict(self)
 
     @staticmethod
     def from_dict(d: Dict[str, Any]) -> "SidecarConfig":
