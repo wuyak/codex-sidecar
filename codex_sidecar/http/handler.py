@@ -231,7 +231,7 @@ class SidecarHandler(BaseHTTPRequestHandler):
                     self.wfile.flush()
                     continue
 
-                data = _json_bytes(msg)
+                data = json_bytes(msg)
                 self.wfile.write(b"event: message\n")
                 self.wfile.write(b"data: ")
                 self.wfile.write(data)

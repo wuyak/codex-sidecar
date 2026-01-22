@@ -12,6 +12,7 @@
 - 后端：tui gate tail 在无新增时跳过打开文件读取，进一步降低空转 IO。
 - 重构(后端)：TuiGateTailer 的解析/渲染逻辑抽离到 `codex_sidecar/watch/tui_gate_helpers.py`，便于单测与维护（行为保持不变）。
 - 修复(后端)：收紧 `codex-tui.log` 的 tool gate 解析（时间戳必须在行首），避免 apply_patch/代码片段中的缩进示例行触发“终端等待确认”误报。
+- 修复(后端)：SSE `/events` 推送中错误调用 `_json_bytes` 导致连接崩溃，改用 `json_bytes()` 并补充回归测试。
 - 后端：controller 收敛翻译（probe/text/items）公共逻辑，并将 watcher 热更新应用集中到单一 helper，降低重复与分叉。
 - 修复(后端)：`update_config` 触发 controller 自锁死锁导致 `/api/config` / `/api/status` 永久卡死（`/health` 仍正常、UI 空白）；调整为热更新在锁外执行，并增加回归测试覆盖。
 - 重构(后端)：watch 层进一步分层（`codex_sidecar/watcher.py` facade → `codex_sidecar/watch/rollout_watcher.py`），并抽离 `ingest_client` / `approval_hint` 降低耦合。
