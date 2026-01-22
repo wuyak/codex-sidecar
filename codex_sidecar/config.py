@@ -214,73 +214,101 @@ def default_config(config_home: Path) -> SidecarConfig:
     )
 
 
-def load_config(config_home: Path) -> SidecarConfig:
+def _ensure_cfg_invariants(cfg: SidecarConfig, config_home: Path) -> None:
+    # config_home is immutable (controls where the config is stored)
+    try:
+        cfg.config_home = str(config_home)
+    except Exception:
+        pass
+    try:
+        if not getattr(cfg, "watch_codex_home", ""):
+            cfg.watch_codex_home = _default_watch_codex_home()
+    except Exception:
+        pass
+
+
+def _migrate_stub_provider(cfg: SidecarConfig, config_home: Path) -> None:
+    # 兼容旧配置：移除 stub/none Provider 后，自动迁移到 openai（不丢失其他 provider 配置）。
+    try:
+        p = str(getattr(cfg, "translator_provider", "") or "").strip().lower()
+        if p in ("stub", "none"):
+            cfg.translator_provider = "openai"
+            save_config(config_home, cfg)
+    except Exception:
+        pass
+
+
+def _migrate_nvidia_model(cfg: SidecarConfig, config_home: Path) -> None:
+    # NVIDIA 翻译模型：仅保留 4 个可选项；同时修正历史遗留的错误 id（直接写回配置）。
+    try:
+        tc = cfg.translator_config
+        if not isinstance(tc, dict):
+            return
+        nv = None
+        if isinstance(tc.get("nvidia"), dict):
+            nv = tc.get("nvidia")
+        else:
+            # Legacy config: translator_config stored NVIDIA fields at top-level.
+            looks_like_nvidia = False
+            for k in ("base_url", "api_key", "auth_env", "model", "rpm", "max_tokens", "timeout_s"):
+                if k in tc:
+                    looks_like_nvidia = True
+                    break
+            if looks_like_nvidia:
+                nv = tc
+        if not isinstance(nv, dict):
+            return
+        allowed = {
+            "moonshotai/kimi-k2-instruct",
+            "google/gemma-3-1b-it",
+            "mistralai/mistral-7b-instruct-v0.3",
+            "mistralai/ministral-14b-instruct-2512",
+        }
+        default_model = "moonshotai/kimi-k2-instruct"
+        m = str(nv.get("model") or "").strip()
+        if not m or m not in allowed:
+            nv["model"] = default_model
+            try:
+                save_config(config_home, cfg)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+
+def _migrate_replay_last_lines(cfg: SidecarConfig, config_home: Path) -> None:
+    # Migration: older default replay_last_lines=0 caused empty session list after restart
+    # unless new output arrives. Align to CLI default (200) so “重启即恢复”开箱即用。
+    try:
+        if int(getattr(cfg, "replay_last_lines", 0) or 0) <= 0:
+            cfg.replay_last_lines = 200
+            save_config(config_home, cfg)
+    except Exception:
+        pass
+
+
+def _apply_inplace_migrations(cfg: SidecarConfig, config_home: Path) -> None:
+    _migrate_stub_provider(cfg, config_home)
+    _migrate_nvidia_model(cfg, config_home)
+    _migrate_replay_last_lines(cfg, config_home)
+
+
+def _try_load_current_config(config_home: Path) -> Optional[SidecarConfig]:
     p = config_path(config_home)
     try:
         raw = p.read_text(encoding="utf-8")
         obj = json.loads(raw)
-        if isinstance(obj, dict):
-            cfg = SidecarConfig.from_dict(obj)
-            # config_home is immutable (controls where the config is stored)
-            cfg.config_home = str(config_home)
-            if not cfg.watch_codex_home:
-                cfg.watch_codex_home = _default_watch_codex_home()
-            # 兼容旧配置：移除 stub/none Provider 后，自动迁移到 openai（不丢失其他 provider 配置）。
-            try:
-                p = str(getattr(cfg, "translator_provider", "") or "").strip().lower()
-                if p in ("stub", "none"):
-                    cfg.translator_provider = "openai"
-                    save_config(config_home, cfg)
-            except Exception:
-                pass
-            # NVIDIA 翻译模型：仅保留 4 个可选项；同时修正历史遗留的错误 id（直接写回配置）。
-            try:
-                tc = cfg.translator_config
-                if isinstance(tc, dict):
-                    nv = None
-                    if isinstance(tc.get("nvidia"), dict):
-                        nv = tc.get("nvidia")
-                    else:
-                        # Legacy config: translator_config stored NVIDIA fields at top-level.
-                        looks_like_nvidia = False
-                        for k in ("base_url", "api_key", "auth_env", "model", "rpm", "max_tokens", "timeout_s"):
-                            if k in tc:
-                                looks_like_nvidia = True
-                                break
-                        if looks_like_nvidia:
-                            nv = tc
-                    if isinstance(nv, dict):
-                        allowed = {
-                            "moonshotai/kimi-k2-instruct",
-                            "google/gemma-3-1b-it",
-                            "mistralai/mistral-7b-instruct-v0.3",
-                            "mistralai/ministral-14b-instruct-2512",
-                        }
-                        default_model = "moonshotai/kimi-k2-instruct"
-                        m = str(nv.get("model") or "").strip()
-                        changed = False
-                        if not m or m not in allowed:
-                            nv["model"] = default_model
-                            changed = True
-                        if changed:
-                            try:
-                                save_config(config_home, cfg)
-                            except Exception:
-                                pass
-            except Exception:
-                pass
-            # Migration: older default replay_last_lines=0 caused empty session list after restart
-            # unless new output arrives. Align to CLI default (200) so “重启即恢复”开箱即用。
-            try:
-                if int(getattr(cfg, "replay_last_lines", 0) or 0) <= 0:
-                    cfg.replay_last_lines = 200
-                    save_config(config_home, cfg)
-            except Exception:
-                pass
-            return cfg
+        if not isinstance(obj, dict):
+            return None
+        cfg = SidecarConfig.from_dict(obj)
+        _ensure_cfg_invariants(cfg, config_home)
+        _apply_inplace_migrations(cfg, config_home)
+        return cfg
     except Exception:
-        pass
+        return None
 
+
+def _try_import_from_legacy_homes(config_home: Path) -> Optional[SidecarConfig]:
     # Migration: if the default config_home changes across versions, try importing the most
     # recent config from previous locations once so users don't "lose" settings after upgrade.
     #
@@ -332,9 +360,7 @@ def load_config(config_home: Path) -> SidecarConfig:
                 if not isinstance(obj, dict):
                     continue
                 cfg = SidecarConfig.from_dict(obj)
-                cfg.config_home = str(config_home)
-                if not cfg.watch_codex_home:
-                    cfg.watch_codex_home = _default_watch_codex_home()
+                _ensure_cfg_invariants(cfg, config_home)
                 try:
                     save_config(config_home, cfg)
                 except Exception:
@@ -344,7 +370,10 @@ def load_config(config_home: Path) -> SidecarConfig:
                 continue
     except Exception:
         pass
+    return None
 
+
+def _try_import_from_legacy_snapshots(config_home: Path) -> Optional[SidecarConfig]:
     # First-run migration: try legacy snapshots in CODEX_HOME/tmp if present.
     #
     # Older versions stored config in:
@@ -385,9 +414,7 @@ def load_config(config_home: Path) -> SidecarConfig:
                 if not isinstance(obj, dict):
                     continue
                 cfg = SidecarConfig.from_dict(obj)
-                cfg.config_home = str(config_home)
-                if not cfg.watch_codex_home:
-                    cfg.watch_codex_home = _default_watch_codex_home()
+                _ensure_cfg_invariants(cfg, config_home)
                 try:
                     save_config(config_home, cfg)
                 except Exception:
@@ -397,6 +424,19 @@ def load_config(config_home: Path) -> SidecarConfig:
                 continue
     except Exception:
         pass
+    return None
+
+
+def load_config(config_home: Path) -> SidecarConfig:
+    cfg = _try_load_current_config(config_home)
+    if cfg is not None:
+        return cfg
+    cfg = _try_import_from_legacy_homes(config_home)
+    if cfg is not None:
+        return cfg
+    cfg = _try_import_from_legacy_snapshots(config_home)
+    if cfg is not None:
+        return cfg
     return default_config(config_home)
 
 
