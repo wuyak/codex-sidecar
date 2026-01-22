@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
 from .config import SidecarConfig, load_config, save_config
+from .control.watcher_factory import build_rollout_watcher
 from .control.translator_build import build_translator as _build_translator_impl, count_valid_http_profiles, select_http_profile
 from .control.translate_api import translate_items as _translate_items, translate_probe as _translate_probe, translate_text as _translate_text
 from .control.translator_specs import TRANSLATORS
@@ -368,27 +369,17 @@ class SidecarController:
             self._started_at = time.time()
 
             stop_event = threading.Event()
-            watcher = RolloutWatcher(
-                codex_home=Path(cfg.watch_codex_home).expanduser(),
-                ingest=HttpIngestClient(server_url=self._server_url),
-                translator=self._build_translator(cfg) or _build_translator_impl(cfg),
-                replay_last_lines=int(cfg.replay_last_lines),
-                watch_max_sessions=int(getattr(cfg, "watch_max_sessions", 3) or 3),
-                translate_mode=str(getattr(cfg, "translate_mode", "auto") or "auto"),
-                poll_interval_s=float(cfg.poll_interval),
-                file_scan_interval_s=float(cfg.file_scan_interval),
-                follow_codex_process=bool(getattr(cfg, "follow_codex_process", False)),
-                codex_process_regex=str(getattr(cfg, "codex_process_regex", "codex") or "codex"),
-                only_follow_when_process=bool(getattr(cfg, "only_follow_when_process", True)),
+            watcher = build_rollout_watcher(
+                cfg=cfg,
+                server_url=self._server_url,
+                build_translator=self._build_translator,
+                build_translator_fallback=_build_translator_impl,
+                selection_mode=self._selection_mode,
+                pinned_thread_id=self._pinned_thread_id,
+                pinned_file=self._pinned_file,
+                exclude_keys=set(self._follow_exclude_keys or set()),
+                exclude_files=set(self._follow_exclude_files or set()),
             )
-            try:
-                watcher.set_follow(self._selection_mode, thread_id=self._pinned_thread_id, file=self._pinned_file)
-            except Exception:
-                pass
-            try:
-                watcher.set_follow_excludes(keys=list(self._follow_exclude_keys), files=list(self._follow_exclude_files))
-            except Exception:
-                pass
             self._stop_event = stop_event
             self._watcher = watcher
 

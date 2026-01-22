@@ -15,6 +15,7 @@
 - 重构(后端)：watch 层进一步分层（`codex_sidecar/watcher.py` facade → `codex_sidecar/watch/rollout_watcher.py`），并抽离 `ingest_client` / `approval_hint` 降低耦合。
 - 重构(后端)：watcher 继续拆分 `rollout_watcher`：抽离 `dedupe_cache` / `rollout_ingest` / `rollout_tailer`，让 watcher 更聚焦“选目标 + 调度”，降低耦合（行为保持不变）。
 - 重构(后端)：follow targets 计算从 watcher 中抽离到 `codex_sidecar/watch/follow_targets.py`，并新增单测覆盖 process/pin/auto 的关键分支。
+- 重构(后端)：controller 的 watcher 组装逻辑抽离到 `codex_sidecar/control/watcher_factory.py`，controller_core 更聚焦线程/状态管理（行为保持不变）。
 - 重构(后端)：controller 分层（`codex_sidecar/controller.py` facade → `codex_sidecar/controller_core.py`），保留 `codex_sidecar.controller.build_translator` 可被测试/工具 patch 的兼容路径。
 - 重构(后端)：翻译控制面公共逻辑抽离到 `codex_sidecar/control/translate_api.py`，controller_core 仅保留协调与状态管理。
 - 重构(后端)：HTTP handler 抽取 `/api/config`、`/api/status`、`/api/sfx`、`/api/offline/*` 复用逻辑，并新增 HTTP 控制面回归测试（config/status）。
