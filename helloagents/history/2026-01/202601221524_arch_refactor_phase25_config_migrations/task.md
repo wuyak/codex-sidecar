@@ -16,4 +16,4 @@
 - [√] 3.2 运行 `python3 -m unittest discover -s tests`
 
 ## 4. 方案包迁移
-- [ ] 4.1 将本方案包迁移至 `helloagents/history/2026-01/202601221524_arch_refactor_phase25_config_migrations/` 并更新 `helloagents/history/index.md`
+- [√] 4.1 将本方案包迁移至 `helloagents/history/2026-01/202601221524_arch_refactor_phase25_config_migrations/` 并更新 `helloagents/history/index.md`
