@@ -51,6 +51,17 @@ export function wireBookmarkDrawer(dom, state, helpers = {}) {
   const _showUiHoverTip = showUiHoverTip;
   const _hideUiHoverTip = hideUiHoverTip;
 
+  const _canHoverTip = (e) => {
+    try {
+      const pt = e && e.pointerType ? String(e.pointerType) : "";
+      if (pt && pt !== "mouse") return false;
+    } catch (_) {}
+    try {
+      if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) return false;
+    } catch (_) {}
+    return true;
+  };
+
   const _isBookmarkDrawerOpen = () => {
     try {
       return !!(dom.bookmarkDrawer && dom.bookmarkDrawer.classList && !dom.bookmarkDrawer.classList.contains("hidden"));
@@ -136,17 +147,6 @@ export function wireBookmarkDrawer(dom, state, helpers = {}) {
       host.appendChild(frag);
       return;
     }
-
-    const canHoverTip = (e) => {
-      try {
-        const pt = e && e.pointerType ? String(e.pointerType) : "";
-        if (pt && pt !== "mouse") return false;
-      } catch (_) {}
-      try {
-        if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) return false;
-      } catch (_) {}
-      return true;
-    };
 
     for (const it of list) {
       if (!it || typeof it !== "object") continue;
@@ -306,9 +306,9 @@ export function wireBookmarkDrawer(dom, state, helpers = {}) {
             if (row.classList && row.classList.contains("editing")) return;
             _showUiHoverTip(row, hintText, { insetX: 10, gap: 6, pad: 10, prefer: "below" });
           };
-          main.addEventListener("pointerenter", (e) => { if (!canHoverTip(e)) return; tracking = true; update(e); });
+          main.addEventListener("pointerenter", (e) => { if (!_canHoverTip(e)) return; tracking = true; update(e); });
           main.addEventListener("pointermove", update);
-          main.addEventListener("pointerleave", (e) => { if (!canHoverTip(e)) return; tracking = false; _hideUiHoverTip(); });
+          main.addEventListener("pointerleave", (e) => { if (!_canHoverTip(e)) return; tracking = false; _hideUiHoverTip(); });
         }
       } catch (_) {}
 
@@ -447,6 +447,26 @@ export function wireBookmarkDrawer(dom, state, helpers = {}) {
         return;
       }
 
+      const wireMiniBtnHoverTip = (btn) => {
+        if (!btn || btn.__miniTipWired) return;
+        btn.__miniTipWired = true;
+        const show = (e) => {
+          if (!_canHoverTip(e)) return;
+          const txt = String(btn.getAttribute && btn.getAttribute("aria-label") ? btn.getAttribute("aria-label") : "").trim();
+          if (!txt) return;
+          _showUiHoverTip(btn, txt, { insetX: 6, gap: 6, pad: 10, prefer: "above" });
+        };
+        const hide = (e) => {
+          if (!_canHoverTip(e)) return;
+          _hideUiHoverTip();
+        };
+        try { btn.addEventListener("pointerenter", show); } catch (_) {}
+        try { btn.addEventListener("pointerleave", hide); } catch (_) {}
+        try { btn.addEventListener("pointerdown", () => { _hideUiHoverTip(); }); } catch (_) {}
+        try { btn.addEventListener("focus", (e) => show(e)); } catch (_) {}
+        try { btn.addEventListener("blur", (e) => hide(e)); } catch (_) {}
+      };
+
       for (const it of rows) {
         const row = document.createElement("div");
         row.className = "tab"
@@ -484,37 +504,6 @@ export function wireBookmarkDrawer(dom, state, helpers = {}) {
 
         const actions = document.createElement("div");
         actions.className = "tab-actions";
-
-        const canHoverTip = (e) => {
-          try {
-            const pt = e && e.pointerType ? String(e.pointerType) : "";
-            if (pt && pt !== "mouse") return false;
-          } catch (_) {}
-          try {
-            if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) return false;
-          } catch (_) {}
-          return true;
-        };
-
-        const wireMiniBtnHoverTip = (btn) => {
-          if (!btn || btn.__miniTipWired) return;
-          btn.__miniTipWired = true;
-          const show = (e) => {
-            if (!canHoverTip(e)) return;
-            const txt = String(btn.getAttribute && btn.getAttribute("aria-label") ? btn.getAttribute("aria-label") : "").trim();
-            if (!txt) return;
-            _showUiHoverTip(btn, txt, { insetX: 6, gap: 6, pad: 10, prefer: "above" });
-          };
-          const hide = (e) => {
-            if (!canHoverTip(e)) return;
-            _hideUiHoverTip();
-          };
-          try { btn.addEventListener("pointerenter", show); } catch (_) {}
-          try { btn.addEventListener("pointerleave", hide); } catch (_) {}
-          try { btn.addEventListener("pointerdown", () => { _hideUiHoverTip(); }); } catch (_) {}
-          try { btn.addEventListener("focus", (e) => show(e)); } catch (_) {}
-          try { btn.addEventListener("blur", (e) => hide(e)); } catch (_) {}
-        };
 
         const renameBtn = document.createElement("button");
         renameBtn.className = "mini-btn";
@@ -645,9 +634,9 @@ export function wireBookmarkDrawer(dom, state, helpers = {}) {
               if (row.classList && row.classList.contains("editing")) return;
               _showUiHoverTip(row, hintText, { insetX: 10, gap: 6, pad: 10, prefer: "below" });
             };
-            main.addEventListener("pointerenter", (e) => { if (!canHoverTip(e)) return; tracking = true; update(e); });
+            main.addEventListener("pointerenter", (e) => { if (!_canHoverTip(e)) return; tracking = true; update(e); });
             main.addEventListener("pointermove", update);
-            main.addEventListener("pointerleave", (e) => { if (!canHoverTip(e)) return; tracking = false; _hideUiHoverTip(); });
+            main.addEventListener("pointerleave", (e) => { if (!_canHoverTip(e)) return; tracking = false; _hideUiHoverTip(); });
           }
         } catch (_) {}
         // Long-press: copy JSON source path (explicit action; no hover hints).
