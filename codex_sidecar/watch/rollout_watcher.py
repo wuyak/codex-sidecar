@@ -21,6 +21,7 @@ from .tui_gate import TuiGateTailer
 from .dedupe_cache import DedupeCache
 from .rollout_ingest import RolloutLineIngestor, sha1_hex
 from .rollout_tailer import poll_one, replay_tail
+from .follow_targets import compute_follow_targets
 
 @dataclass
 class _FileCursor:
@@ -480,27 +481,6 @@ class RolloutWatcher:
             excl_keys = set()
             excl_files = set()
 
-        def _is_excluded(p: Optional[Path]) -> bool:
-            if p is None:
-                return False
-            try:
-                if p in excl_files:
-                    return True
-            except Exception:
-                pass
-            try:
-                tid0 = _parse_thread_id_from_filename(p) or ""
-                if tid0 and tid0 in excl_keys:
-                    return True
-            except Exception:
-                pass
-            try:
-                if str(p) in excl_keys:
-                    return True
-            except Exception:
-                pass
-            return False
-
         pick = self._follow_picker.pick(selection_mode=sel, pinned_thread_id=pin_tid, pinned_file=pin_file)
         picked = pick.picked
         self._process_file = pick.process_file
@@ -541,55 +521,18 @@ class RolloutWatcher:
                     cur.active = False
             return
 
-        n = max(1, int(self._watch_max_sessions or 1))
-
-        targets: List[Path] = []
-        # Process-follow mode: only follow rollout files actually opened by Codex processes.
-        # Do NOT scan sessions/** to "fill to N" (more stable + cheaper).
-        if self._follow_mode == "process":
-            try:
-                for p in list(self._process_files or []):
-                    if len(targets) >= n:
-                        break
-                    if _is_excluded(p):
-                        continue
-                    targets.append(p)
-            except Exception:
-                targets = []
-        else:
-            if picked is not None and (not _is_excluded(picked)):
-                targets.append(picked)
-            if len(targets) < n:
-                # Pin mode: never backfill from sessions/** by mtime (prevents zombie sessions).
-                if sel == "pin":
-                    try:
-                        for p in list(self._process_files or []):
-                            if len(targets) >= n:
-                                break
-                            if _is_excluded(p):
-                                continue
-                            if p in targets:
-                                continue
-                            targets.append(p)
-                    except Exception:
-                        pass
-                else:
-                    try:
-                        # 进程跟随模式下，只跟随“进程正在写入的 rollout 文件”，不再扫描 sessions 补齐 N 个会话。
-                        # 否则重启/空窗期会误跟到历史会话（例如旧的 how 会话）。
-                        cands = []
-                        if self._follow_mode != "process":
-                            cands = _latest_rollout_files(self._codex_home, limit=max(n * 3, n))
-                    except Exception:
-                        cands = []
-                    for p in cands:
-                        if len(targets) >= n:
-                            break
-                        if _is_excluded(p):
-                            continue
-                        if p in targets:
-                            continue
-                        targets.append(p)
+        targets = compute_follow_targets(
+            selection_mode=sel,
+            watch_max_sessions=int(self._watch_max_sessions or 1),
+            follow_mode=self._follow_mode,
+            picked=picked,
+            process_files=list(self._process_files or []),
+            codex_home=self._codex_home,
+            latest_rollout_files=_latest_rollout_files,
+            exclude_keys=excl_keys,
+            exclude_files=excl_files,
+            parse_thread_id=_parse_thread_id_from_filename,
+        )
 
         changed = force or (targets != self._follow_files)
         if not changed:
