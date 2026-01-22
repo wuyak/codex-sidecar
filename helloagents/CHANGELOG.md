@@ -15,6 +15,8 @@
 - 重构(后端)：watch 层进一步分层（`codex_sidecar/watcher.py` facade → `codex_sidecar/watch/rollout_watcher.py`），并抽离 `ingest_client` / `approval_hint` 降低耦合。
 - 重构(后端)：controller 分层（`codex_sidecar/controller.py` facade → `codex_sidecar/controller_core.py`），保留 `codex_sidecar.controller.build_translator` 可被测试/工具 patch 的兼容路径。
 - 重构(后端)：HTTP handler 抽取 `/api/config`、`/api/status`、`/api/sfx`、`/api/offline/*` 复用逻辑，并新增 HTTP 控制面回归测试（config/status）。
+- 修复(后端)：架构分层重构后启动侧 `controller.start()` 仍引用 `build_translator` 导致 `NameError`；已改为使用内部 `_build_translator`/fallback 构建 translator。
+- 重构(后端)：`codex_sidecar/__init__.py` 改为延迟导入 `main`，避免导入任意子模块时被动加载 CLI/controller 栈，降低循环依赖风险与导入开销。
 - 后端：watcher 在进程定位模式的 `idle/wait_codex` 空闲期对 TUI gate 轮询降频到 scan cadence，进一步降低空转开销。
 - UI：移除浮动按钮 hover tooltip（避免提示遮挡/误导）；`aria-label` 仅用于无障碍读屏。
 - UI：设置抽屉“高级选项”更名为“监听设置”；配置目录移到监视目录下方；移除设置内冗余提示文案。
