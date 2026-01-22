@@ -25,6 +25,7 @@ from .rollout_follow_state import apply_follow_targets, now_ts
 from .follow_control_helpers import clean_exclude_files, clean_exclude_keys, resolve_pinned_rollout_file
 from .rollout_follow_sync import FollowControls, build_follow_sync_plan
 from .rollout_watcher_loop import should_poll_tui
+from .rollout_watcher_status import build_watcher_status
 
 @dataclass
 class _FileCursor:
@@ -185,34 +186,35 @@ class RolloutWatcher:
         except Exception:
             primary_offset = self._offset
             primary_line_no = self._line_no
-        out: Dict[str, object] = {
-            "current_file": str(self._current_file) if self._current_file is not None else "",
-            "thread_id": self._thread_id or "",
-            "offset": str(primary_offset),
-            "line_no": str(primary_line_no),
-            "last_error": self._last_error or "",
-            "follow_mode": self._follow_mode or "",
-            "selection_mode": sel,
-            "pinned_thread_id": pin_tid,
-            "pinned_file": pin_file,
-            "watch_max_sessions": str(self._watch_max_sessions),
-            "replay_last_lines": str(self._replay_last_lines),
-            "poll_interval_s": str(self._poll_interval_s),
-            "file_scan_interval_s": str(self._file_scan_interval_s),
-            "follow_files": [str(p) for p in (self._follow_files or [])][:12],
-            "codex_detected": "1" if self._codex_detected else "0",
-            "codex_pids": ",".join(str(x) for x in self._codex_pids[:8]),
-            "codex_candidate_pids": ",".join(str(x) for x in self._codex_candidate_pids[:8]),
-            "codex_process_regex": self._follow_picker.codex_process_regex,
-            "process_file": str(self._process_file) if self._process_file is not None else "",
-            "process_files": [str(p) for p in (self._process_files or [])][:12],
-        }
+        translate_stats = None
         try:
             if self._translate is not None:
-                out["translate"] = self._translate.stats()
+                translate_stats = self._translate.stats()
         except Exception:
             pass
-        return out
+        return build_watcher_status(
+            current_file=self._current_file,
+            thread_id=str(self._thread_id or ""),
+            offset=int(primary_offset or 0),
+            line_no=int(primary_line_no or 0),
+            last_error=str(self._last_error or ""),
+            follow_mode=str(self._follow_mode or ""),
+            selection_mode=str(sel or "auto"),
+            pinned_thread_id=str(pin_tid or ""),
+            pinned_file=str(pin_file or ""),
+            watch_max_sessions=int(self._watch_max_sessions or 0),
+            replay_last_lines=int(self._replay_last_lines or 0),
+            poll_interval_s=float(self._poll_interval_s or 0.0),
+            file_scan_interval_s=float(self._file_scan_interval_s or 0.0),
+            follow_files=list(self._follow_files or []),
+            codex_detected=bool(self._codex_detected),
+            codex_pids=list(self._codex_pids or []),
+            codex_candidate_pids=list(self._codex_candidate_pids or []),
+            codex_process_regex=str(self._follow_picker.codex_process_regex or ""),
+            process_file=self._process_file,
+            process_files=list(self._process_files or []),
+            translate_stats=translate_stats if isinstance(translate_stats, dict) else None,
+        )
 
     def set_translate_mode(self, mode: str) -> None:
         """

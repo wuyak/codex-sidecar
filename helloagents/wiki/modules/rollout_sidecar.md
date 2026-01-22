@@ -46,6 +46,7 @@
   - `watch/follow_targets.py`：follow targets 计算（process/pin/auto + excludes），降低 watcher 内联分支耦合
   - `watch/rollout_follow_sync.py`：RolloutWatcher 的 follow 同步决策（pick + pin 补齐 + idle 判定 + targets 计算）抽离，便于单测与维护（行为保持不变）
   - `watch/rollout_watcher_loop.py`：run loop 的 TUI 轮询节流判断（纯逻辑），便于单测与回归（行为保持不变）
+  - `watch/rollout_watcher_status.py`：status payload 组装（纯逻辑），便于单测与回归（行为保持不变）
   - `watch/follow_control_helpers.py`：follow 控制面输入清洗（pin 文件解析 + excludes 清洗），供 `RolloutWatcher` 复用（行为保持不变）
   - `watch/process_follow_scan.py`：进程强匹配扫描/进程树收集/rollout fd 解析（供 `FollowPicker` 复用），降低 follow_picker 内联复杂度（行为保持不变）
   - `watch/translation_queue.py`：翻译队列状态机（seen/inflight/force_after + 背压丢弃时的 inflight 清理）
