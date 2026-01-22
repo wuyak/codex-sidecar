@@ -56,7 +56,7 @@
   - `watch/translation_pump_items.py`：TranslationPump 的 batch items 解析与过滤抽离（pairs/ids 提取），便于单测与维护（行为保持不变）
 - 服务端分层：`server.py` 仅负责启动/绑定；HTTP Handler（SSE/静态资源/通用响应）与路由分发拆分到 `http/*`（GET/POST 路由分别在 `http/routes_get.py`、`http/routes_post.py`）。其中 config/status payload 组装抽到 `http/config_payload.py`，JSON 请求体解析抽到 `http/json_helpers.py`。
 - 控制面分层：`controller_core.py` 聚焦线程生命周期/配置入口（`controller.py` 仅作为向后兼容的 facade）；translator schema/构建与校验拆分到 `control/*`，配置 patch/校验抽到 `control/config_patch.py`，密钥按需读取抽到 `control/reveal_secret.py`，翻译控制面公共逻辑抽到 `control/translate_api.py`，watcher 热更新逻辑抽到 `control/watcher_hot_updates.py`，watcher 组装抽到 `control/watcher_factory.py`
-- UI 控制层：`ui/app/control/wire.js` 作为事件 wiring 入口，按功能域拆分到 `ui/app/control/wire/*`（例如 `ui_hints.js`、`import_dialog.js`、`secrets.js`、`sfx.js`），降低单文件耦合与复杂度。
+- UI 控制层：`ui/app/control/wire.js` 作为事件 wiring 入口，按功能域拆分到 `ui/app/control/wire/*`（例如 `ui_hints.js`、`import_dialog.js`、`secrets.js`、`sfx.js`、`export_prefs_panel.js`），降低单文件耦合与复杂度。
 - UI 偏好 SSOT：UI-only 的字体/按钮尺寸偏好（localStorage）应用逻辑集中到 `ui/app/control/ui_prefs.js`，避免 `load.js` 与 `wire.js` 重复实现（行为保持不变）。
 
 > 注：下文涉及 `ui/app/*` 的“分层/模块拆分”描述对应当前默认 UI（`ui/`）；此前尝试过 UI v2（Vue 3 + Vite + Pinia），现已归档到 `old/`（不再提供路由入口）。

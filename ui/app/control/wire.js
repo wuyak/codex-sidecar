@@ -9,7 +9,7 @@ import { copyToClipboard } from "../utils/clipboard.js";
 import { buildThinkingMetaRight } from "../thinking/meta.js";
 import { colorForKey, rolloutStampFromFile, shortId } from "../utils.js";
 import { exportThreadMarkdown } from "../export.js";
-import { getExportPrefsForKey, setExportPrefsForKey } from "../export_prefs.js";
+import { getExportPrefsForKey } from "../export_prefs.js";
 import { getCustomLabel, setCustomLabel } from "../sidebar/labels.js";
 import { saveClosedThreads } from "../closed_threads.js";
 import { saveHiddenThreads } from "../sidebar/hidden.js";
@@ -20,6 +20,7 @@ import { wireImportDialog } from "./wire/import_dialog.js";
 import { hideUiHoverTip, openPopupNearEl, showUiHoverTip, toastFromEl } from "./wire/ui_hints.js";
 import { wireSecretToggles } from "./wire/secrets.js";
 import { wireSfxSelects } from "./wire/sfx.js";
+import { createExportPrefsPanel } from "./wire/export_prefs_panel.js";
 import { LS_UI_BTN, LS_UI_FONT, applyUiButtonSize, applyUiFontSize } from "./ui_prefs.js";
 
 export function wireControlEvents(dom, state, helpers) {
@@ -248,107 +249,13 @@ export function wireControlEvents(dom, state, helpers) {
 	  _syncBookmarkTabsToggle();
 
 	  // 导出偏好：会话级（每个会话可单独设置 精简/全量、译文/原文）。
-	  let _exportPrefsKey = "";
-	  const _sanitizeExportPrefsKey = (v) => {
-	    const s = String(v || "").trim();
-	    return (!s || s === "all") ? "" : s;
-	  };
-	  const _exportPrefsText = (p) => `${p && p.quick ? "精简" : "全量"} · ${p && p.translate ? "译文" : "原文"}`;
-
-	  const _syncExportPrefsPanel = (key, silent = true) => {
-	    const k = _sanitizeExportPrefsKey(key) || _sanitizeExportPrefsKey(_exportPrefsKey) || _sanitizeExportPrefsKey(state.currentKey);
-	    const dlg = dom && dom.exportPrefsDialog ? dom.exportPrefsDialog : null;
-	    if (!dlg) return null;
-	    if (!k) return null;
-	    _exportPrefsKey = k;
-	    const p = getExportPrefsForKey(k);
-	    try {
-	      if (dom.exportPrefsQuickBtn) {
-	        dom.exportPrefsQuickBtn.setAttribute("aria-pressed", p.quick ? "true" : "false");
-	        dom.exportPrefsQuickBtn.classList.toggle("is-on-a", !!p.quick);
-	        dom.exportPrefsQuickBtn.classList.toggle("is-on-b", !p.quick);
-	      }
-	    } catch (_) {}
-	    try {
-	      if (dom.exportPrefsTranslateBtn) {
-	        dom.exportPrefsTranslateBtn.setAttribute("aria-pressed", p.translate ? "true" : "false");
-	        dom.exportPrefsTranslateBtn.classList.toggle("is-on-a", !!p.translate);
-	        dom.exportPrefsTranslateBtn.classList.toggle("is-on-b", !p.translate);
-	      }
-	    } catch (_) {}
-	    if (!silent) {
-	      try { _toastFromEl(dlg, `导出：${_exportPrefsText(p)}`, { durationMs: 1400 }); } catch (_) {}
-	    }
-	    return p;
-	  };
-
-		  const _openExportPrefsPanel = (key, anchorEl = null) => {
-		    const p = _syncExportPrefsPanel(key, true);
-		    const dlg = dom && dom.exportPrefsDialog ? dom.exportPrefsDialog : null;
-		    const ok = _openPopupNearEl(dlg, anchorEl, { prefer: "left", align: "end", gap: 10, pad: 12 });
-		    if (ok) {
-		      // 让“导出设置”弹层与会话管理抽屉对齐，同时避免遮挡导出按钮：
-		      // - 默认左边框对齐抽屉左边框；
-		      // - 若会遮挡导出按钮，则改为右边框对齐导出按钮左边缘。
-		      try {
-		        const drawer = dom && dom.bookmarkDrawer ? dom.bookmarkDrawer : null;
-		        const anchor = anchorEl && anchorEl.getBoundingClientRect ? anchorEl : null;
-		        if (!anchor) throw new Error("no_anchor");
-		        const ar = anchor.getBoundingClientRect();
-		        const pr = dlg.getBoundingClientRect();
-		        const vw = window.innerWidth || 0;
-		        const pad = 12;
-		        let left = Number.isFinite(ar.left) ? (ar.left - pr.width) : 0;
-		        try {
-		          if (drawer && drawer.getBoundingClientRect && drawer.classList && !drawer.classList.contains("hidden")) {
-		            const dr = drawer.getBoundingClientRect();
-		            // Prefer drawer-left alignment when it won't cover the export button.
-		            const drawerLeft = Number.isFinite(dr.left) ? dr.left : left;
-		            if ((drawerLeft + pr.width) <= ar.left) left = drawerLeft;
-		          }
-		        } catch (_) {}
-		        left = _clamp(left, pad, Math.max(pad, vw - pr.width - pad));
-		        try { dlg.style.left = `${left}px`; } catch (_) {}
-		      } catch (_) {}
-		      try {
-		        setTimeout(() => {
-		          try { if (dom.exportPrefsQuickBtn && typeof dom.exportPrefsQuickBtn.focus === "function") dom.exportPrefsQuickBtn.focus(); } catch (_) {}
-		        }, 0);
-		      } catch (_) {}
-		    }
-		    return p;
-		  };
-
-	  const _wireExportPrefsPanel = () => {
-	    const quickBtn = dom && dom.exportPrefsQuickBtn ? dom.exportPrefsQuickBtn : null;
-	    const trBtn = dom && dom.exportPrefsTranslateBtn ? dom.exportPrefsTranslateBtn : null;
-	    if (!quickBtn && !trBtn) return;
-		    const apply = (next) => {
-		      const k = _sanitizeExportPrefsKey(_exportPrefsKey) || _sanitizeExportPrefsKey(state.currentKey);
-		      if (!k) return;
-		      setExportPrefsForKey(k, next);
-		      _syncExportPrefsPanel(k, true);
-		      try { _renderBookmarkDrawerList(); } catch (_) {}
-		    };
-		    try {
-		      if (quickBtn) quickBtn.addEventListener("click", () => {
-		        const k = _sanitizeExportPrefsKey(_exportPrefsKey) || _sanitizeExportPrefsKey(state.currentKey);
-		        const cur = getExportPrefsForKey(k);
-		        apply({ quick: !cur.quick, translate: !!cur.translate });
-		      });
-		    } catch (_) {}
-		    try {
-		      if (trBtn) trBtn.addEventListener("click", () => {
-		        const k = _sanitizeExportPrefsKey(_exportPrefsKey) || _sanitizeExportPrefsKey(state.currentKey);
-		        const cur = getExportPrefsForKey(k);
-		        apply({ quick: !!cur.quick, translate: !cur.translate });
-		      });
-		    } catch (_) {}
-
-	    try { _syncExportPrefsPanel(state.currentKey, true); } catch (_) {}
-	  };
-
-	  _wireExportPrefsPanel();
+	  const _exportPrefs = createExportPrefsPanel(dom, state, {
+	    toastFromEl: _toastFromEl,
+	    openPopupNearEl: _openPopupNearEl,
+	    clamp: _clamp,
+	    renderBookmarkDrawerList: () => { try { _renderBookmarkDrawerList(); } catch (_) {} },
+	  });
+	  const _openExportPrefsPanel = _exportPrefs ? _exportPrefs.openExportPrefsPanel : (() => null);
 
   if (dom.configToggleBtn) dom.configToggleBtn.addEventListener("click", () => {
     try {
