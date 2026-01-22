@@ -41,7 +41,7 @@
   - `watch/dedupe_cache.py`：轻量去重缓存（rollout 与 TUI gate 共享一套去重语义）
   - `watch/rollout_ingest.py`：rollout 单行解析/去重/工具门禁提示/翻译入队（watcher 只负责调度）
   - `watch/rollout_tailer.py`：文件 replay/poll 的通用 tail 逻辑（按 offset 增量读取）
-- 服务端分层：`server.py` 仅负责启动/绑定；HTTP 路由、SSE 与静态资源拆分到 `http/*`
+- 服务端分层：`server.py` 仅负责启动/绑定；HTTP Handler（SSE/静态资源/通用响应）与路由分发拆分到 `http/*`（GET/POST 路由分别在 `http/routes_get.py`、`http/routes_post.py`）
 - 控制面分层：`controller_core.py` 聚焦线程生命周期/配置入口（`controller.py` 仅作为向后兼容的 facade）；translator schema/构建与校验拆分到 `control/*`，翻译控制面公共逻辑抽到 `control/translate_api.py`
 - UI 控制层：`ui/app/control/wire.js` 作为事件 wiring 入口，按功能域拆分到 `ui/app/control/wire/*`（例如 `ui_hints.js`、`import_dialog.js`），降低单文件耦合与复杂度。
 
