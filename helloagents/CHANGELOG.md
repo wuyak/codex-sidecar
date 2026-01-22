@@ -311,6 +311,7 @@
 - 修复：配置解析更健壮：容忍 `config.json` 中数字字段为非法字符串/空值，避免启动时报 `ValueError`。
 - 安全：`/api/config` 与 `/api/status` 默认脱敏（`openai.base_url/api_key`、`nvidia.api_key`、`http.token`）；UI 可通过“眼睛按钮”按需显示原文。
 - 新增：`/api/control/reveal_secret`（仅返回单个字段），用于 UI 显示/隐藏 API Key/Base URL 时按需取回原值。
+- 重构(后端)：`reveal_secret` 解析逻辑抽离到 `codex_sidecar/control/reveal_secret.py`，controller_core 更聚焦状态/锁管理（行为保持不变）。
 - 诊断增强：`/api/status` 的 watcher 状态增加 `replay_last_lines/poll_interval_s/file_scan_interval_s` 等运行态参数，便于确认“并行会话/回放行数”热更新是否生效。
 - UI：翻译设置为 OpenAI/NVIDIA/HTTP Token 增加“显示/隐藏”按钮；NVIDIA API Key 下方增加获取链接（build.nvidia.com/settings/api-keys）。
 - 维护：新增 `config/sidecar/config.example.json`；调整 `.gitignore` 仅忽略 `config/sidecar/config.json` 与锁文件，允许提交示例配置。

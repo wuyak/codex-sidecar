@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional, Set
 
 from .config import SidecarConfig, load_config, save_config
 from .control.config_patch import apply_config_patch
+from .control.reveal_secret import reveal_secret as _reveal_secret
 from .control.watcher_factory import build_rollout_watcher
 from .control.translator_build import build_translator as _build_translator_impl
 from .control.translate_api import translate_items as _translate_items, translate_probe as _translate_probe, translate_text as _translate_text
@@ -133,63 +134,9 @@ class SidecarController:
             return self._cfg.to_dict()
 
     def reveal_secret(self, provider: str, field: str, profile: str = "") -> Dict[str, Any]:
-        """
-        Reveal a single secret value for UI "显示/隐藏" controls.
-
-        Notes:
-        - `/api/config` always returns a redacted view, so UI must call this endpoint
-          to show original values on demand.
-        - This returns only the requested field (not the whole config).
-        """
-        p = str(provider or "").strip().lower()
-        f = str(field or "").strip().lower()
-        prof = str(profile or "").strip()
         with self._lock:
             cfg = self._cfg.to_dict()
-        tc = cfg.get("translator_config")
-        if not isinstance(tc, dict):
-            tc = {}
-
-        def _as_dict(x):
-            return x if isinstance(x, dict) else {}
-
-        if p == "openai":
-            o = _as_dict(tc.get("openai") if isinstance(tc.get("openai"), dict) else tc)
-            if f == "api_key":
-                return {"ok": True, "provider": p, "field": f, "value": str(o.get("api_key") or "")}
-            if f == "base_url":
-                return {"ok": True, "provider": p, "field": f, "value": str(o.get("base_url") or "")}
-            return {"ok": False, "error": "unknown_field"}
-
-        if p == "nvidia":
-            n = _as_dict(tc.get("nvidia") if isinstance(tc.get("nvidia"), dict) else tc)
-            if f == "api_key":
-                return {"ok": True, "provider": p, "field": f, "value": str(n.get("api_key") or "")}
-            return {"ok": False, "error": "unknown_field"}
-
-        if p == "http":
-            h = _as_dict(tc.get("http") if isinstance(tc.get("http"), dict) else tc)
-            profiles = h.get("profiles") if isinstance(h.get("profiles"), list) else []
-            if f != "token":
-                return {"ok": False, "error": "unknown_field"}
-            if not prof:
-                # best-effort: use selected profile if not specified
-                try:
-                    prof = str(h.get("selected") or "").strip()
-                except Exception:
-                    prof = ""
-            if profiles:
-                for pr in profiles:
-                    if not isinstance(pr, dict):
-                        continue
-                    if str(pr.get("name") or "").strip() == prof:
-                        return {"ok": True, "provider": p, "field": f, "profile": prof, "value": str(pr.get("token") or "")}
-                # Not found: return empty (do not error, UI may be on a new profile)
-                return {"ok": True, "provider": p, "field": f, "profile": prof, "value": ""}
-            # legacy: {token: "..."}
-            return {"ok": True, "provider": p, "field": f, "profile": prof, "value": str(h.get("token") or "")}
-
-        return {"ok": False, "error": "unknown_provider"}
+        return _reveal_secret(cfg, provider, field, profile=str(profile or ""))
 
     def update_config(self, patch: Dict[str, Any]) -> Dict[str, Any]:
         allow_empty = bool(patch.pop("__allow_empty_translator_config", False))
