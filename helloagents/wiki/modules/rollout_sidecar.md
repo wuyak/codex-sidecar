@@ -44,6 +44,7 @@
   - `watch/rollout_tailer.py`：文件 replay/poll 的通用 tail 逻辑（按 offset 增量读取）
   - `watch/rollout_follow_state.py`：follow targets → cursors/primary 的落地逻辑（cursor 初始化/回放/active 标记），从 watcher 抽离保持行为不变
   - `watch/follow_targets.py`：follow targets 计算（process/pin/auto + excludes），降低 watcher 内联分支耦合
+  - `watch/follow_control_helpers.py`：follow 控制面输入清洗（pin 文件解析 + excludes 清洗），供 `RolloutWatcher` 复用（行为保持不变）
   - `watch/process_follow_scan.py`：进程强匹配扫描/进程树收集/rollout fd 解析（供 `FollowPicker` 复用），降低 follow_picker 内联复杂度（行为保持不变）
   - `watch/translation_queue.py`：翻译队列状态机（seen/inflight/force_after + 背压丢弃时的 inflight 清理）
   - `watch/translation_batch_worker.py`：批量翻译执行/解包/回退逻辑抽离，`TranslationPump` 更聚焦队列调度与统计（行为保持不变）

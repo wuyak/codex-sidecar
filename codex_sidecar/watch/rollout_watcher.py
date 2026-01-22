@@ -23,6 +23,7 @@ from .rollout_ingest import RolloutLineIngestor, sha1_hex
 from .rollout_tailer import poll_one, replay_tail
 from .follow_targets import compute_follow_targets
 from .rollout_follow_state import apply_follow_targets, now_ts
+from .follow_control_helpers import clean_exclude_files, clean_exclude_keys, resolve_pinned_rollout_file
 
 @dataclass
 class _FileCursor:
@@ -311,26 +312,13 @@ class RolloutWatcher:
         tid = str(thread_id or "").strip()
         fp = str(file or "").strip()
 
-        pinned_file: Optional[Path] = None
-        if fp:
-            try:
-                cand = Path(fp).expanduser()
-                if not cand.is_absolute():
-                    cand = (self._codex_home / cand).resolve()
-                else:
-                    cand = cand.resolve()
-                sessions_root = (self._codex_home / "sessions").resolve()
-                try:
-                    _ = cand.relative_to(sessions_root)
-                except Exception:
-                    cand = None  # type: ignore[assignment]
-                if cand is not None and cand.exists() and cand.is_file() and _ROLLOUT_RE.match(cand.name):
-                    pinned_file = cand
-            except Exception:
-                pinned_file = None
-
-        if pinned_file is None and tid:
-            pinned_file = _find_rollout_file_for_thread(self._codex_home, tid)
+        pinned_file = resolve_pinned_rollout_file(
+            self._codex_home,
+            file_path=fp,
+            thread_id=tid,
+            find_rollout_file_for_thread=_find_rollout_file_for_thread,
+            rollout_re=_ROLLOUT_RE,
+        )
 
         with self._follow_lock:
             self._selection_mode = m
@@ -354,44 +342,8 @@ class RolloutWatcher:
         raw_keys = keys if isinstance(keys, list) else []
         raw_files = files if isinstance(files, list) else []
 
-        cleaned_keys: Set[str] = set()
-        for x in raw_keys:
-            try:
-                s = str(x or "").strip()
-            except Exception:
-                s = ""
-            if not s:
-                continue
-            # Keep it bounded to avoid untrusted UI inputs growing without limit.
-            cleaned_keys.add(s[:256])
-            if len(cleaned_keys) >= 1000:
-                break
-
-        cleaned_files: Set[Path] = set()
-        sessions_root = (self._codex_home / "sessions").resolve()
-        for x in raw_files:
-            try:
-                s = str(x or "").strip()
-            except Exception:
-                s = ""
-            if not s:
-                continue
-            try:
-                cand = Path(s).expanduser()
-                if not cand.is_absolute():
-                    cand = (self._codex_home / cand).resolve()
-                else:
-                    cand = cand.resolve()
-                try:
-                    _ = cand.relative_to(sessions_root)
-                except Exception:
-                    continue
-                if cand.exists() and cand.is_file() and _ROLLOUT_RE.match(cand.name):
-                    cleaned_files.add(cand)
-            except Exception:
-                continue
-            if len(cleaned_files) >= 1000:
-                break
+        cleaned_keys = clean_exclude_keys(raw_keys, max_items=1000, max_len=256)
+        cleaned_files = clean_exclude_files(raw_files, codex_home=self._codex_home, rollout_re=_ROLLOUT_RE, max_items=1000)
 
         try:
             with self._follow_lock:

@@ -19,6 +19,7 @@
 - 重构(后端)：RolloutWatcher 的 follow targets 落地逻辑抽离到 `codex_sidecar/watch/rollout_follow_state.py`，watcher 更聚焦“选目标 + 调度”（行为保持不变）。
 - 重构(后端)：follow targets 计算从 watcher 中抽离到 `codex_sidecar/watch/follow_targets.py`，并新增单测覆盖 process/pin/auto 的关键分支。
 - 重构(后端)：FollowPicker 的进程扫描/进程树/rollout fd 解析抽离到 `codex_sidecar/watch/process_follow_scan.py`，follow_picker 更聚焦选择策略（行为保持不变）。
+- 重构(后端)：RolloutWatcher 的 follow 控制输入清洗抽离到 `codex_sidecar/watch/follow_control_helpers.py`，并新增单测覆盖（行为保持不变）。
 - 重构(后端)：controller 的 watcher 组装逻辑抽离到 `codex_sidecar/control/watcher_factory.py`，controller_core 更聚焦线程/状态管理（行为保持不变）。
 - 重构(后端)：TranslationPump 的队列状态（seen/inflight/force_after）抽离到 `codex_sidecar/watch/translation_queue.py`，并新增单测覆盖关键队列行为。
 - 重构(后端)：TranslationPump 的批量翻译执行/解包/回退逻辑抽离到 `codex_sidecar/watch/translation_batch_worker.py`，降低 `_worker()` 复杂度并补充单测（行为保持不变）。
