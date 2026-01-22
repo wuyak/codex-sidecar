@@ -2,6 +2,7 @@ import { closeBookmarkDrawer, closeDrawer, closeTranslateDrawer } from "../ui.js
 import { colorForKey, rolloutStampFromFile, shortId } from "../../utils.js";
 import { offlineKeyFromRel } from "../../offline.js";
 import { openPopupNearEl } from "./ui_hints.js";
+import { buildImportIndex } from "./import_dialog/import_index.js";
 import { createOpenOfflineRel } from "./import_dialog/open_offline_rel.js";
 
 export function wireImportDialog(dom, state, helpers, opts = {}) {
@@ -476,54 +477,13 @@ export function wireImportDialog(dom, state, helpers, opts = {}) {
       return;
     }
 
-    const parseYmd = (rel) => {
-      const r = String(rel || "").trim().replaceAll("\\", "/").replace(/^\/+/, "");
-      const parts = r.split("/");
-      if (parts.length < 5) return null;
-      if (parts[0] !== "sessions") return null;
-      const y = String(parts[1] || "");
-      const m = String(parts[2] || "");
-      const d = String(parts[3] || "");
-      if (!/^\d{4}$/.test(y)) return null;
-      if (!/^\d{2}$/.test(m)) return null;
-      if (!/^\d{2}$/.test(d)) return null;
-      return { y, m, d };
-    };
-
-    const byDate = new Map(); // YYYY-MM-DD -> items[]
-    const countByMonth = new Map(); // YYYY-MM -> count
-    const countByYear = new Map(); // YYYY -> count
-    const other = [];
-    let minT = null;
-    let maxT = null;
-
-    for (const it of files) {
-      const rel = String((it && it.rel) ? it.rel : "").trim();
-      if (!rel) continue;
-      const ymd = parseYmd(rel);
-      if (!ymd) { other.push(it); continue; }
-      const { y, m, d } = ymd;
-      const dayKey = `${y}-${m}-${d}`;
-      const monthKey = `${y}-${m}`;
-      const yearKey = String(y);
-
-      if (!byDate.has(dayKey)) byDate.set(dayKey, []);
-      try { byDate.get(dayKey).push(it); } catch (_) {}
-
-      try { countByMonth.set(monthKey, Number(countByMonth.get(monthKey) || 0) + 1); } catch (_) {}
-      try { countByYear.set(yearKey, Number(countByYear.get(yearKey) || 0) + 1); } catch (_) {}
-
-      const dt = new Date(Number(y), Number(m) - 1, Number(d));
-      const t = Number(dt.getTime());
-      if (Number.isFinite(t)) {
-        if (minT === null || t < minT) minT = t;
-        if (maxT === null || t > maxT) maxT = t;
-      }
-    }
-
-    const minDate = (minT === null) ? null : new Date(minT);
-    const maxDate = (maxT === null) ? null : new Date(maxT);
-    importIndex = { byDate, countByMonth, countByYear, minDate, maxDate, other };
+    importIndex = buildImportIndex(files);
+    const byDate = (importIndex && importIndex.byDate) ? importIndex.byDate : new Map();
+    const countByMonth = (importIndex && importIndex.countByMonth) ? importIndex.countByMonth : new Map();
+    const countByYear = (importIndex && importIndex.countByYear) ? importIndex.countByYear : new Map();
+    const minDate = (importIndex && importIndex.minDate) ? importIndex.minDate : null;
+    const maxDate = (importIndex && importIndex.maxDate) ? importIndex.maxDate : null;
+    const other = (importIndex && Array.isArray(importIndex.other)) ? importIndex.other : [];
 
     const isShown = (rel) => {
       const r = String(rel || "").trim();
