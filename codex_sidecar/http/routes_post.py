@@ -1,7 +1,8 @@
-import json
 import threading
 import time
 from http import HTTPStatus
+
+from .json_helpers import parse_json_object
 
 
 def dispatch_post(h) -> None:
@@ -138,14 +139,9 @@ def dispatch_post(h) -> None:
         return
 
     raw = h.rfile.read(length)
-    try:
-        obj = json.loads(raw.decode("utf-8", errors="replace"))
-    except Exception:
-        h._send_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "invalid_json"})
-        return
-
-    if not isinstance(obj, dict):
-        h._send_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "invalid_payload"})
+    obj, err = parse_json_object(raw, allow_invalid_json=False)
+    if err:
+        h._send_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": err})
         return
 
     op = str(obj.get("op") or "").strip().lower()
@@ -164,4 +160,3 @@ def dispatch_post(h) -> None:
 
     h._state.add(obj)
     h._send_json(HTTPStatus.OK, {"ok": True, "op": "add"})
-
