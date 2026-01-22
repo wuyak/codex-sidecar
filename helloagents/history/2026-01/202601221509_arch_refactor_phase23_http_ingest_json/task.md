@@ -18,4 +18,4 @@
 - [√] 4.2 运行 `python3 -m unittest discover -s tests`
 
 ## 5. 方案包迁移
-- [ ] 5.1 将本方案包迁移至 `helloagents/history/2026-01/202601221509_arch_refactor_phase23_http_ingest_json/` 并更新 `helloagents/history/index.md`
+- [√] 5.1 将本方案包迁移至 `helloagents/history/2026-01/202601221509_arch_refactor_phase23_http_ingest_json/` 并更新 `helloagents/history/index.md`
