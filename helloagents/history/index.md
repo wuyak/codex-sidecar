@@ -3,6 +3,7 @@
 > 该目录存放已执行的方案包（从 `helloagents/plan/` 迁移而来）。
 
 ## 2026-01
+- 202601221808_arch_refactor_phase39_ui_wire_secrets_sfx
 - 202601221803_arch_refactor_phase38_ui_prefs_ssot
 - 202601221741_arch_refactor_phase37_follow_sync_apply
 - 202601221729_arch_refactor_phase36_translator_meta
