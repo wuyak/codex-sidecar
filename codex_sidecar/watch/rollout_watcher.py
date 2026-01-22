@@ -21,7 +21,7 @@ from .tui_gate import TuiGateTailer
 from .dedupe_cache import DedupeCache
 from .rollout_ingest import RolloutLineIngestor, sha1_hex
 from .rollout_tailer import poll_one, replay_tail
-from .rollout_follow_state import apply_follow_targets, now_ts
+from .rollout_follow_state import apply_follow_sync_targets, now_ts
 from .follow_control_helpers import clean_exclude_files, clean_exclude_keys, resolve_pinned_rollout_file
 from .rollout_follow_sync import FollowControls, build_follow_sync_plan
 from .rollout_watcher_loop import decide_follow_sync_force, should_poll_tui
@@ -469,31 +469,14 @@ class RolloutWatcher:
             except Exception:
                 pass
 
-        # When we are explicitly in "idle / wait_codex / wait_rollout" mode, do not follow any file.
-        if plan.idle:
-            if force or self._follow_files:
-                self._follow_files = []
-                self._current_file = None
-                self._thread_id = None
-                self._offset = 0
-                self._line_no = 0
-                for cur in self._cursors.values():
-                    cur.active = False
-            return
-
-        targets = list(plan.targets or [])
-
-        changed = force or (targets != self._follow_files)
-        if not changed:
-            return
-
-        self._follow_files = targets
-        now = now_ts()
-        cur_file, thread_id, primary_offset, primary_line_no = apply_follow_targets(
-            targets=targets,
+        res = apply_follow_sync_targets(
+            idle=bool(plan.idle),
+            targets=list(plan.targets or []),
+            force=bool(force),
+            prev_follow_files=list(self._follow_files or []),
             cursors=self._cursors,
             new_cursor=_FileCursor,
-            now=now,
+            now=now_ts(),
             replay_last_lines=self._replay_last_lines,
             read_tail_lines=read_tail_lines,
             replay_tail=replay_tail,
@@ -503,14 +486,26 @@ class RolloutWatcher:
             prev_primary_offset=int(self._offset or 0),
             prev_primary_line_no=int(self._line_no or 0),
         )
+        if res is None:
+            return
+        self._follow_files = list(res.follow_files or [])
+
+        # When we are explicitly in "idle / wait_codex / wait_rollout" mode, do not follow any file.
+        if res.idle:
+            self._current_file = None
+            self._thread_id = None
+            self._offset = 0
+            self._line_no = 0
+            return
 
         # Update "primary" fields for status and tool gate tagging.
-        self._current_file = cur_file
-        self._thread_id = thread_id
-        self._offset = int(primary_offset or 0)
-        self._line_no = int(primary_line_no or 0)
+        self._current_file = res.current_file
+        self._thread_id = res.thread_id
+        self._offset = int(res.offset or 0)
+        self._line_no = int(res.line_no or 0)
 
         try:
+            targets = list(res.follow_files or [])
             if targets:
                 joined = " | ".join(str(p) for p in targets[:6])
                 print(f"[sidecar] follow_files={len(targets)} primary={targets[0]} | {joined}", file=sys.stderr)

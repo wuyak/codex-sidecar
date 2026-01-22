@@ -1,6 +1,7 @@
 import time
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 
 def apply_follow_targets(
@@ -113,6 +114,90 @@ def apply_follow_targets(
     return (current_file, thread_id, primary_offset, primary_line_no)
 
 
+@dataclass(frozen=True)
+class FollowApplyResult:
+    follow_files: List[Path]
+    current_file: Optional[Path]
+    thread_id: Optional[str]
+    offset: int
+    line_no: int
+    idle: bool
+
+
+def apply_follow_sync_targets(
+    *,
+    idle: bool,
+    targets: Sequence[Path],
+    force: bool,
+    prev_follow_files: Sequence[Path],
+    cursors: Dict[Path, object],
+    new_cursor: Callable[..., object],
+    now: float,
+    replay_last_lines: int,
+    read_tail_lines: Callable[..., List[bytes]],
+    replay_tail: Callable[..., None],
+    stop_requested: Callable[[], bool],
+    on_line: Callable[..., int],
+    parse_thread_id: Callable[[Path], str],
+    prev_primary_offset: int,
+    prev_primary_line_no: int,
+) -> Optional[FollowApplyResult]:
+    """
+    Apply follow sync plan targets to runtime state.
+
+    This is extracted from RolloutWatcher._sync_follow_targets(). Behavior is intended
+    to remain identical:
+      - When idle, clear follow state only if force or previously following files.
+      - When not idle, only apply when force or targets differ from previous list.
+      - Delegate cursor init/primary derivation to apply_follow_targets().
+    """
+    prev_files = list(prev_follow_files or [])
+
+    if bool(idle):
+        if (not bool(force)) and (not prev_files):
+            return None
+        for cur in cursors.values():
+            try:
+                cur.active = False  # type: ignore[attr-defined]
+            except Exception:
+                pass
+        return FollowApplyResult(
+            follow_files=[],
+            current_file=None,
+            thread_id=None,
+            offset=0,
+            line_no=0,
+            idle=True,
+        )
+
+    next_files = list(targets or [])
+    if (not bool(force)) and (next_files == prev_files):
+        return None
+
+    cur_file, thread_id, primary_offset, primary_line_no = apply_follow_targets(
+        targets=next_files,
+        cursors=cursors,
+        new_cursor=new_cursor,
+        now=now,
+        replay_last_lines=replay_last_lines,
+        read_tail_lines=read_tail_lines,
+        replay_tail=replay_tail,
+        stop_requested=stop_requested,
+        on_line=on_line,
+        parse_thread_id=parse_thread_id,
+        prev_primary_offset=prev_primary_offset,
+        prev_primary_line_no=prev_primary_line_no,
+    )
+    return FollowApplyResult(
+        follow_files=next_files,
+        current_file=cur_file,
+        thread_id=thread_id,
+        offset=int(primary_offset or 0),
+        line_no=int(primary_line_no or 0),
+        idle=False,
+    )
+
+
 def now_ts() -> float:
     """
     A tiny indirection to make follow_state easier to unit-test deterministically.
@@ -121,4 +206,3 @@ def now_ts() -> float:
         return float(time.time())
     except Exception:
         return 0.0
-

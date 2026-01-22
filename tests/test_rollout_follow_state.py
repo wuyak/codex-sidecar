@@ -3,7 +3,7 @@ import unittest
 from dataclasses import dataclass
 from pathlib import Path
 
-from codex_sidecar.watch.rollout_follow_state import apply_follow_targets
+from codex_sidecar.watch.rollout_follow_state import apply_follow_sync_targets, apply_follow_targets
 
 
 @dataclass
@@ -96,7 +96,103 @@ class TestRolloutFollowState(unittest.TestCase):
             self.assertEqual(cur.line_no, 2)
             self.assertEqual(cur.last_active_ts, 124.0)
 
+    def test_apply_follow_sync_targets_idle_noop_returns_none(self) -> None:
+        cursors = {}
+        r = apply_follow_sync_targets(
+            idle=True,
+            targets=[],
+            force=False,
+            prev_follow_files=[],
+            cursors=cursors,
+            new_cursor=_Cursor,
+            now=0.0,
+            replay_last_lines=0,
+            read_tail_lines=lambda *_a, **_k: [],
+            replay_tail=lambda *_a, **_k: None,
+            stop_requested=lambda: False,
+            on_line=lambda *_a, **_k: 0,
+            parse_thread_id=lambda _p: "tid",
+            prev_primary_offset=0,
+            prev_primary_line_no=0,
+        )
+        self.assertIsNone(r)
+
+    def test_apply_follow_sync_targets_idle_force_clears_and_deactivates(self) -> None:
+        p = Path("/tmp/rollout-2026-01-01T00-00-00-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa.jsonl")
+        cur = _Cursor(path=p, thread_id="tid", active=True)
+        cursors = {p: cur}
+        r = apply_follow_sync_targets(
+            idle=True,
+            targets=[],
+            force=True,
+            prev_follow_files=[],
+            cursors=cursors,
+            new_cursor=_Cursor,
+            now=0.0,
+            replay_last_lines=0,
+            read_tail_lines=lambda *_a, **_k: [],
+            replay_tail=lambda *_a, **_k: None,
+            stop_requested=lambda: False,
+            on_line=lambda *_a, **_k: 0,
+            parse_thread_id=lambda _p: "tid",
+            prev_primary_offset=0,
+            prev_primary_line_no=0,
+        )
+        self.assertIsNotNone(r)
+        self.assertEqual(r.idle, True)  # type: ignore[union-attr]
+        self.assertEqual(r.follow_files, [])  # type: ignore[union-attr]
+        self.assertEqual(cur.active, False)
+
+    def test_apply_follow_sync_targets_no_change_returns_none(self) -> None:
+        p = Path("/tmp/rollout-2026-01-01T00-00-00-bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb.jsonl")
+        cursors = {}
+        r = apply_follow_sync_targets(
+            idle=False,
+            targets=[p],
+            force=False,
+            prev_follow_files=[p],
+            cursors=cursors,
+            new_cursor=_Cursor,
+            now=0.0,
+            replay_last_lines=0,
+            read_tail_lines=lambda *_a, **_k: [],
+            replay_tail=lambda *_a, **_k: None,
+            stop_requested=lambda: False,
+            on_line=lambda *_a, **_k: 0,
+            parse_thread_id=lambda _p: "tid",
+            prev_primary_offset=0,
+            prev_primary_line_no=0,
+        )
+        self.assertIsNone(r)
+
+    def test_apply_follow_sync_targets_change_returns_primary(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "rollout-2026-01-01T00-00-00-cccccccc-cccc-cccc-cccc-cccccccccccc.jsonl"
+            p.write_text("a\n", encoding="utf-8")
+            cursors = {}
+            r = apply_follow_sync_targets(
+                idle=False,
+                targets=[p],
+                force=False,
+                prev_follow_files=[],
+                cursors=cursors,
+                new_cursor=_Cursor,
+                now=123.0,
+                replay_last_lines=0,
+                read_tail_lines=lambda *_a, **_k: [],
+                replay_tail=lambda *_a, **_k: None,
+                stop_requested=lambda: False,
+                on_line=lambda *_a, **_k: 0,
+                parse_thread_id=lambda _p: "tid",
+                prev_primary_offset=0,
+                prev_primary_line_no=0,
+            )
+            self.assertIsNotNone(r)
+            self.assertEqual(r.idle, False)  # type: ignore[union-attr]
+            self.assertEqual(r.current_file, p)  # type: ignore[union-attr]
+            self.assertEqual(r.thread_id, "tid")  # type: ignore[union-attr]
+            self.assertEqual(int(r.offset), p.stat().st_size)  # type: ignore[union-attr]
+
 
 if __name__ == "__main__":
     unittest.main()
-

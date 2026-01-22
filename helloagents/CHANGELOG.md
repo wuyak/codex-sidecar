@@ -18,6 +18,7 @@
 - 重构(后端)：controller 的 follow 控制逻辑抽离到 `codex_sidecar/control/follow_control_api.py`，并新增单测覆盖（行为保持不变）。
 - 重构(后端)：RolloutWatcher 的 status payload 组装抽离到 `codex_sidecar/watch/rollout_watcher_status.py`，并新增单测覆盖（行为保持不变）。
 - 重构(后端)：RolloutWatcher 的 run loop 同步调度判断抽离到 `codex_sidecar/watch/rollout_watcher_loop.py`（并扩展单测覆盖，行为保持不变）。
+- 重构(后端)：follow sync targets 应用逻辑抽离到 `codex_sidecar/watch/rollout_follow_state.py`，并扩展单测覆盖（行为保持不变）。
 - 重构(后端)：controller 停止 watcher 线程的 stop/join 逻辑抽离到 `codex_sidecar/control/watcher_lifecycle.py`，并新增单测覆盖（行为保持不变）。
 - 重构(后端)：translator 的 error/model 元信息解析抽离到 `codex_sidecar/control/translator_meta.py`，并新增单测覆盖（行为保持不变）。
 - 修复(后端)：`update_config` 触发 controller 自锁死锁导致 `/api/config` / `/api/status` 永久卡死（`/health` 仍正常、UI 空白）；调整为热更新在锁外执行，并增加回归测试覆盖。
