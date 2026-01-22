@@ -3,6 +3,7 @@
 > 该目录存放已执行的方案包（从 `helloagents/plan/` 迁移而来）。
 
 ## 2026-01
+- 202601222007_arch_refactor_phase52_tabs_hover_tip_helper
 - 202601222004_arch_refactor_phase51_export_remove_unused_translate_helper
 - 202601222001_arch_refactor_phase50_export_markdown_utils
 - 202601221955_arch_refactor_phase49_bookmark_drawer_hover_tip_helper
