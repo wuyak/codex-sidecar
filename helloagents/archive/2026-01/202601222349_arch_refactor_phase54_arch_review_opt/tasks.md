@@ -21,6 +21,6 @@
 - [√] 3.2 回归测试：确保 config load/migrations 相关测试通过。
 
 ## 4. 收尾与归档（Phase54.4）
-- [ ] 4.1 更新 `helloagents/CHANGELOG.md`（记录 Phase54 的结构性优化）。
-- [ ] 4.2 将本方案包迁移至 `helloagents/archive/2026-01/` 并更新 `helloagents/archive/_index.md`。
-- [ ] 4.3 质量验证：`python3 -m compileall -q codex_sidecar`、`python3 -m unittest discover -s tests`。
+- [√] 4.1 更新 `helloagents/CHANGELOG.md`（记录 Phase54 的结构性优化）。
+- [√] 4.2 将本方案包迁移至 `helloagents/archive/2026-01/` 并更新 `helloagents/archive/_index.md`。
+- [√] 4.3 质量验证：`python3 -m compileall -q codex_sidecar`、`python3 -m unittest discover -s tests`。
