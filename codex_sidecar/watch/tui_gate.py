@@ -133,11 +133,12 @@ class TuiGateTailer:
             if not msg:
                 continue
 
-            toolcall = self._parse_toolcall(msg)
-            if toolcall is not None:
-                toolcall["ts"] = ts
-                last_toolcall = toolcall
-                continue
+            if ts:
+                toolcall = self._parse_toolcall(msg)
+                if toolcall is not None:
+                    toolcall["ts"] = ts
+                    last_toolcall = toolcall
+                    continue
 
             if ts and _WAIT_RE.match(msg):
                 last_wait = (ts, last_toolcall)

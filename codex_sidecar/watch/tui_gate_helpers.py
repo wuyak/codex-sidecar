@@ -14,12 +14,16 @@ def split_ts(line: str) -> Tuple[str, str]:
     期望格式（去掉 ANSI 后）：
       2026-01-14T12:34:56.123Z  INFO waiting for tool gate
     """
-    s = (line or "").lstrip()
+    s = str(line or "")
     if not s:
         return ("", "")
+    # Guard: codex-tui.log 的真实日志行通常以时间戳开头（第 1 列为数字）。
+    # apply_patch 的 patch 内容/代码片段可能包含“缩进示例行”，不要误判。
+    if not s[0].isdigit():
+        return ("", s.strip())
     m = _TS_HEAD_RE.match(s)
     if not m:
-        return ("", s)
+        return ("", s.strip())
     ts = (m.group(1) or "").strip()
     rest = (m.group(2) or "").strip()
     return (ts, rest)

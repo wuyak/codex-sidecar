@@ -93,6 +93,7 @@
 - 快速浏览：开启 ⚡ 后仅显示 输入/输出/思考 + 更新计划（`update_plan`）块，其余类型隐藏（不影响摄取与时间线）。
 - Tool gate 提示来源：
   - ✅ 优先：`codex-tui.log`（真实 “waiting for tool gate / released”）
+    - 误报规避：仅当日志行“行首即为时间戳”时才会被识别为 tool gate 事件；避免 apply_patch/代码片段中的缩进示例文本触发误报
   - ⚠️ 辅助：tool_call 参数中出现权限升级字段时的“可能需要终端确认”提示（不等同于 tool gate 状态，是否需要批准以终端为准）
   - `justification` 字段来源：来自 tool_call 的参数（由 Codex 生成，用于解释“为什么要执行该命令/操作”）
 - UI 辅助：

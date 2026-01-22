@@ -9,6 +9,11 @@ class TestTuiGateHelpers(unittest.TestCase):
         self.assertEqual(ts, "2026-01-14T12:34:56.123Z")
         self.assertEqual(msg, "INFO waiting for tool gate")
 
+        # Regression: indented examples (e.g. docstrings / patch bodies) must NOT be treated as log lines.
+        ts0, msg0 = split_ts("  2026-01-14T12:34:56.123Z  INFO waiting for tool gate")
+        self.assertEqual(ts0, "")
+        self.assertIn("2026-01-14T12:34:56.123Z", msg0)
+
         ts2, msg2 = split_ts("INFO tool gate released")
         self.assertEqual(ts2, "")
         self.assertEqual(msg2, "INFO tool gate released")
