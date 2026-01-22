@@ -3,6 +3,7 @@
 > 该目录存放已执行的方案包（从 `helloagents/plan/` 迁移而来）。
 
 ## 2026-01
+- 202601221640_arch_refactor_phase30_watcher_hot_updates
 - 202601221625_fix_phase29_http_sse_json_bytes
 - 202601221608_arch_refactor_phase28_rollout_watcher_tui_poll
 - 202601221537_arch_refactor_phase27_controller_retranslate
