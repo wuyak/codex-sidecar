@@ -7,6 +7,17 @@ import { saveClosedThreads } from "../closed_threads.js";
 import { getUnreadCount, jumpToNextUnread } from "../unread.js";
 import { flashToastAt } from "../utils/toast.js";
 
+function _canHoverTip(e) {
+  try {
+    const pt = e && e.pointerType ? String(e.pointerType) : "";
+    if (pt && pt !== "mouse") return false;
+  } catch (_) {}
+  try {
+    if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) return false;
+  } catch (_) {}
+  return true;
+}
+
 function _toastFromEl(el, text, opts = {}) {
   const msg = String(text || "").trim();
   if (!msg) return;
@@ -190,17 +201,6 @@ function _wireBookmarkInteractions(btn) {
   if (!btn || btn.__bmWired) return;
   btn.__bmWired = true;
 
-  const canHoverTip = (e) => {
-    try {
-      const pt = e && e.pointerType ? String(e.pointerType) : "";
-      if (pt && pt !== "mouse") return false;
-    } catch (_) {}
-    try {
-      if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) return false;
-    } catch (_) {}
-    return true;
-  };
-
   const tipRename = "长按重命名";
   const tipClose = () => {
     const m = String(btn.dataset && btn.dataset.mode ? btn.dataset.mode : "").trim().toLowerCase();
@@ -222,12 +222,12 @@ function _wireBookmarkInteractions(btn) {
   };
 
   btn.addEventListener("pointerenter", (e) => {
-    if (!canHoverTip(e)) return;
+    if (!_canHoverTip(e)) return;
     if (btn.classList && btn.classList.contains("editing")) return;
     _scheduleTip(btn, tipRename);
   });
   btn.addEventListener("pointerleave", (e) => {
-    if (!canHoverTip(e)) return;
+    if (!_canHoverTip(e)) return;
     _clearTipTimer();
     _hideBmHoverTip();
   });
@@ -238,11 +238,11 @@ function _wireBookmarkInteractions(btn) {
     if (closeEl && !closeEl.__bmTipWired) {
       closeEl.__bmTipWired = true;
       closeEl.addEventListener("pointerenter", (e) => {
-        if (!canHoverTip(e)) return;
+        if (!_canHoverTip(e)) return;
         _scheduleTip(closeEl, tipClose(), 120);
       });
       closeEl.addEventListener("pointerleave", (e) => {
-        if (!canHoverTip(e)) return;
+        if (!_canHoverTip(e)) return;
         _clearTipTimer();
         try {
           if (btn.matches && btn.matches(":hover")) _scheduleTip(btn, tipRename, 260);
