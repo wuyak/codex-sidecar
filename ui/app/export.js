@@ -3,6 +3,7 @@ import { extractJsonOutputString, keyOf, safeJsonParse, shortId } from "./utils.
 import { getExportPrefsForKey } from "./export_prefs.js";
 import { isOfflineKey, offlineRelFromKey } from "./offline.js";
 import { loadOfflineZhMap, upsertOfflineZhBatch } from "./offline_zh.js";
+import { classifyToolCallText } from "./export/tool_calls.js";
 import {
   extractExitCode,
   extractOutputBody,
@@ -11,9 +12,7 @@ import {
   formatOutputTree,
   formatShellRun,
   formatShellRunExpanded,
-  inferToolName,
   normalizeNonEmptyLines,
-  parseToolCallText,
   parseToolOutputText,
   statusIcon,
 } from "./format.js";
@@ -225,47 +224,6 @@ function _getQuickBlocks(state) {
     if (fromLs) return fromLs;
   } catch (_) {}
   return new Set(_DEFAULT_QUICK_BLOCKS);
-}
-
-function _extractUpdatePlanFromParallelArgs(argsObj) {
-  try {
-    if (!argsObj || typeof argsObj !== "object") return null;
-    const uses = Array.isArray(argsObj.tool_uses) ? argsObj.tool_uses : [];
-    for (const it of uses) {
-      if (!it || typeof it !== "object") continue;
-      const rn = String(it.recipient_name || it.tool || it.name || "").trim();
-      if (!rn) continue;
-      const norm = rn.replace(/^functions\./, "").replace(/^multi_tool_use\./, "");
-      if (norm === "update_plan" || norm.endsWith(".update_plan")) {
-        const p = it.parameters;
-        if (p && typeof p === "object") return p;
-      }
-    }
-  } catch (_) {}
-  return null;
-}
-
-function _classifyToolCallText(text) {
-  const parsed = parseToolCallText(text || "");
-  const argsRaw = String(parsed.argsRaw || "").trimEnd();
-  const argsObj = safeJsonParse(argsRaw);
-  const toolName = inferToolName(parsed.toolName || "", argsRaw, argsObj) || String(parsed.toolName || "");
-  const callId = String(parsed.callId || "").trim();
-
-  let planArgs = null;
-  let isPlanUpdate = false;
-  try {
-    if (toolName === "parallel") {
-      planArgs = _extractUpdatePlanFromParallelArgs(argsObj);
-      isPlanUpdate = !!planArgs || String(argsRaw || "").includes("update_plan");
-    }
-  } catch (_) {}
-  if (toolName === "update_plan") {
-    isPlanUpdate = true;
-    if (argsObj && typeof argsObj === "object") planArgs = argsObj;
-  }
-
-  return { toolName, callId, argsRaw, argsObj, isPlanUpdate, planArgs };
 }
 
 function _renderUpdatePlan(planArgs) {
@@ -728,7 +686,7 @@ export async function exportThreadMarkdown(state, key, opts = {}) {
   for (const m of selected) {
     const kind = String(m && m.kind ? m.kind : "");
     if (kind !== "tool_call") continue;
-    const tc = _classifyToolCallText(m && m.text ? m.text : "");
+    const tc = classifyToolCallText(m && m.text ? m.text : "");
     if (!tc.callId) continue;
     callMeta.set(tc.callId, { tool_name: tc.toolName, args_raw: tc.argsRaw, args_obj: tc.argsObj });
   }
@@ -806,7 +764,7 @@ export async function exportThreadMarkdown(state, key, opts = {}) {
       if (kind === "reasoning_summary" && !quickBlocks.has("reasoning_summary")) continue;
       if (kind === "tool_gate" && !quickBlocks.has("tool_gate")) continue;
       if (kind === "tool_call") {
-        const tc0 = _classifyToolCallText(m && m.text ? m.text : "");
+        const tc0 = classifyToolCallText(m && m.text ? m.text : "");
         if (_isSuppressedToolCallTool(tc0.toolName)) continue; // UI never shows these tool_call rows
         if (tc0.isPlanUpdate) {
           if (!quickBlocks.has("update_plan")) continue;
@@ -832,7 +790,7 @@ export async function exportThreadMarkdown(state, key, opts = {}) {
     if (kind === "reasoning_summary") {
       text = _renderReasoning(m, { lang: reasoningLang });
     } else if (kind === "tool_call") {
-      const tc = _classifyToolCallText(m && m.text ? m.text : "");
+      const tc = classifyToolCallText(m && m.text ? m.text : "");
       if (_isSuppressedToolCallTool(tc.toolName)) continue; // mirror UI: tool_output already carries the useful summary
       kindName = tc.isPlanUpdate ? "更新计划" : `${_kindLabel(kind)}${tc.toolName ? ` · ${tc.toolName}` : ""}`;
       text = _renderToolCallMd(tc);
