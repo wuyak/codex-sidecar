@@ -7,7 +7,6 @@ import { showShutdownScreen } from "../shutdown.js";
 import { setViewMode, toggleViewMode } from "../view_mode.js";
 import { copyToClipboard } from "../utils/clipboard.js";
 import { buildThinkingMetaRight } from "../thinking/meta.js";
-import { maybePlayNotifySound, preloadNotifySound } from "../sound.js";
 import { colorForKey, rolloutStampFromFile, shortId } from "../utils.js";
 import { exportThreadMarkdown } from "../export.js";
 import { getExportPrefsForKey, setExportPrefsForKey } from "../export_prefs.js";
@@ -19,6 +18,8 @@ import { isOfflineKey, offlineKeyFromRel } from "../offline.js";
 import { removeOfflineShowByKey, saveOfflineShowList } from "../offline_show.js";
 import { wireImportDialog } from "./wire/import_dialog.js";
 import { hideUiHoverTip, openPopupNearEl, showUiHoverTip, toastFromEl } from "./wire/ui_hints.js";
+import { wireSecretToggles } from "./wire/secrets.js";
+import { wireSfxSelects } from "./wire/sfx.js";
 import { LS_UI_BTN, LS_UI_FONT, applyUiButtonSize, applyUiFontSize } from "./ui_prefs.js";
 
 export function wireControlEvents(dom, state, helpers) {
@@ -26,7 +27,6 @@ export function wireControlEvents(dom, state, helpers) {
   const refreshList = typeof h.refreshList === "function" ? h.refreshList : (async () => {});
   const onSelectKey = typeof h.onSelectKey === "function" ? h.onSelectKey : (async () => {});
   const renderTabs = typeof h.renderTabs === "function" ? h.renderTabs : (() => {});
-  const MASK = "********";
   const _LS_TABS_COLLAPSED = "codex_sidecar_tabs_collapsed_v1";
 
   const syncTranslateToggle = () => {
@@ -115,98 +115,12 @@ export function wireControlEvents(dom, state, helpers) {
     }
   };
 
-  const _setEyeBtnState = (btn, shown, label) => {
-    if (!btn) return;
-    const isShown = !!shown;
-    try { btn.classList.toggle("active", isShown); } catch (_) {}
-    try {
-      const use = btn.querySelector ? btn.querySelector("use") : null;
-      // 语义：开眼=当前可见；斜杠眼=当前隐藏
-      if (use && use.setAttribute) use.setAttribute("href", isShown ? "#i-eye" : "#i-eye-off");
-    } catch (_) {}
-    try { btn.setAttribute("aria-label", `${isShown ? "隐藏" : "显示"} ${label}`); } catch (_) {}
-  };
-
-  const _toggleSecretField = async ({ btn, input, provider, field, label, getProfile }) => {
-    if (!btn || !input) return;
-    const curType = String(input.type || "text").toLowerCase();
-    const shown = curType !== "password";
-    if (shown) {
-      try { input.type = "password"; } catch (_) {}
-      _setEyeBtnState(btn, false, label);
-      return;
-    }
-
-    const curVal = String(input.value || "").trim();
-    if (curVal === MASK) {
-      let prof = "";
-      try { prof = typeof getProfile === "function" ? String(getProfile() || "") : ""; } catch (_) { prof = ""; }
-      try {
-        const r = await api("POST", "/api/control/reveal_secret", { provider, field, profile: prof });
-        const v = (r && r.ok) ? String(r.value || "") : "";
-        if (!v) {
-          _toastFromEl(btn, "获取原文失败", { isLight: true, durationMs: 1800 });
-          return;
-        }
-        input.value = v;
-      } catch (_) {
-        _toastFromEl(btn, "获取原文失败", { isLight: true, durationMs: 1800 });
-        return;
-      }
-    }
-
-    try { input.type = "text"; } catch (_) {}
-    _setEyeBtnState(btn, true, label);
-    try { input.focus(); } catch (_) {}
-  };
-
   if (dom.translatorSel) dom.translatorSel.addEventListener("change", () => {
     showProviderBlocks(dom, (dom.translatorSel.value || ""));
   });
 
-  // Secret toggles (show/hide with on-demand reveal).
-  try {
-    _setEyeBtnState(dom && dom.openaiBaseUrlEyeBtn, false, "Base URL");
-    _setEyeBtnState(dom && dom.openaiApiKeyEyeBtn, false, "API Key");
-    _setEyeBtnState(dom && dom.nvidiaApiKeyEyeBtn, false, "API Key");
-    _setEyeBtnState(dom && dom.httpTokenEyeBtn, false, "Token");
-  } catch (_) {}
-  if (dom.openaiBaseUrlEyeBtn) dom.openaiBaseUrlEyeBtn.addEventListener("click", async () => {
-    await _toggleSecretField({ btn: dom.openaiBaseUrlEyeBtn, input: dom.openaiBaseUrl, provider: "openai", field: "base_url", label: "Base URL" });
-  });
-  if (dom.openaiApiKeyEyeBtn) dom.openaiApiKeyEyeBtn.addEventListener("click", async () => {
-    await _toggleSecretField({ btn: dom.openaiApiKeyEyeBtn, input: dom.openaiApiKey, provider: "openai", field: "api_key", label: "API Key" });
-  });
-  if (dom.nvidiaApiKeyEyeBtn) dom.nvidiaApiKeyEyeBtn.addEventListener("click", async () => {
-    await _toggleSecretField({ btn: dom.nvidiaApiKeyEyeBtn, input: dom.nvidiaApiKey, provider: "nvidia", field: "api_key", label: "API Key" });
-  });
-  if (dom.httpTokenEyeBtn) dom.httpTokenEyeBtn.addEventListener("click", async () => {
-    await _toggleSecretField({
-      btn: dom.httpTokenEyeBtn,
-      input: dom.httpToken,
-      provider: "http",
-      field: "token",
-      label: "Token",
-      getProfile: () => (dom.httpProfile && dom.httpProfile.value) ? dom.httpProfile.value : (state && state.httpSelected ? state.httpSelected : ""),
-    });
-  });
-
-  const _wireSfxSelect = (sel, { field, kind }) => {
-    if (!sel) return;
-    sel.addEventListener("change", async () => {
-      const v = String(sel.value || "none").trim() || "none";
-      try {
-        if (kind === "tool_gate") state.notifySoundToolGate = v;
-        else state.notifySoundAssistant = v;
-      } catch (_) {}
-      try { preloadNotifySound(state); } catch (_) {}
-      try { await api("POST", "/api/config", { [field]: v }); } catch (_) {}
-      try { if (v !== "none") maybePlayNotifySound(dom, state, { kind, force: true }); } catch (_) {}
-    });
-  };
-
-  _wireSfxSelect(dom.notifySoundAssistant, { field: "notify_sound_assistant", kind: "assistant" });
-  _wireSfxSelect(dom.notifySoundToolGate, { field: "notify_sound_tool_gate", kind: "tool_gate" });
+  try { wireSecretToggles(dom, state); } catch (_) {}
+  try { wireSfxSelects(dom, state); } catch (_) {}
 
   const _readSavedInt = (lsKey, fallback) => {
     try {
