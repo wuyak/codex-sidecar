@@ -8,6 +8,8 @@
 - 输出：本地服务端（默认 `127.0.0.1:8787`）
   - `GET /ui`：浏览器实时面板（含配置/控制）
   - `GET /events`：SSE（可供其它客户端订阅）
+    - 服务端会为“新增消息”（非 `op=update`）写入 `id: {seq}`（单调递增）；浏览器重连后会自动携带 `Last-Event-ID`，服务端可基于该游标补齐断线期间遗漏的新增消息（首连不回放历史，历史由 `/api/messages` 获取）。
+    - `op=update`（译文回填等）不写 `id:`，避免 update 事件回填旧消息导致游标倒退；断线恢复时 UI 仍会回源同步一次以补齐可能遗漏的 update。
   - `GET /api/messages`：最近消息 JSON（调试）
   - `GET /api/threads`：按 `thread_id/file` 聚合的会话列表（用于 UI 标签切换）
   - `GET /api/offline/files`：列出可选的历史 `rollout-*.jsonl`（严格限制在 `CODEX_HOME/sessions/**`）

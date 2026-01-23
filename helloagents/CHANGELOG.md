@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+- 整理：`.gitignore` 补充忽略 `.ace-tool/`（本地检索/索引目录），避免工作区噪音与误提交。
+- 整理(启动脚本)：内嵌 Python 片段统一使用 `python3 -X utf8 -`，减少不同环境下的编码差异。
+- 文档：`helloagents/modules/rollout_sidecar.md` 补充 SSE `id:` 与 `Last-Event-ID` 断线补齐策略说明（与代码一致）。
 - 重构(后端)：SSE `/events` 现在会为新增消息写入 `id: {seq}` 并支持基于 `Last-Event-ID` 的断线补齐（首连不回放历史、`op=update` 不写 id，避免游标倒退）；同时抽离 SSE 构造逻辑到 `codex_sidecar/http/sse.py` 并补充回归测试。
 - 重构(启动脚本)：抽离 `scripts/_common.sh` 复用健康检查/浏览器打开/锁 PID 等逻辑，`scripts/run.sh` 与 `scripts/ui.sh` 移除大段重复实现（UI 检测已有服务不再依赖 `curl`）。
 - 重构(后端)：`SidecarConfig.translator_config` 改为 `field(default_factory=dict)`，清理 `None` 分支并简化序列化逻辑（行为不变）。

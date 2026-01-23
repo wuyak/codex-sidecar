@@ -1,6 +1,6 @@
 wait_for_health() {
   local url="$1"
-  python3 - <<PY
+  python3 -X utf8 - <<PY
 import time, urllib.request
 url = ${url@Q}
 deadline = time.time() + 8.0
@@ -17,7 +17,7 @@ PY
 
 check_health_once() {
   local url="$1"
-  python3 - <<PY
+  python3 -X utf8 - <<PY
 import urllib.request
 url = ${url@Q}
 try:
@@ -46,7 +46,7 @@ open_browser() {
 detect_locked_pid() {
   local config_home="$1"
   local port="$2"
-  python3 - <<PY
+  python3 -X utf8 - <<PY
 import tempfile
 from pathlib import Path
 
@@ -152,4 +152,3 @@ maybe_autorecover_port() {
   fi
   return 0
 }
-
