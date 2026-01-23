@@ -710,8 +710,9 @@
 		        .rightbar { top: calc(12px + var(--safe-top)); }
 		      }
 	      .grid { display:grid; grid-template-columns: 140px 1fr; gap: 6px 10px; align-items:center; margin-top: 10px; }
-	      .grid.grid-compact { grid-template-columns: 110px 1fr; gap: 6px 8px; margin-top: 8px; }
+	      .grid.grid-compact { grid-template-columns: 160px 1fr; gap: 6px 8px; margin-top: 8px; }
 			      .grid input, .grid select { width: 100%; padding: 6px 8px; border: 1px solid var(--c-border); border-radius: 10px; background: var(--c-surface); color: var(--c-text); }
+			      .grid input.readonly-text[readonly] { background: transparent; border: none; padding: 0; box-shadow: none; color: var(--c-text); font-variant-numeric: tabular-nums; }
 	      .grid input[type="checkbox"] { width: auto; padding: 0; border: none; box-shadow: none; accent-color: var(--c-accent); }
 		      .grid.grid-compact input, .grid.grid-compact select { padding: 5px 8px; border-radius: 10px; }
 	      .check-row { display:flex; flex-wrap:wrap; gap: 12px; align-items:center; }

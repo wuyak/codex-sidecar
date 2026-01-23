@@ -45,7 +45,7 @@ class SidecarConfig:
     max_messages: int = 1000
 
     # UI 友好：自动开始监听（通常用于 /ui 模式）。
-    auto_start: bool = False
+    auto_start: bool = True
 
     # 是否优先基于 Codex 进程定位“正在写入的 rollout 文件”。
     # 兼容旧行为：默认关闭，仍按 sessions mtime 选择最新文件。
@@ -66,8 +66,8 @@ class SidecarConfig:
     # 提示音（UI）：none（无）或音效 id（builtin:* / file:*）。
     # - notify_sound_assistant: 回答输出（assistant_message）
     # - notify_sound_tool_gate: 终端确认等待（tool_gate）
-    notify_sound_assistant: str = "none"
-    notify_sound_tool_gate: str = "none"
+    notify_sound_assistant: str = "builtin:chime-gentle-up"
+    notify_sound_tool_gate: str = "builtin:chime-double"
 
     translator_provider: str = "http"  # http | openai | nvidia
     translator_config: Dict[str, Any] = field(default_factory=dict)  # provider-specific
@@ -120,11 +120,18 @@ class SidecarConfig:
         if only_follow_when_process is None:
             only_follow_when_process = True
 
+        auto_start_raw = d.get("auto_start")
+        auto_start = True if auto_start_raw is None else bool(auto_start_raw)
+
         tm = str(d.get("translate_mode") or "auto").strip().lower()
         if tm not in ("auto", "manual"):
             tm = "auto"
-        ns_assistant = _sanitize_sfx_id(d.get("notify_sound_assistant"))
-        ns_tool_gate = _sanitize_sfx_id(d.get("notify_sound_tool_gate"))
+        ns_assistant = _sanitize_sfx_id(
+            d.get("notify_sound_assistant") if d.get("notify_sound_assistant") is not None else "builtin:chime-gentle-up"
+        )
+        ns_tool_gate = _sanitize_sfx_id(
+            d.get("notify_sound_tool_gate") if d.get("notify_sound_tool_gate") is not None else "builtin:chime-double"
+        )
         return SidecarConfig(
             config_home=cfg_home,
             watch_codex_home=watch_home,
@@ -133,7 +140,7 @@ class SidecarConfig:
             poll_interval=_to_float(d.get("poll_interval"), 0.5),
             file_scan_interval=_to_float(d.get("file_scan_interval"), 2.0),
             max_messages=_to_int(d.get("max_messages"), 1000),
-            auto_start=bool(d.get("auto_start") or False),
+            auto_start=auto_start,
             follow_codex_process=bool(d.get("follow_codex_process") or False),
             codex_process_regex=str(d.get("codex_process_regex") or "codex"),
             only_follow_when_process=bool(only_follow_when_process),
@@ -191,13 +198,13 @@ def default_config(config_home: Path) -> SidecarConfig:
         poll_interval=0.5,
         file_scan_interval=2.0,
         max_messages=1000,
-        auto_start=False,
+        auto_start=True,
         follow_codex_process=False,
         codex_process_regex="codex",
         only_follow_when_process=True,
         translate_mode="auto",
-        notify_sound_assistant="none",
-        notify_sound_tool_gate="none",
+        notify_sound_assistant="builtin:chime-gentle-up",
+        notify_sound_tool_gate="builtin:chime-double",
         translator_provider="http",
         translator_config={
             "openai": {
