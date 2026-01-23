@@ -12,7 +12,7 @@
   "translate_mode": "auto",
   "notify_sound_assistant": "none",
   "notify_sound_tool_gate": "none",
-  "translator_provider": "nvidia",
+  "translator_provider": "http",
   "translator_config": {
     "openai": {
       "base_url": "https://api.openai.com/v1",
@@ -37,7 +37,7 @@
       "profiles": [
         {
           "name": "默认",
-          "url": "http://127.0.0.1:9000/translate",
+          "url": "https://siliconflow.zvo.cn/translate.json?to=chinese_simplified",
           "token": "",
           "timeout_s": 3
         }

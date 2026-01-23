@@ -69,7 +69,7 @@ class SidecarConfig:
     notify_sound_assistant: str = "none"
     notify_sound_tool_gate: str = "none"
 
-    translator_provider: str = "nvidia"  # http | openai | nvidia
+    translator_provider: str = "http"  # http | openai | nvidia
     translator_config: Dict[str, Any] = field(default_factory=dict)  # provider-specific
 
     def to_dict(self) -> Dict[str, Any]:
@@ -140,7 +140,7 @@ class SidecarConfig:
             translate_mode=tm,
             notify_sound_assistant=ns_assistant,
             notify_sound_tool_gate=ns_tool_gate,
-            translator_provider=str(d.get("translator_provider") or "nvidia"),
+            translator_provider=str(d.get("translator_provider") or "http"),
             translator_config=translator_config,
         )
 
@@ -198,7 +198,7 @@ def default_config(config_home: Path) -> SidecarConfig:
         translate_mode="auto",
         notify_sound_assistant="none",
         notify_sound_tool_gate="none",
-        translator_provider="nvidia",
+        translator_provider="http",
         translator_config={
             "openai": {
                 "base_url": "https://api.openai.com/v1",
@@ -223,7 +223,7 @@ def default_config(config_home: Path) -> SidecarConfig:
                 "profiles": [
                     {
                         "name": "默认",
-                        "url": "http://127.0.0.1:9000/translate",
+                        "url": "https://siliconflow.zvo.cn/translate.json?to=chinese_simplified",
                         "token": "",
                         "timeout_s": 3,
                     }
