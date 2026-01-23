@@ -34,7 +34,7 @@ class TestConfigLoadMigrations(unittest.TestCase):
             obj = json.loads(p.read_text(encoding="utf-8"))
             self.assertEqual(int(obj.get("replay_last_lines") or 0), 200)
 
-    def test_stub_provider_migrates_to_openai_and_keeps_other_configs(self) -> None:
+    def test_stub_provider_migrates_to_nvidia_and_keeps_other_configs(self) -> None:
         with TemporaryDirectory() as td:
             home = Path(td)
             p = config_path(home)
@@ -57,12 +57,12 @@ class TestConfigLoadMigrations(unittest.TestCase):
             )
 
             cfg = load_config(home)
-            self.assertEqual(str(cfg.translator_provider or ""), "openai")
+            self.assertEqual(str(cfg.translator_provider or ""), "nvidia")
             self.assertIsInstance(cfg.translator_config, dict)
             self.assertIn("http", cfg.translator_config)
 
             obj = json.loads(p.read_text(encoding="utf-8"))
-            self.assertEqual(str(obj.get("translator_provider") or ""), "openai")
+            self.assertEqual(str(obj.get("translator_provider") or ""), "nvidia")
             tc = obj.get("translator_config")
             self.assertIsInstance(tc, dict)
             self.assertIn("http", tc)
@@ -99,4 +99,3 @@ class TestConfigLoadMigrations(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

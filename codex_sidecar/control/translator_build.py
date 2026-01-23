@@ -5,9 +5,9 @@ from ..translator import HttpTranslator, NvidiaChatTranslator, OpenAIResponsesTr
 
 
 def build_translator(cfg: SidecarConfig) -> Translator:
-    provider = (cfg.translator_provider or "openai").strip().lower()
+    provider = (cfg.translator_provider or "nvidia").strip().lower()
     if provider not in ("openai", "nvidia", "http"):
-        provider = "openai"
+        provider = "nvidia"
     if provider == "openai":
         tc = cfg.translator_config or {}
         tc = tc if isinstance(tc, dict) else {}
