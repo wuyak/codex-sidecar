@@ -12,7 +12,7 @@
   "translate_mode": "auto",
   "notify_sound_assistant": "none",
   "notify_sound_tool_gate": "none",
-  "translator_provider": "openai",
+  "translator_provider": "nvidia",
   "translator_config": {
     "openai": {
       "base_url": "https://api.openai.com/v1",
