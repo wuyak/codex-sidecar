@@ -201,7 +201,7 @@ def default_config(config_home: Path) -> SidecarConfig:
         translator_provider="http",
         translator_config={
             "openai": {
-                "base_url": "https://api.openai.com/v1",
+                "base_url": "",
                 "model": "gpt-5.1",
                 "api_key": "",
                 "auth_header": "Authorization",
