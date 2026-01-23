@@ -182,6 +182,9 @@ function _textForCopyFromRowBody(row) {
 
 function decorateMetaHoldCopy(row) {
   if (!row) return;
+  try {
+    if (row.classList && (row.classList.contains("kind-tool_call") || row.classList.contains("kind-tool_output"))) return;
+  } catch (_) {}
   const meta = row.querySelector ? row.querySelector(".meta-line") : null;
   if (!meta) return;
   wireHoldCopy(meta, {
