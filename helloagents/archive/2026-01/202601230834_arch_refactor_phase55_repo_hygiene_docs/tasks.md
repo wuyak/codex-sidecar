@@ -17,4 +17,4 @@
 
 ## 4. 收尾与归档（Phase55.4）
 - [√] 4.1 质量验证：`python3 -m compileall -q codex_sidecar`、`python3 -m unittest discover -s tests`。
-- [ ] 4.2 将本方案包迁移至 `helloagents/archive/2026-01/` 并更新 `helloagents/archive/_index.md`。
+- [√] 4.2 将本方案包迁移至 `helloagents/archive/2026-01/` 并更新 `helloagents/archive/_index.md`。
