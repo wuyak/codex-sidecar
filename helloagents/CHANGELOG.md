@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- 调整：默认翻译 Provider 改为 `nvidia`（UI 可切换 `http/openai/nvidia`），并将 OpenAI 默认 `base_url` 统一为 `https://api.openai.com/v1`（密钥仍需在本机配置，仓库不提交）。
 - 文档：README 同步知识库目录结构说明（`helloagents/` v3 布局：`modules/archive/plan`）。
 - 整理：`.gitignore` 补充忽略 `.ace-tool/`（本地检索/索引目录），避免工作区噪音与误提交。
 - 整理(启动脚本)：内嵌 Python 片段统一使用 `python3 -X utf8 -`，减少不同环境下的编码差异。

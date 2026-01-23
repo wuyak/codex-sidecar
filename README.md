@@ -85,7 +85,7 @@ Windows（PowerShell）：
 ## 说明
 
 ### 翻译 Provider
-- 可在 UI 切换：
+- 可在 UI 切换（默认使用 `nvidia`）：
   - `http`：通用 HTTP 适配器（支持 Profiles）
   - `openai`：Responses API 兼容（用于 GPT 类网关/自建代理）
   - `nvidia`：NVIDIA NIM（Chat Completions 兼容；默认 `integrate.api.nvidia.com/v1`；内置 RPM 节流与 429 重试）
