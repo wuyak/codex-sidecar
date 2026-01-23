@@ -54,7 +54,7 @@ function _buildTranslatorPatch(dom, state) {
   const patch = { translator_provider: provider };
   if (provider === "http") {
     if (!state.httpSelected && state.httpProfiles.length > 0) state.httpSelected = state.httpProfiles[0].name || "";
-    if (!state.httpSelected) state.httpSelected = "默认";
+    if (!state.httpSelected) state.httpSelected = "siliconflowfree";
     upsertSelectedProfileFromInputs(dom, state);
     refreshHttpProfileSelect(dom, state);
     patch.translator_config = { http: { profiles: state.httpProfiles, selected: state.httpSelected } };
@@ -72,7 +72,7 @@ function _buildTranslatorPatch(dom, state) {
     const auth_prefix = (mode === "x-api-key") ? "" : "Bearer ";
     patch.translator_config = {
       openai: {
-        base_url: base || "https://api.openai.com/v1",
+        base_url: base,
         model,
         api_key: apiKey,
         timeout_s: timeout,

@@ -5,15 +5,15 @@ export function normalizeHttpProfiles(tc) {
   // Backwards-compat: old config used {url, timeout_s, ...}.
   if (profiles.length === 0 && (tc.url || tc.timeout_s)) {
     profiles.push({
-      name: "默认",
+      name: "siliconflowfree",
       url: tc.url || "",
       token: tc.token || "",
-      timeout_s: (tc.timeout_s ?? 3),
+      timeout_s: (tc.timeout_s ?? 12),
     });
-    selected = "默认";
+    selected = "siliconflowfree";
   }
 
-  if (!selected && profiles.length > 0) selected = profiles[0].name || "默认";
+  if (!selected && profiles.length > 0) selected = profiles[0].name || "siliconflowfree";
   return { profiles, selected };
 }
 
@@ -21,7 +21,7 @@ export function readHttpInputs(dom) {
   return {
     url: (dom.httpUrl && dom.httpUrl.value) ? dom.httpUrl.value : "",
     token: (dom.httpToken && dom.httpToken.value) ? dom.httpToken.value : "",
-    timeout_s: Number((dom.httpTimeout && dom.httpTimeout.value) ? dom.httpTimeout.value : 3),
+    timeout_s: Number((dom.httpTimeout && dom.httpTimeout.value) ? dom.httpTimeout.value : 12),
   };
 }
 
@@ -46,7 +46,7 @@ export function applyProfileToInputs(dom, state, name) {
   if (!p) return;
   if (dom.httpUrl) dom.httpUrl.value = p.url || "";
   if (dom.httpToken) dom.httpToken.value = p.token || "";
-  if (dom.httpTimeout) dom.httpTimeout.value = p.timeout_s ?? 3;
+  if (dom.httpTimeout) dom.httpTimeout.value = p.timeout_s ?? 12;
 }
 
 export function refreshHttpProfileSelect(dom, state) {

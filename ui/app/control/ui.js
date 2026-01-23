@@ -166,9 +166,6 @@ function showNvidiaFields(dom, show) {
 
 function ensureOpenAIDefaults(dom) {
   try {
-    if (dom.openaiBaseUrl && !String(dom.openaiBaseUrl.value || "").trim()) {
-      dom.openaiBaseUrl.value = "https://www.right.codes/codex/v1";
-    }
 	    if (dom.openaiModel && !String(dom.openaiModel.value || "").trim()) {
 	      dom.openaiModel.value = "gpt-5.1";
 	    }

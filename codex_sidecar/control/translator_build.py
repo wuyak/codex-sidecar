@@ -14,6 +14,8 @@ def build_translator(cfg: SidecarConfig) -> Translator:
         if isinstance(tc.get("openai"), dict):
             tc = tc.get("openai") or {}
         base_url = str(tc.get("base_url") or "").strip()
+        if not base_url:
+            base_url = "https://api.openai.com/v1"
         model = str(tc.get("model") or "").strip()
         api_key = str(tc.get("api_key") or "").strip()
         timeout_raw = tc.get("timeout_s")
@@ -69,7 +71,7 @@ def build_translator(cfg: SidecarConfig) -> Translator:
         tc = cfg.translator_config or {}
         selected = select_http_profile(tc if isinstance(tc, dict) else {})
         url = str(selected.get("url") or "").strip()
-        timeout_s = float(selected.get("timeout_s") or 3.0)
+        timeout_s = float(selected.get("timeout_s") or 12.0)
         auth_token = str(selected.get("token") or "").strip()
         auth_header = str(selected.get("auth_header") or "Authorization").strip() or "Authorization"
         auth_prefix = str(selected.get("auth_prefix") or "Bearer ").strip()
