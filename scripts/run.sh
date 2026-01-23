@@ -58,6 +58,23 @@ if [ "${has_config_home}" != "1" ]; then
   extra_args=(--config-home "${default_config_home}")
 fi
 
+# 默认 CODEX_HOME（监视目录）仍是 ~/.codex（或环境变量 CODEX_HOME）。
+CODEX_HOME_ARG="${CODEX_HOME:-$HOME/.codex}"
+has_codex_home="0"
+prev=""
+for a in "$@"; do
+  if [ "${prev}" = "--codex-home" ]; then has_codex_home="1"; break; fi
+  case "$a" in
+    --codex-home=*) has_codex_home="1"; break ;;
+    --codex-home) prev="--codex-home" ;;
+    --codex-home*) has_codex_home="1"; break ;;  # also handles common typo: --codex-home"$HOME/.codex"
+    *) prev="" ;;
+  esac
+done
+if [ "${has_codex_home}" != "1" ]; then
+  extra_args+=(--codex-home "${CODEX_HOME_ARG}")
+fi
+
 if [ "${no_server}" != "1" ]; then
   maybe_autorecover_port "${no_server}" "${config_home}" "${port}" "${health_url}" "${base_url}" "${ui_url}"
 fi

@@ -17,18 +17,18 @@
 ## 快速开始
 
 ```bash
-./ui.sh
+./run.sh
 ```
 
 打开：
 - `http://127.0.0.1:8787/ui`
 
-监视目录固定为 `CODEX_HOME`（默认 `~/.codex`，UI 仅展示不提供修改入口）；保存配置后点击“开始监听”。也可以启用“自动开始监听（UI）”省去手动点击。
+监视目录固定为 `CODEX_HOME`（默认 `~/.codex`，UI 仅展示不提供修改入口）。
 
-如果你希望 **启动即开始监听**（不走 UI 按钮）：
+如需“只启动 UI/服务端（不自动启动 watcher）”，可用：
 
 ```bash
-./run.sh
+./run.sh --ui
 ```
 
 ## 分享/发布（GitHub 安全）
@@ -46,11 +46,11 @@
 
 - 方式 A：直接打包当前 Git 版本（推荐）
   - `git archive --format=zip --output codex_sidecar.zip HEAD`
-  - 对方解压后运行：`./ui.sh`
+  - 对方解压后运行：`./run.sh`
 
 - 方式 B：只发一条命令（对方自行 clone）
   - `git clone <your_repo_url>`
-  - `./ui.sh`
+  - `./run.sh`
 
 ### 做成 exe（可行但需要额外工具）
 
@@ -114,7 +114,7 @@ Windows（PowerShell）：
   - `control/`: 控制面子模块（translator schema / translator 构建 / 配置校验）
 - `server.py`: HTTP+SSE 启动器（绑定 state/controller，启动 ThreadingHTTPServer）
 - `ui/`：默认 UI（静态源码，服务端以 `/ui/*` 提供）
-- `scripts/`：启动脚本实现（`run.sh` / `ui.sh`）
+- `scripts/`：启动脚本实现（`run.sh` + `_common.sh`）
 - `config/sidecar/`：本地配置落点（默认；已加入 `.gitignore`）
   - 实际配置：`config/sidecar/config.json`（本机使用，已加入 `.gitignore`）
   - 示例配置：`config/sidecar/config.example.json`（可提交/发布，无敏信息）
