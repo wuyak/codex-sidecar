@@ -172,9 +172,8 @@ class OpenAIResponsesTranslator:
     """
     OpenAI Responses API compatible translator.
 
-    Typical proxy base url:
-      - https://www.right.codes/codex/v1
-    (sidecar will POST to {base_url}/responses)
+    Base URL 默认使用 OpenAI 官方地址（https://api.openai.com/v1），也支持任意兼容的反向代理/网关。
+    Sidecar 会 POST 到 {base_url}/responses。
     """
 
     base_url: str

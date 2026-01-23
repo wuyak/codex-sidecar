@@ -219,13 +219,13 @@ def default_config(config_home: Path) -> SidecarConfig:
                 "max_retries": 3,
             },
             "http": {
-                "selected": "默认",
+                "selected": "siliconflowfree",
                 "profiles": [
                     {
-                        "name": "默认",
+                        "name": "siliconflowfree",
                         "url": "https://siliconflow.zvo.cn/translate.json?to=chinese_simplified",
                         "token": "",
-                        "timeout_s": 3,
+                        "timeout_s": 12,
                     }
                 ],
             },

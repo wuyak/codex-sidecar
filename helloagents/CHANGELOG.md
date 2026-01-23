@@ -1,8 +1,9 @@
 # Changelog
 
 ## [Unreleased]
-- 调整：默认翻译 Provider 改为 `http`（默认 URL 为硅基流动 `translate.json` 示例；UI 可切换 `http/openai/nvidia`），并将 OpenAI 默认 `base_url` 统一为 `https://api.openai.com/v1`（密钥仍需在本机配置，仓库不提交）。
-- 修复(UI)：OpenAI `Base URL` 默认不再预填，允许留空；保存时若留空会回退到 `https://api.openai.com/v1`（避免 clone 后误以为已配置）。
+- 调整：默认翻译 Provider 改为 `http`（默认 URL 为硅基流动 `translate.json` 示例；UI 可切换 `http/openai/nvidia`）；OpenAI `base_url` 允许留空，运行时默认回退为 `https://api.openai.com/v1`（密钥仍需在本机配置，仓库不提交）。
+- 修复(UI)：OpenAI `Base URL` 不再自动预填，也不在保存时强制写入默认 URL；未填写时仅作为“运行时默认值”回退到 `https://api.openai.com/v1`（避免 clone 后误以为已配置）。
+- 调整：HTTP 默认 Profile 命名为 `siliconflowfree`，并将 HTTP 翻译超时默认值调整为 `12` 秒（更贴近常用公网翻译服务的响应时间）。
 - 修复：配置加载不再自动从旧路径导入（如 `~/.config`、`$CODEX_HOME/tmp`、`./.codex-thinking-sidecar`），仅依赖当前项目的 `config/sidecar/config.json`，避免 clone 后误读本机旧密钥。
 - 文档：README 同步知识库目录结构说明（`helloagents/` v3 布局：`modules/archive/plan`）。
 - 整理：`.gitignore` 补充忽略 `.ace-tool/`（本地检索/索引目录），避免工作区噪音与误提交。

@@ -27,7 +27,7 @@ TRANSLATORS: List[TranslatorSpec] = [
         id="openai",
         label="GPT（Responses API 兼容）",
         fields={
-            "base_url": {"type": "string", "label": "Base URL", "placeholder": "https://www.right.codes/codex/v1"},
+            "base_url": {"type": "string", "label": "Base URL", "placeholder": ""},
             "model": {"type": "string", "label": "Model", "placeholder": "gpt-5.1"},
             "api_key": {"type": "string", "label": "API Key", "placeholder": "sk-..."},
             "timeout_s": {"type": "number", "label": "超时（秒）", "default": 12},
@@ -42,7 +42,7 @@ TRANSLATORS: List[TranslatorSpec] = [
         fields={
             "url": {"type": "string", "label": "翻译服务 URL", "placeholder": "http://127.0.0.1:9000/translate"},
             "token": {"type": "string", "label": "Token（可选）", "placeholder": "用于 Authorization Header 或 URL 中 {token} 替换"},
-            "timeout_s": {"type": "number", "label": "超时（秒）", "default": 3},
+            "timeout_s": {"type": "number", "label": "超时（秒）", "default": 12},
             "auth_header": {"type": "string", "label": "认证 Header（可选）", "default": "Authorization"},
             "auth_prefix": {"type": "string", "label": "认证前缀（可选）", "default": "Bearer "},
         },
