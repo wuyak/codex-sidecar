@@ -6,7 +6,6 @@ from dataclasses import dataclass, asdict, field
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from .config_import import try_import_from_legacy_homes, try_import_from_legacy_snapshots
 from .config_migrations import apply_inplace_migrations, ensure_cfg_invariants
 
 
@@ -251,24 +250,6 @@ def _try_load_current_config(config_home: Path) -> Optional[SidecarConfig]:
 
 def load_config(config_home: Path) -> SidecarConfig:
     cfg = _try_load_current_config(config_home)
-    if cfg is not None:
-        return cfg
-    cfg = try_import_from_legacy_homes(
-        config_home,
-        config_path=config_path,
-        from_dict=SidecarConfig.from_dict,
-        save_config=save_config,
-        default_watch_codex_home=_default_watch_codex_home,
-    )
-    if cfg is not None:
-        return cfg
-    cfg = try_import_from_legacy_snapshots(
-        config_home,
-        legacy_config_path=_legacy_config_path,
-        from_dict=SidecarConfig.from_dict,
-        save_config=save_config,
-        default_watch_codex_home=_default_watch_codex_home,
-    )
     if cfg is not None:
         return cfg
     return default_config(config_home)
