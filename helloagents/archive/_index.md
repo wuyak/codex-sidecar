@@ -3,6 +3,9 @@
 > 该目录存放已执行的方案包（从 `helloagents/plan/` 迁移而来）。
 
 ## 2026-01
+- 202601230851_arch_refactor_phase56_docs_readme_kb
+- 202601230834_arch_refactor_phase55_repo_hygiene_docs
+- 202601222349_arch_refactor_phase54_arch_review_opt
 - 202601222013_arch_refactor_phase53_bookmark_drawer_export_long_press_helper
 - 202601222007_arch_refactor_phase52_tabs_hover_tip_helper
 - 202601222004_arch_refactor_phase51_export_remove_unused_translate_helper

@@ -10,6 +10,7 @@ from .routes_post import dispatch_post
 from .ui_assets import load_ui_text, resolve_ui_path, ui_content_type, ui_dir
 from .json_helpers import json_bytes, parse_json_object
 from .config_payload import apply_config_display_fields, build_config_payload, decorate_status_payload
+from .sse import parse_last_event_id, sse_message_event_bytes
 
 
 class SidecarHandler(BaseHTTPRequestHandler):
@@ -267,7 +268,7 @@ class SidecarHandler(BaseHTTPRequestHandler):
 
     def _handle_sse(self) -> None:
         # If present, resume from Last-Event-ID (EventSource reconnect).
-        last_event_id = self._parse_last_event_id()
+        last_event_id = parse_last_event_id(self.headers)
         last_sent_add_seq = int(last_event_id or 0)
 
         q = self._state.subscribe()
@@ -293,7 +294,7 @@ class SidecarHandler(BaseHTTPRequestHandler):
                             continue
                         if seq <= int(last_event_id or 0):
                             continue
-                        id_line, out = self._sse_event_bytes(m)
+                        id_line, out = sse_message_event_bytes(m)
                         if id_line is not None:
                             self.wfile.write(id_line)
                         self.wfile.write(out)
@@ -325,7 +326,7 @@ class SidecarHandler(BaseHTTPRequestHandler):
                         continue
                     last_sent_add_seq = max(last_sent_add_seq, int(seq or 0))
 
-                id_line, out = self._sse_event_bytes(msg)
+                id_line, out = sse_message_event_bytes(msg)
                 if id_line is not None:
                     self.wfile.write(id_line)
                 self.wfile.write(out)
