@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- 文档：README 同步知识库目录结构说明（`helloagents/` v3 布局：`modules/archive/plan`）。
 - 整理：`.gitignore` 补充忽略 `.ace-tool/`（本地检索/索引目录），避免工作区噪音与误提交。
 - 整理(启动脚本)：内嵌 Python 片段统一使用 `python3 -X utf8 -`，减少不同环境下的编码差异。
 - 文档：`helloagents/modules/rollout_sidecar.md` 补充 SSE `id:` 与 `Last-Event-ID` 断线补齐策略说明（与代码一致）。

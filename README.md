@@ -118,4 +118,4 @@ Windows（PowerShell）：
   - 实际配置：`config/sidecar/config.json`（本机使用，已加入 `.gitignore`）
   - 示例配置：`config/sidecar/config.example.json`（可提交/发布，无敏信息）
 - `old/`：归档（历史草稿/快照/旧 tools 结构）
-- `helloagents/`: 知识库（CHANGELOG / wiki / history）
+- `helloagents/`: 知识库（`CHANGELOG.md` / `INDEX.md` / `modules/` / `archive/` / `plan/`）
