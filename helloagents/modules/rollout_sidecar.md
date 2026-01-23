@@ -126,21 +126,21 @@
 
 ## 运行方式（WSL 示例）
 - 推荐（短命令，先开 UI 再开始监听）：
-  - 在仓库根目录执行：`./ui.sh`
+  - 在仓库根目录执行：`./run.sh --ui`
   - 打开 `http://127.0.0.1:8787/ui`，点右侧工具栏 ⚙️ 保存配置，再点 ▶/⏹️ 监听（点击切换开始/停止）
 
 - 兼容（启动即监听，命令行参数方式）：
   - 在仓库根目录执行：`./run.sh --codex-home "$HOME/.codex" --port 8787 --replay-last-lines 5000`
 
 端口占用自动恢复（体验优化）：
-- 若检测到旧 sidecar 仍占用端口，但健康检查失败（例如意外关浏览器/进程卡死导致 UI 打不开），`./run.sh` / `./ui.sh` 会尝试**仅对 codex_sidecar 进程**做安全终止并重启。
+- 若检测到旧 sidecar 仍占用端口，但健康检查失败（例如意外关浏览器/进程卡死导致 UI 打不开），`./run.sh` 会尝试**仅对 codex_sidecar 进程**做安全终止并重启。
 - 若占用端口的进程看起来不是 codex_sidecar，则会在终端提示并退出（避免误杀其它服务）；此时请手动停止占用进程或换端口（`PORT=...` / `--port ...`）。
 
 ## 配置持久化与多翻译 Profiles
 - UI 中点击“保存配置”会将配置写入项目目录内（默认放在仓库根目录下）：
   - 实际配置（本机使用，已加入 `.gitignore`）：`./config/sidecar/config.json`
   - 示例配置（可提交/发布，无敏信息）：`./config/sidecar/config.example.json`
-- 下次启动 `./ui.sh` 或 `./run.sh` 时会自动读取并沿用已保存配置（`./run.sh` 会立即开始监听）。
+- 下次启动 `./run.sh` 时会自动读取并沿用已保存配置（默认会立即开始监听；如需只启动 UI/服务端可传 `--ui`）。
 - 当翻译 Provider 选择 `HTTP` 时，可在 `HTTP Profiles` 中保存多个翻译 API 配置并手动切换（支持新增/删除）。
   - `HTTP Profiles` 支持在 UI 中新增/删除/重命名配置。
   - DeepLX 等“token 在 URL 路径里”的接口：将 URL 写为 `https://api.deeplx.org/{token}/translate`，并在 `HTTP Token` 中填写 token，sidecar 会自动替换 `{token}`。

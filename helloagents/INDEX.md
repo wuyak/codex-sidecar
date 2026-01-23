@@ -11,7 +11,7 @@
 | nvidia_translate_migration | NVIDIA 翻译接入迁移指南（配置/请求/响应/提示词） | 开发中 | modules/nvidia_translate_migration.md |
 
 - 后端（HTTP + watcher）：`codex_sidecar/`
-- 启动脚本：`scripts/`（根目录 `./ui.sh`、`./run.sh` 为兼容入口）
+- 启动脚本：`scripts/`（根目录仅保留 `./run.sh` 入口；可传 `--ui` 仅启动服务端/UI）
 - 默认配置目录：`config/sidecar/`（已加入 `.gitignore`）
 
 - UI（默认 `/ui`）：静态 UI（保留现有交互/筛选/性能优化逻辑）

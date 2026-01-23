@@ -28,7 +28,6 @@
 相关代码：
 - `codex_sidecar/config.py`
 - `scripts/run.sh`
-- `scripts/ui.sh`
 
 ### 2.2 关键字段（NVIDIA Provider）
 
