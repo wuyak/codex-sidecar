@@ -129,6 +129,9 @@ export async function initApp() {
     }
   };
 
+  // Expose view switcher for cross-module interactions (e.g. corner tool_gate click jump).
+  try { state.onSelectKey = onSelectKey; } catch (_) {}
+
   const renderTabsWrapper = (d, s) => renderTabs(d, s, onSelectKey);
   const refreshListWrapper = async () => await refreshList(dom, state, renderTabsWrapper, renderMessage, renderEmpty);
 

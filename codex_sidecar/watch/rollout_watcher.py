@@ -393,6 +393,12 @@ class RolloutWatcher:
                 self._last_file_scan_ts = now
             self._poll_follow_files()
             try:
+                # Approval gates may stall the rollout JSONL (no new lines) while waiting for terminal confirmation.
+                # Poll a lightweight timeout-based tracker so UI can still alert the user.
+                self._line_ingestor.poll_tool_gates()
+            except Exception:
+                pass
+            try:
                 if should_poll_tui(
                     follow_mode=self._follow_mode,
                     codex_detected=bool(self._codex_detected),

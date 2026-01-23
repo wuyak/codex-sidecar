@@ -10,6 +10,29 @@ class _Broadcaster:
         self._lock = threading.Lock()
         self._subscribers: List["queue.Queue[dict]"] = []
 
+    @staticmethod
+    def _is_high_priority(msg: dict) -> bool:
+        """
+        High-priority events should survive SSE backpressure.
+
+        Rationale:
+        - UI notifications depend on receiving these events in real time.
+        - SSE subscriber queues are bounded; if the browser can't keep up, we
+          prefer dropping low-value noise (e.g. translation backfill updates)
+          rather than terminal approval / final assistant output.
+        """
+        try:
+            op = str(msg.get("op") or "").strip().lower()
+        except Exception:
+            op = ""
+        if op == "update":
+            return False
+        try:
+            kind = str(msg.get("kind") or "").strip()
+        except Exception:
+            kind = ""
+        return kind in ("tool_gate", "assistant_message")
+
     def subscribe(self) -> "queue.Queue[dict]":
         q: "queue.Queue[dict]" = queue.Queue(maxsize=256)
         with self._lock:
@@ -24,14 +47,26 @@ class _Broadcaster:
                 return
 
     def publish(self, msg: dict) -> None:
+        high = self._is_high_priority(msg) if isinstance(msg, dict) else False
         with self._lock:
             subs = list(self._subscribers)
         for q in subs:
             try:
                 q.put_nowait(msg)
             except queue.Full:
-                # Drop if the client can't keep up.
-                continue
+                # Client can't keep up:
+                # - For low-priority events, drop to avoid blocking producers.
+                # - For high-priority events, evict one oldest item to make room.
+                if not high:
+                    continue
+                try:
+                    _ = q.get_nowait()
+                except queue.Empty:
+                    continue
+                try:
+                    q.put_nowait(msg)
+                except queue.Full:
+                    continue
 
 
 class SidecarState:

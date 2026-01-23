@@ -7,7 +7,7 @@
 - 输入：`CODEX_HOME/sessions/YYYY/MM/DD/rollout-*.jsonl`（追加写入的 JSONL）
 - 输出：本地服务端（默认 `127.0.0.1:8787`）
   - `GET /ui`：浏览器实时面板（含配置/控制）
-  - `GET /events`：SSE（可供其它客户端订阅）
+  - `GET /events`：SSE（可供其它客户端订阅；支持 `Last-Event-ID` 断线补发 add 事件）
   - `GET /api/messages`：最近消息 JSON（调试）
   - `GET /api/threads`：按 `thread_id/file` 聚合的会话列表（用于 UI 标签切换）
   - `GET /api/offline/files`：列出可选的历史 `rollout-*.jsonl`（严格限制在 `CODEX_HOME/sessions/**`）
@@ -40,7 +40,7 @@
   - `watch/rollout_extract.py`：单条 JSONL 记录 → UI 事件块提取（assistant/user/tool/reasoning）
   - `watch/dedupe_cache.py`：轻量去重缓存（rollout 与 TUI gate 共享一套去重语义）
   - `watch/tui_gate_helpers.py`：TUI gate 的时间戳拆分/ToolCall 解析/脱敏/Markdown 生成（供 tailer 调用），便于单测与复用（行为保持不变）
-  - `watch/rollout_ingest.py`：rollout 单行解析/去重/工具门禁提示/翻译入队（watcher 只负责调度）
+  - `watch/rollout_ingest.py`：rollout 单行解析/去重/翻译入队；并对需要终端审批的工具调用（`sandbox_permissions=require_escalated` 等）构建“延迟判定”的 tool gate：若同 `call_id` 在阈值（默认 1.25s）内未出现 `tool_output`，才推送 `tool_gate`（waiting）；收到 `tool_output` 后推送 released（避免“自动通过/秒确认”的误报与噪音），并携带 `gate_id/gate_status/gate_result` 供 UI 可靠渲染（不靠文本猜测）；同时会根据同命令历史 `Wall time` 做自适应延迟，降低“已自动批准但命令执行较久”的误报
   - `watch/rollout_tailer.py`：文件 replay/poll 的通用 tail 逻辑（按 offset 增量读取）
   - `watch/rollout_follow_state.py`：follow targets → cursors/primary 的落地逻辑（cursor 初始化/回放/active 标记），从 watcher 抽离保持行为不变
   - `watch/follow_targets.py`：follow targets 计算（process/pin/auto + excludes），降低 watcher 内联分支耦合
@@ -89,7 +89,8 @@
 - UI 工具渲染分层：`render/tool/*`（call/output），`render/tool.js` 作为 facade
 - 长列表刷新：对较早消息行延后装饰（idle 分片 `decorateRow`），避免一次性加载/切换时卡顿
 - 多会话切换性能：消息列表按会话 key 做视图缓存；非当前会话的 SSE 仅对“已缓存视图”的会话进行缓冲，切回时回放到对应视图（溢出/切到 all 时自动回源刷新）；其中 `op=update`（译文回填）会按消息 id 覆盖合并，避免缓冲被大量回填顶爆
-- 断线恢复：浏览器 SSE 重连后会自动回源同步当前视图，并标记缓存视图在下次切换时回源刷新（避免长时间挂着漏消息）
+- 断线恢复：SSE `/events` 现在支持基于 `Last-Event-ID` 的断线补发（仅补发 add 事件，避免通知丢失）；同时浏览器 SSE 重连后仍会自动回源同步当前视图，并标记缓存视图在下次切换时回源刷新（避免长时间挂着漏消息）
+- 通知可靠性：服务端 SSE 广播对“高优先级事件”（`tool_gate`/`assistant_message`）做背压保护；当浏览器处理不过来导致订阅队列满时，会优先丢弃低价值噪音（例如翻译回填 update），保证“终端确认提示/最终回答”不被静默丢弃
 - 会话列表同步：断线恢复后会标记 `threadsDirty`，下一次列表回源时同步 `/api/threads`，避免侧栏漏会话/排序漂移
 - 多会话不串线：推荐通过会话书签栏切换（或启用“锁定”）来浏览单会话；`all` 视图更适合快速总览（不再在每条消息上额外展示会话标识，避免信息噪音）
 - 翻译 Provider 可插拔并可在 UI 中切换：`http/openai/nvidia`（旧配置中的 `stub/none` 会自动迁移到 `openai`）
@@ -101,15 +102,16 @@
 - tool_call/tool_output 不展示 `call_id`（仅用于内部关联 tool_call ↔ tool_output），避免 UI 出现无意义的 uuid 干扰阅读。
 - 快速浏览：开启 ⚡ 后仅显示 输入/输出/思考 + 更新计划（`update_plan`）块，其余类型隐藏（不影响摄取与时间线）。
 - Tool gate 提示来源：
-  - ✅ 优先：`codex-tui.log`（真实 “waiting for tool gate / released”）
+  - ✅ `codex-tui.log`（真实 “waiting for tool gate / released”）
     - 误报规避：仅当日志行“行首即为时间戳”时才会被识别为 tool gate 事件；避免 apply_patch/代码片段中的缩进示例文本触发误报
-  - ⚠️ 辅助：tool_call 参数中出现权限升级字段时的“可能需要终端确认”提示（不等同于 tool gate 状态，是否需要批准以终端为准）
-  - `justification` 字段来源：来自 tool_call 的参数（由 Codex 生成，用于解释“为什么要执行该命令/操作”）
+  - `justification` 字段来源：来自终端日志中的 ToolCall payload（用于解释“为什么要执行该命令/操作”）
 - UI 辅助：
   - 右下角悬浮“↑ 顶部 / ↓ 底部”按钮：仅负责滚动定位；未读提示/跳转由会话标签（徽标 + 点击逐条跳转）承载，并高亮落点
-- 右下角通知：tool gate（含权限升级提示）/ 回答新输出等关键状态弹出提醒（含“可能是历史残留”的提示）；tool_gate 与回答新输出都会计入未读（会话标签徽标/角标）
+- 右下角通知：tool gate（真实 waiting/released）/ 回答新输出等关键状态弹出提醒（含“可能是历史残留”的提示）；回答新输出会计入未读角标；tool_gate **不计入未读**，改用“贴着对应会话标签上方”的通知条承载（避免污染未读计数）
+  - 点击 tool_gate 通知可跳转到对应会话并滚动到对应消息位置（跳转后弹窗自动消失；waiting 默认不自动消失，直到点击或出现 released 覆盖）
+  - tool_gate 字段：`gate_id`（优先=call_id）、`gate_status`（waiting/released）、`gate_result`（executed/rejected/aborted/...）用于区分“已确认/已拒绝/已取消”等结果，并支持同会话多条审批同时提示
 - 右侧“翻译”按钮：单击切换自动翻译 `auto/manual`（对运行中的 watcher 立即生效，无需重启）；长按打开独立的“翻译设置”抽屉（含自动翻译开关、Provider/模型/Key/超时等）
-  - 提示音：设置中可选择“无/提示音-1/2/3（轻/中/强）”，用于“回答输出/终端确认提示（tool_gate + 权限升级提示）”的通知；**仅在产生新未读时响铃**，并按 `msg.id` 去重避免重复事件导致无新增也响铃（回答输出回放/补齐不响铃；tool_gate 即使回放/补齐也会响铃，因为可能正卡在终端待确认）（选择后会播放预览，不再弹出额外文字提示；音效来源：Kenney UI SFX Set，CC0；文件在 `ui/music/`）
+  - 提示音：设置中可选择“无/提示音-1/2/3（轻/中/强）”，用于“回答输出 / 终端等待确认（tool_gate waiting）”的通知；**仅在产生新通知时响铃**，并按 `msg.id` 去重避免重复事件导致重复响铃（回答输出回放/补齐不响铃；tool_gate 不计入未读但在 waiting 时仍会响铃，因为可能正卡在终端待确认）（选择后会播放预览，不再弹出额外文字提示；音效来源：Kenney UI SFX Set，CC0；文件在 `ui/music/`）
 
 ## 关于“在页面内输入并让 Codex 执行”
 本 sidecar 的核心原则是**不修改 Codex、只读监听**（旁路查看/调试）。因此：

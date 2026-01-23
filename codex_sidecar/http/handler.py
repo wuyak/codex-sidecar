@@ -2,7 +2,7 @@ import queue
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from .state import SidecarState
 from .routes_get import dispatch_get
@@ -209,7 +209,67 @@ class SidecarHandler(BaseHTTPRequestHandler):
         except Exception:
             self._send_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": "not_found"})
 
+    def _parse_last_event_id(self) -> Optional[int]:
+        """
+        Parse SSE resume cursor from EventSource.
+
+        Notes:
+        - Browsers send `Last-Event-ID` on reconnect only after the server has
+          emitted at least one `id:` field in the event stream.
+        - We intentionally treat "missing header" as "no resume" to avoid
+          replaying history on first connect (UI fetches history via /api/messages).
+        """
+        try:
+            raw = self.headers.get("Last-Event-ID")
+        except Exception:
+            raw = None
+        if not raw:
+            return None
+        s = str(raw or "").strip()
+        if not s:
+            return None
+        try:
+            n = int(s)
+        except Exception:
+            return None
+        return max(0, n)
+
+    @staticmethod
+    def _sse_event_bytes(msg: dict) -> Tuple[Optional[bytes], bytes]:
+        """
+        Build an SSE "message" event.
+
+        Returns:
+          (id_line_bytes_or_none, body_bytes)
+        """
+        op = ""
+        try:
+            op = str(msg.get("op") or "").strip().lower()
+        except Exception:
+            op = ""
+
+        # Only attach `id:` for non-update events.
+        # Updates can arrive for older messages (e.g. translation backfill); if we
+        # used the message `seq` as the SSE id for updates, browsers may "rewind"
+        # Last-Event-ID and cause duplicate replays on reconnect.
+        id_line: Optional[bytes] = None
+        if op != "update":
+            try:
+                seq = int(msg.get("seq") or 0)
+            except Exception:
+                seq = 0
+            if seq > 0:
+                id_line = f"id: {seq}\n".encode("utf-8")
+
+        data = json_bytes(msg)
+        out = b"event: message\n" + b"data: " + data + b"\n\n"
+        return id_line, out
+
     def _handle_sse(self) -> None:
+        # If present, resume from Last-Event-ID (EventSource reconnect).
+        last_event_id = self._parse_last_event_id()
+        last_sent_add_seq = int(last_event_id or 0)
+
         q = self._state.subscribe()
         try:
             self.send_response(HTTPStatus.OK)
@@ -222,6 +282,26 @@ class SidecarHandler(BaseHTTPRequestHandler):
             self.wfile.write(b":ok\n\n")
             self.wfile.flush()
 
+            # Best-effort catch-up: only when the client provides Last-Event-ID.
+            # Avoid replaying full history on first connect (UI already does /api/messages).
+            if last_event_id is not None:
+                try:
+                    for m in self._state.list_messages():
+                        try:
+                            seq = int(m.get("seq") or 0)
+                        except Exception:
+                            continue
+                        if seq <= int(last_event_id or 0):
+                            continue
+                        id_line, out = self._sse_event_bytes(m)
+                        if id_line is not None:
+                            self.wfile.write(id_line)
+                        self.wfile.write(out)
+                        last_sent_add_seq = max(last_sent_add_seq, int(seq or 0))
+                    self.wfile.flush()
+                except Exception:
+                    pass
+
             while True:
                 try:
                     msg = q.get(timeout=10.0)
@@ -231,11 +311,24 @@ class SidecarHandler(BaseHTTPRequestHandler):
                     self.wfile.flush()
                     continue
 
-                data = json_bytes(msg)
-                self.wfile.write(b"event: message\n")
-                self.wfile.write(b"data: ")
-                self.wfile.write(data)
-                self.wfile.write(b"\n\n")
+                # Skip duplicates already delivered via resume catch-up.
+                try:
+                    op = str(msg.get("op") or "").strip().lower()
+                except Exception:
+                    op = ""
+                if op != "update":
+                    try:
+                        seq = int(msg.get("seq") or 0)
+                    except Exception:
+                        seq = 0
+                    if seq and seq <= last_sent_add_seq:
+                        continue
+                    last_sent_add_seq = max(last_sent_add_seq, int(seq or 0))
+
+                id_line, out = self._sse_event_bytes(msg)
+                if id_line is not None:
+                    self.wfile.write(id_line)
+                self.wfile.write(out)
                 self.wfile.flush()
         except (BrokenPipeError, ConnectionResetError):
             return

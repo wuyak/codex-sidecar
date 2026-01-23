@@ -1024,6 +1024,9 @@
 		      body[data-offtabs="1"] .corner-notify { bottom: calc(16px + var(--safe-bottom) + var(--tabs-bar-h) + var(--tabs-stack-gap) + var(--tabs-bar-h) + 10px); }
 		      body[data-tabs-collapsed="1"] .corner-notify { bottom: calc(16px + var(--safe-bottom)); }
 	      .corner-toast { pointer-events:none; min-width: 220px; max-width: min(460px, calc(100vw - 28px - 64px)); padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(148,163,184,.35); background: rgba(15,23,42,.92); color:#e2e8f0; box-shadow: 0 16px 44px rgba(0,0,0,.22); animation: cornerToastIn .16s ease-out forwards; }
+	      .corner-toast.clickable { pointer-events:auto; cursor: pointer; }
+	      .corner-toast.clickable:hover { filter: brightness(1.05); }
+	      .corner-toast.clickable:active { transform: translateY(1px); }
 	      .corner-toast.info { border-color: rgba(148,163,184,.35); }
 	      .corner-toast.warn { border-color: rgba(248,113,113,.55); background: rgba(127,29,29,.86); }
 	      .corner-toast.success { border-color: rgba(34,197,94,.5); background: rgba(20,83,45,.86); }

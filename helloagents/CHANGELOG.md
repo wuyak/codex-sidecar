@@ -5,8 +5,12 @@
 - 修复(启动脚本)：端口被旧 sidecar 占用且健康检查失败时，`./run.sh` / `./ui.sh` 会安全终止旧 codex_sidecar 并重启（占用者非 codex_sidecar 则提示退出，避免误杀）。
 - 优化(UI)：预留滚动条槽位（`scrollbar-gutter: stable`），减少弹窗/精简切换导致的右侧抖动。
 - 修复(UI)：长代码块展开后滚动，收起时视口不再漂移到代码块下方（基于点击位置的滚动校正）。
-- 修复(UI)：终端确认提示（tool_gate：含权限升级提示/真实 waiting 状态）现在会触发通知与提示音，并计入会话标签未读角标。
-- 修复(UI)：tool_gate 在回放/补齐阶段也会触发提示音与未读，避免新会话首次 tail（replay）时“正在等终端确认”却漏提醒。
+- 优化(UI)：终端确认（tool_gate）通知条体验优化：更稳定贴合对应会话标签页上方；“终端已确认”不再 1.6s 闪退。
+- 优化(UI)：tool_gate 通知不再依赖文本猜测，优先使用后端字段 `gate_status/gate_result` 渲染；同一会话多条 tool_gate 会在标签页上方堆叠展示，避免互相覆盖。
+- 修复(后端)：tool_gate 的 waiting 判定加入“同命令历史运行时长（Wall time）”自适应延迟，避免“已自动批准但命令执行较久”被误报为“终端等待确认”。
+- 调整：仅对“真实卡住”的终端确认弹窗与提示音：当 `require_escalated` 等工具调用在阈值（1.25s）内未产出对应 `tool_output` 时才提示；短暂自动通过/秒确认的不提示；不再对 tool_call 做“可能需要确认”的噪音提示。
+- 修复(UI)：终端确认提示（tool_gate：真实 waiting 状态）现在会触发通知与提示音，且支持多会话同时提示（每个会话独立通知条）。
+- 修复(UI)：tool_gate 在回放/补齐阶段也会触发提示音与通知条，避免新会话首次 tail（replay）时“正在等终端确认”却漏提醒。
 - UI：新增“导入对话”入口（右侧工具栏）；弹窗内支持输入 `rel`（可直接粘贴完整路径自动提取）或用日历组件（Air Datepicker）按年月日浏览 `sessions/YYYY/MM/DD` 选择 `rollout-*.jsonl` 加入展示并打开；日/月/年单元格展示文件数量角标，空日期/空月份/空年份禁用。
 - 新增：通用翻译接口 `POST /api/control/translate_text`（支持批量 items）；离线思考翻译与导出补齐译文写入本机缓存 `offlineZh:${rel}`。
 - 后端：抽离并复用“从文件尾部读取最后 N 行”的实现（watcher/offline/tui 共用），同时 poll 在无增量时跳过打开文件，降低空转开销。
@@ -15,6 +19,8 @@
 - 重构(后端)：TuiGateTailer 的解析/渲染逻辑抽离到 `codex_sidecar/watch/tui_gate_helpers.py`，便于单测与维护（行为保持不变）。
 - 修复(后端)：收紧 `codex-tui.log` 的 tool gate 解析（时间戳必须在行首），避免 apply_patch/代码片段中的缩进示例行触发“终端等待确认”误报。
 - 修复(后端)：SSE `/events` 推送中错误调用 `_json_bytes` 导致连接崩溃，改用 `json_bytes()` 并补充回归测试。
+- 修复(后端)：SSE `/events` 支持 `Last-Event-ID` 断线补发（仅补发 add 事件，避免 update 回填导致游标回退），降低短暂断线期间“审批提示/回答输出”通知遗漏概率。
+- 修复(后端)：SSE 广播背压保护：当订阅队列满时优先保留 `tool_gate`/`assistant_message`，避免“终端确认提示/最终回答”在不断线情况下被静默丢弃（低优先级事件仍可能被丢以避免阻塞）。
 - 后端：controller 收敛翻译（probe/text/items）公共逻辑，并将 watcher 热更新应用集中到单一 helper，降低重复与分叉。
 - 重构(后端)：watcher 热更新逻辑抽离到 `codex_sidecar/control/watcher_hot_updates.py`，并新增单测覆盖（行为保持不变）。
 - 重构(后端)：controller 的 follow 控制逻辑抽离到 `codex_sidecar/control/follow_control_api.py`，并新增单测覆盖（行为保持不变）。
@@ -178,6 +184,8 @@
 - UI: `all` 视图移除每条消息的会话标识 pill（减少信息噪音），并移除会话 tab/消息行的 thread_id 悬停提示（避免遮挡/干扰）。
 - UI: 配置抽屉不再区分“基础/高级”，统一为单页表单；表单输入统一 `box-sizing:border-box`，修复文本框宽度溢出。
 - 翻译: `auto` 模式仅自动翻译 `reasoning_summary`，避免翻译队列堆积导致整体变慢。
+- 优化(UI)：tool_gate 右下角通知更清爽：清理重复标签/多余符号，命令单独换行并做长度截断；“可能需要确认”提示不再自动消失（直到点击跳转或出现 released 覆盖）。
+- 优化(UI)：tool_gate 通知支持点击跳转：点击弹窗会切换到对应会话并滚动到对应消息位置，然后自动消失（tool_gate 不占用会话未读角标）。
 - 新增：NVIDIA NIM 翻译 Provider（`nvidia`，Chat Completions 兼容）：支持 `NVIDIA_API_KEY` 环境变量鉴权、RPM 节流与 429 退避重试。
 - 修复：NVIDIA Provider 响应解析更健壮（兼容 `message.content` 非字符串形态），并提取错误信息便于定位；UI 为 NVIDIA Model 增加常用预设候选。
 - 调整：NVIDIA Provider 在 404/疑似未翻译输出时仅在 4 个内置模型内自动回退；同时更新 UI 默认模型为 `moonshotai/kimi-k2-instruct`，并在加载配置时强制纠正到允许列表以避免过时/无权限 id 导致空译文。
@@ -319,7 +327,7 @@
 - 防抖：手动翻译增加 in-flight 保护，避免重复点击导致多次翻译请求；翻译队列也会忽略同一条消息的重复 force 触发。
 - 修复：当某条仍在翻译中再次点击“重译”，会排队一次后续重译（等待当前翻译完成），避免“闪一下但没发请求/没执行”的困惑。
 - 修复：`TranslationPump` 在批量翻译的边界分支也会清理 inflight，避免后续重译被永久合并导致“入队但不执行”。
-- 新增：对 `require_escalated` 等需要终端批准的工具调用，Watcher 会主动推送一条 `tool_gate` 提示到 UI（不依赖 codex-tui.log），降低“终端在等你确认但 UI 看起来没反应”的困惑。
+- 调整：撤销 rollout 推断的“权限升级提示（可能需要终端确认）”；终端确认改为基于 `call_id` 的“延迟判定”：超过阈值仍无 `tool_output` 才推送 waiting，收到 `tool_output` 再推送 released。
 - 修复：翻译失败（超时/空译文）不再把告警文本写入 `zh`（避免 UI 误判“ZH 已就绪”并污染内容区）；改为回填 `translate_error`，UI 用状态 pill 展示失败并支持“重试”。
 - 修复：重新翻译会清空 `zh` 时，UI 不再被旧的“单条显示模式”覆盖导致英文被隐藏（无 `zh` 时强制显示 EN）。
 - 优化：工具“需要终端批准”提示（`tool_gate`）不再展示 `call_id`，并把“原因”明确标注为 `justification`（来自 tool_call 参数）。
@@ -329,7 +337,7 @@
 - 安全：终端批准提示（tool gate/需要批准）在展示命令与理由时做简单脱敏（`sk-***` / `Bearer ***`），避免敏感信息误入 UI。
 - 新增：侧栏会话管理（安全优先）：导出当前会话为 Markdown（⤓）、隐藏当前会话（🙈）、显示隐藏会话（👁）；仅使用本机 localStorage，不删除任何 `rollout-*.jsonl`。
 - 新增：`all` 视图下每条消息显示所属会话标识（rollout 时间戳 + thread_id 片段），降低多会话混在一起的“错乱感”。
-- 修复：tool_call 权限升级提示降级为“可能需要终端确认”（不再误报为确定的 tool gate waiting），并在通知摘要中提示“可能是历史残留”。
+- 调整：移除 tool_call 的“权限升级提示（可能需要终端确认）”文案与通知路径：这类信息不再弹窗/不响铃，避免误报影响专注度。
 - 修复：配置解析更健壮：容忍 `config.json` 中数字字段为非法字符串/空值，避免启动时报 `ValueError`。
 - 安全：`/api/config` 与 `/api/status` 默认脱敏（`openai.base_url/api_key`、`nvidia.api_key`、`http.token`）；UI 可通过“眼睛按钮”按需显示原文。
 - 新增：`/api/control/reveal_secret`（仅返回单个字段），用于 UI 显示/隐藏 API Key/Base URL 时按需取回原值。

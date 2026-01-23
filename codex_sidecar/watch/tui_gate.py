@@ -16,6 +16,10 @@ _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 _WAIT_RE = re.compile(r"^INFO\s+waiting\s+for\s+tool\s+gate\s*$")
 _RELEASE_RE = re.compile(r"^INFO\s+tool\s+gate\s+released\s*$")
 
+# Only notify the UI if the terminal approval is *actually* blocking for a moment.
+# This avoids noisy "blink" toasts when the approval is auto-resolved quickly.
+_WAIT_NOTIFY_DELAY_S = 1.25
+
 
 class TuiGateTailer:
     """
@@ -34,6 +38,10 @@ class TuiGateTailer:
         self._buf = b""
         self._last_toolcall: Optional[Dict[str, object]] = None
         self._gate_waiting = False
+        self._wait_observed_at = 0.0
+        self._wait_ts = ""
+        self._wait_toolcall: Optional[Dict[str, object]] = None
+        self._wait_emitted = False
 
     def poll(
         self,
@@ -81,6 +89,17 @@ class TuiGateTailer:
             self._offset = 0
             self._buf = b""
         if self._offset == size:
+            # Even if codex-tui.log hasn't grown, we may still be in a waiting state
+            # and need to fire the delayed "waiting" notification once.
+            try:
+                self._maybe_emit_delayed_wait(
+                    thread_id=thread_id,
+                    sha1_hex=sha1_hex,
+                    dedupe=dedupe,
+                    ingest=ingest,
+                )
+            except Exception:
+                pass
             return
 
         try:
@@ -105,6 +124,15 @@ class TuiGateTailer:
                 dedupe=dedupe,
                 ingest=ingest,
             )
+        try:
+            self._maybe_emit_delayed_wait(
+                thread_id=thread_id,
+                sha1_hex=sha1_hex,
+                dedupe=dedupe,
+                ingest=ingest,
+            )
+        except Exception:
+            pass
 
     def _scan_gate_state(
         self,
@@ -119,6 +147,10 @@ class TuiGateTailer:
         last_wait: Optional[Tuple[str, Optional[Dict[str, object]]]] = None
         gate_waiting = bool(self._gate_waiting)
         last_toolcall = self._last_toolcall
+        wait_observed_at = float(self._wait_observed_at or 0.0)
+        wait_ts = str(self._wait_ts or "")
+        wait_toolcall = self._wait_toolcall
+        wait_emitted = bool(self._wait_emitted)
 
         for bline in lines:
             try:
@@ -143,23 +175,21 @@ class TuiGateTailer:
             if ts and _WAIT_RE.match(msg):
                 last_wait = (ts, last_toolcall)
                 # codex-tui.log may emit repeated "waiting" lines while blocked.
-                # Only emit when the state changes (avoid spamming the UI).
+                # We only treat it as "actionable waiting" after a small delay,
+                # otherwise quick auto-resolved approvals would spam the UI.
                 if not gate_waiting:
                     gate_waiting = True
-                    if not synthetic_only:
-                        self._emit_tool_gate(
-                            ts,
-                            waiting=True,
-                            toolcall=last_toolcall,
-                            thread_id=thread_id,
-                            sha1_hex=sha1_hex,
-                            dedupe=dedupe,
-                            ingest=ingest,
-                        )
+                    wait_observed_at = time.monotonic()
+                    wait_ts = ts
+                    wait_toolcall = last_toolcall
+                    wait_emitted = False
+                else:
+                    if wait_toolcall is None and last_toolcall is not None:
+                        wait_toolcall = last_toolcall
                 continue
 
             if ts and _RELEASE_RE.match(msg):
-                if gate_waiting and not synthetic_only:
+                if gate_waiting and wait_emitted and not synthetic_only:
                     self._emit_tool_gate(
                         ts,
                         waiting=False,
@@ -171,6 +201,10 @@ class TuiGateTailer:
                     )
                 gate_waiting = False
                 last_wait = None
+                wait_observed_at = 0.0
+                wait_ts = ""
+                wait_toolcall = None
+                wait_emitted = False
                 continue
 
         # If we're only doing a synthetic init scan, emit a single "still waiting" message.
@@ -193,9 +227,17 @@ class TuiGateTailer:
                     ingest=ingest,
                     synthetic=True,
                 )
+                wait_observed_at = time.monotonic()
+                wait_ts = ts
+                wait_toolcall = tc
+                wait_emitted = True
 
         self._last_toolcall = last_toolcall
         self._gate_waiting = gate_waiting
+        self._wait_observed_at = float(wait_observed_at or 0.0)
+        self._wait_ts = str(wait_ts or "")
+        self._wait_toolcall = wait_toolcall
+        self._wait_emitted = bool(wait_emitted)
 
     @staticmethod
     def _split_ts(line: str) -> Tuple[str, str]:
@@ -267,3 +309,37 @@ class TuiGateTailer:
             ingest(msg)
         except Exception:
             return
+
+    def _maybe_emit_delayed_wait(
+        self,
+        *,
+        thread_id: str,
+        sha1_hex: Callable[[str], str],
+        dedupe: Callable[[str, str], bool],
+        ingest: Callable[[Dict[str, Any]], bool],
+    ) -> None:
+        if not bool(self._gate_waiting):
+            return
+        if bool(self._wait_emitted):
+            return
+        started = float(self._wait_observed_at or 0.0)
+        if started <= 0.0:
+            return
+        try:
+            now = time.monotonic()
+        except Exception:
+            return
+        if (now - started) < float(_WAIT_NOTIFY_DELAY_S):
+            return
+        self._wait_emitted = True
+        ts = str(self._wait_ts or "")
+        tc = self._wait_toolcall
+        self._emit_tool_gate(
+            ts,
+            waiting=True,
+            toolcall=tc,
+            thread_id=thread_id,
+            sha1_hex=sha1_hex,
+            dedupe=dedupe,
+            ingest=ingest,
+        )
