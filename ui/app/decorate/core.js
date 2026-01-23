@@ -128,6 +128,34 @@ function decorateMdBlocks(root) {
   }
 }
 
+function decorateThinkingMeta(row) {
+  if (!row || !row.classList) return;
+  if (!row.classList.contains("kind-reasoning_summary")) return;
+  const meta = row.querySelector ? row.querySelector(".meta-line") : null;
+  if (!meta) return;
+  wireHoldCopy(meta, {
+    // Do not steal gestures on buttons/links/inputs in the meta line.
+    ignoreSelector: "button,a,input,textarea,select,summary",
+    toastIsLight: true,
+    getText: () => {
+      try {
+        const r = meta.closest ? meta.closest(".row") : row;
+        if (!r) return "";
+        const wantZh = !!(r.classList && r.classList.contains("think-mode-zh"));
+        const think = r.querySelector ? r.querySelector(".think") : null;
+        if (!think) return "";
+        const zh = think.querySelector ? think.querySelector(".think-zh") : null;
+        const en = think.querySelector ? think.querySelector(".think-en") : null;
+        const el = wantZh ? (zh || en) : (en || zh);
+        return String(el ? (el.innerText || el.textContent || "") : "").trim();
+      } catch (_) {
+        return "";
+      }
+    },
+    onTap: null,
+  });
+}
+
 export function decorateRow(row) {
   // cleanup legacy per-block copy buttons if any existed (older UI versions)
   try {
@@ -137,5 +165,6 @@ export function decorateRow(row) {
   decoratePreBlocks(row);
   decorateMdBlocks(row);
   decorateToolCards(row);
+  decorateThinkingMeta(row);
   wireToolToggles(row);
 }
