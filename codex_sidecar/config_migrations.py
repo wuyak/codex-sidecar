@@ -23,11 +23,11 @@ def ensure_cfg_invariants(
 
 
 def _migrate_stub_provider(cfg: Any, config_home: Path, *, save_config: Callable[[Path, Any], None]) -> None:
-    # 兼容旧配置：移除 stub/none Provider 后，自动迁移到 nvidia（不丢失其他 provider 配置）。
+    # 兼容旧配置：移除 stub/none Provider 后，自动迁移到 http（不丢失其他 provider 配置）。
     try:
         p = str(getattr(cfg, "translator_provider", "") or "").strip().lower()
         if p in ("stub", "none"):
-            cfg.translator_provider = "nvidia"
+            cfg.translator_provider = "http"
             save_config(config_home, cfg)
     except Exception:
         pass

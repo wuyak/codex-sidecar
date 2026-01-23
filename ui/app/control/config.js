@@ -66,14 +66,13 @@ function _buildTranslatorPatch(dom, state) {
     const mode = (dom.openaiAuthMode && dom.openaiAuthMode.value) ? dom.openaiAuthMode.value : "authorization";
     const reasoning = (dom.openaiReasoning && dom.openaiReasoning.value) ? dom.openaiReasoning.value.trim() : "";
     const timeout = Number((dom.openaiTimeout && dom.openaiTimeout.value) ? dom.openaiTimeout.value : 12);
-    if (!base) return { ok: false, error: "missing_openai_base_url" };
     if (!model) return { ok: false, error: "missing_openai_model" };
     if (!apiKey) return { ok: false, error: "missing_openai_key" };
     const auth_header = (mode === "x-api-key") ? "x-api-key" : "Authorization";
     const auth_prefix = (mode === "x-api-key") ? "" : "Bearer ";
     patch.translator_config = {
       openai: {
-        base_url: base,
+        base_url: base || "https://api.openai.com/v1",
         model,
         api_key: apiKey,
         timeout_s: timeout,
@@ -115,7 +114,6 @@ export async function saveTranslateConfig(dom, state) {
   const built = _buildTranslatorPatch(dom, state);
   if (!built || built.ok === false) {
     const err = String(built && built.error ? built.error : "invalid_translate_config");
-    if (err === "missing_openai_base_url") { _markInvalid(dom, dom.openaiBaseUrl, "请填写 Base URL（例如 https://www.right.codes/codex/v1）"); return; }
     if (err === "missing_openai_model") { _markInvalid(dom, dom.openaiModel, "请填写 Model（例如 gpt-5.1）"); return; }
     if (err === "missing_openai_key") { _markInvalid(dom, dom.openaiApiKey, "请填写 API Key"); return; }
     if (err === "missing_nvidia_base_url") { _markInvalid(dom, dom.nvidiaBaseUrl, "请填写 Base URL（例如 https://integrate.api.nvidia.com/v1）"); return; }
