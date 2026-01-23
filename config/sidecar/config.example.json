@@ -1,0 +1,47 @@
+{
+  "watch_codex_home": "~/.codex",
+  "replay_last_lines": 50,
+  "watch_max_sessions": 3,
+  "poll_interval": 0.5,
+  "file_scan_interval": 2.0,
+  "max_messages": 1000,
+  "auto_start": false,
+  "follow_codex_process": false,
+  "codex_process_regex": "codex",
+  "only_follow_when_process": true,
+  "translate_mode": "auto",
+  "notify_sound_assistant": "none",
+  "notify_sound_tool_gate": "none",
+  "translator_provider": "openai",
+  "translator_config": {
+    "openai": {
+      "base_url": "https://api.openai.com/v1",
+      "model": "gpt-5.1",
+      "api_key": "",
+      "auth_header": "Authorization",
+      "auth_prefix": "Bearer ",
+      "timeout_s": 12,
+      "reasoning_effort": ""
+    },
+    "nvidia": {
+      "base_url": "https://integrate.api.nvidia.com/v1",
+      "model": "moonshotai/kimi-k2-instruct",
+      "api_key": "",
+      "max_tokens": 8192,
+      "rpm": 0,
+      "timeout_s": 60,
+      "max_retries": 3
+    },
+    "http": {
+      "selected": "默认",
+      "profiles": [
+        {
+          "name": "默认",
+          "url": "http://127.0.0.1:9000/translate",
+          "token": "",
+          "timeout_s": 3
+        }
+      ]
+    }
+  }
+}

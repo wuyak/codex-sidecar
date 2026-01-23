@@ -1,0 +1,5 @@
+本目录内置提示音（`ui/sfx/builtin/chime-*.wav`）由脚本 `ui/sfx/generate_chimes.py` 程序生成，
+并以 Creative Commons Zero（CC0 1.0）释出（公共领域）。
+
+许可：
+- https://creativecommons.org/publicdomain/zero/1.0/

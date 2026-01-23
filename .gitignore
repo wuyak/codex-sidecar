@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtualenvs
+.venv/
+venv/
+
+# OS / Editor
+.DS_Store
+.idea/
+.vscode/
+
+# Logs / temp
+*.log
+*.tmp
+.env
+.env.*
+
+# Build / dist
+dist/
+build/
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Local tool state / caches
+.codex-home/
+.codex-thinking-sidecar/
+.npm-cache/
+config/sidecar/config.json
+config/sidecar/*.lock
+config/sidecar/*.tmp
+config/sidecar/*.bak-*
+
+# Repo archive (old/)
+old/
+
+# Internal knowledgebase (local only)
+helloagents/
+
+# Local notes
+修改意见整理/
+.ace-tool/

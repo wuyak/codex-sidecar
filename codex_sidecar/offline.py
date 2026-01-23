@@ -1,0 +1,194 @@
+import hashlib
+import json
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+from urllib.parse import quote
+
+from .watch.rollout_extract import extract_rollout_items
+from .watch.rollout_paths import _ROLLOUT_RE, _latest_rollout_files, _parse_thread_id_from_filename
+from .watch.tail_lines import read_tail_lines
+
+
+def _sha1_hex(s: str) -> str:
+    return hashlib.sha1(s.encode("utf-8", errors="replace")).hexdigest()
+
+def _sha1_hex_bytes(b: bytes) -> str:
+    try:
+        return hashlib.sha1(b).hexdigest()
+    except Exception:
+        return hashlib.sha1(str(b or b"").encode("utf-8", errors="replace")).hexdigest()
+
+
+def _norm_rel(rel: str) -> str:
+    s = str(rel or "").strip().replace("\\", "/")
+    # avoid accidental absolute paths
+    while s.startswith("/"):
+        s = s[1:]
+    return s
+
+
+def offline_key_from_rel(rel: str) -> str:
+    """
+    Build a stable offline key compatible with JS encodeURIComponent(rel).
+
+    JS encodeURIComponent leaves: A-Z a-z 0-9 - _ . ! ~ * ' ( )
+    """
+    rel_s = _norm_rel(rel)
+    enc = quote(rel_s, safe="-_.!~*'()")
+    return f"offline:{enc}"
+
+
+def resolve_offline_rollout_path(codex_home: Path, rel: str) -> Optional[Path]:
+    """
+    Resolve a user-provided relative path to a rollout-*.jsonl under CODEX_HOME/sessions.
+
+    Security constraints:
+    - Must be inside CODEX_HOME/sessions
+    - Must match rollout filename regex
+    - Must be a file
+    """
+    try:
+        base = Path(str(codex_home or "")).expanduser()
+    except Exception:
+        return None
+    rel_s = _norm_rel(rel)
+    if not rel_s:
+        return None
+    # Require sessions/ prefix to avoid reading arbitrary files.
+    if not rel_s.startswith("sessions/"):
+        return None
+    try:
+        sessions = (base / "sessions").resolve()
+    except Exception:
+        sessions = base / "sessions"
+    try:
+        cand = (base / rel_s).resolve()
+    except Exception:
+        cand = base / rel_s
+    try:
+        if not (cand == sessions or sessions in cand.parents):
+            return None
+    except Exception:
+        return None
+    try:
+        if not cand.exists() or not cand.is_file():
+            return None
+    except Exception:
+        return None
+    try:
+        if not _ROLLOUT_RE.match(cand.name):
+            return None
+    except Exception:
+        return None
+    return cand
+
+
+def list_offline_rollout_files(codex_home: Path, limit: int = 60) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    try:
+        base = Path(str(codex_home or "")).expanduser()
+    except Exception:
+        return out
+    try:
+        xs = _latest_rollout_files(base, limit=max(0, int(limit or 0)))
+    except Exception:
+        xs = []
+    for p in xs:
+        if not p:
+            continue
+        try:
+            if not p.exists() or not p.is_file():
+                continue
+        except Exception:
+            continue
+        try:
+            if not _ROLLOUT_RE.match(p.name):
+                continue
+        except Exception:
+            continue
+        rel = ""
+        try:
+            rel = str(p.relative_to(base)).replace("\\", "/")
+        except Exception:
+            # best-effort: still return something usable for display
+            rel = f"sessions/{p.name}"
+        tid = ""
+        try:
+            tid = str(_parse_thread_id_from_filename(p) or "")
+        except Exception:
+            tid = ""
+        st = {}
+        try:
+            st = p.stat()
+        except Exception:
+            st = {}
+        out.append(
+            {
+                "rel": _norm_rel(rel),
+                "file": str(p),
+                "thread_id": tid,
+                "mtime": float(getattr(st, "st_mtime", 0.0) or 0.0),
+                "size": int(getattr(st, "st_size", 0) or 0),
+            }
+        )
+    return out
+
+
+def build_offline_messages(
+    *,
+    rel: str,
+    file_path: Path,
+    tail_lines: int,
+    offline_key: str,
+) -> List[Dict[str, Any]]:
+    """
+    Parse rollout-*.jsonl into the same message schema as /api/messages.
+    """
+    rel_s = _norm_rel(rel)
+    off_key = str(offline_key or "").strip() or offline_key_from_rel(rel_s)
+    try:
+        tid = str(_parse_thread_id_from_filename(file_path) or "")
+    except Exception:
+        tid = ""
+    tail = read_tail_lines(file_path, last_lines=max(0, int(tail_lines or 0)))
+    msgs: List[Dict[str, Any]] = []
+    seq = 1
+    line_no = 0
+    for bline in tail:
+        line_no += 1
+        if not bline:
+            continue
+        try:
+            obj = json.loads(bline.decode("utf-8", errors="replace"))
+        except Exception:
+            continue
+        ts, extracted = extract_rollout_items(obj)
+        for item in extracted:
+            try:
+                kind = str(item.get("kind") or "")
+                text = str(item.get("text") or "")
+            except Exception:
+                continue
+            # Stable offline id: off:${key}:${sha1(rawLine)}
+            # - Avoid collision with live 16-hex ids (DOM ids / caches / exports).
+            # - Raw-line hash is resilient to insertions that shift line numbers.
+            raw_hex = _sha1_hex_bytes(bline)
+            mid = f"off:{off_key}:{raw_hex}"
+            msgs.append(
+                {
+                    "id": mid,
+                    "seq": int(seq),
+                    "ts": str(ts or ""),
+                    "kind": kind,
+                    "text": text,
+                    "zh": "",
+                    "translate_error": "",
+                    "replay": True,
+                    "key": str(off_key),
+                    "thread_id": tid,
+                    "file": str(file_path),
+                    "line": int(line_no),
+                }
+            )
+            seq += 1
+    return msgs
