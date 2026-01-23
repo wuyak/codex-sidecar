@@ -20,8 +20,6 @@ import {
   statusIcon,
 } from "./format.js";
 
-const _EXPORT_ENGINE_TAG = "md_fence_v2_20260120_1650";
-
 // Export is side-effectful (triggers a file download). To avoid “点击多个导出后卡住，
 // 过几十秒突然下载一大批”的体验，默认只允许同时进行 1 个导出任务。
 let _exportInFlight = null; // { key, startedMs }
@@ -481,38 +479,12 @@ export async function exportThreadMarkdown(state, key, opts = {}) {
     }
   } catch (_) {}
 
-  const now = new Date();
   const custom = pickCustomLabel(k, threadId, file);
   const fileBase = baseName(file);
   const title = custom || fileBase || (threadId ? shortId(threadId) : shortId(k)) || "导出";
 
   const lines = [];
   lines.push(`# ${title}`);
-  const modeLabel = mode === "quick" ? "精简" : "全量";
-  const thinkMode = (reasoningLang === "en")
-    ? "原文"
-    : (reasoningLang === "zh" || reasoningLang === "toggle")
-      ? "译文"
-      : (reasoningLang === "both")
-        ? "双语"
-        : "自动";
-  const idShort = threadId ? shortId(threadId) : shortId(k);
-  lines.push("");
-  lines.push(`| 项目 | 值 |`);
-  lines.push(`| --- | --- |`);
-  if (idShort) lines.push(`| Thread | \`${idShort}\` |`);
-  if (fileBase) lines.push(`| 源文件 | \`${fileBase}\` |`);
-  lines.push(`| 导出时间 | ${_fmtLocal(now)} |`);
-  lines.push(`| 导出模式 | ${modeLabel} |`);
-  lines.push(`| 思考语言 | ${thinkMode} |`);
-  lines.push(`| 导出引擎 | \`${_EXPORT_ENGINE_TAG}\` |`);
-  try {
-    if (translateStat && translateStat.queued) {
-      lines.push(`| 导出翻译 | 已触发 ${translateStat.queued} 条（已就绪 ${translateStat.filled} 条，等待 ${translateStat.waited_ms}ms） |`);
-    }
-  } catch (_) {}
-  lines.push("");
-  lines.push("---");
   lines.push("");
 
   const sections = [];
