@@ -5,13 +5,13 @@
   "poll_interval": 0.5,
   "file_scan_interval": 2.0,
   "max_messages": 1000,
-  "auto_start": false,
+  "auto_start": true,
   "follow_codex_process": false,
   "codex_process_regex": "codex",
   "only_follow_when_process": true,
   "translate_mode": "auto",
-  "notify_sound_assistant": "none",
-  "notify_sound_tool_gate": "none",
+  "notify_sound_assistant": "builtin:chime-gentle-up",
+  "notify_sound_tool_gate": "builtin:chime-double",
   "translator_provider": "http",
   "translator_config": {
     "openai": {
