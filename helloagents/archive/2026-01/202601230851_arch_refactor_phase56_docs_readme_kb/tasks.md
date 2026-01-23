@@ -9,4 +9,4 @@
 
 ## 2. 收尾与归档（Phase56.2）
 - [√] 2.1 更新 `helloagents/CHANGELOG.md` 记录 Phase56。
-- [ ] 2.2 将本方案包迁移至 `helloagents/archive/2026-01/` 并更新 `helloagents/archive/_index.md`。
+- [√] 2.2 将本方案包迁移至 `helloagents/archive/2026-01/` 并更新 `helloagents/archive/_index.md`。
