@@ -36,6 +36,7 @@
 ### 配置与敏感信息
 
 - 本机配置默认落在 `config/sidecar/config.json`（已加入 `.gitignore`，不会提交到 GitHub）。
+- 配置**仅依赖当前项目目录**：不会自动从 `~/.config`、`$CODEX_HOME/tmp` 或其它旧路径导入历史配置，避免 clone 后“意外读到本机旧 token/api_key”。
 - 可发布/可提交的示例配置：`config/sidecar/config.example.json`（无敏信息）。
 - UI 会对敏感字段做脱敏展示（例如 OpenAI `base_url/api_key`、HTTP Profile `token`、NVIDIA `api_key`），避免误拷贝泄漏。
 

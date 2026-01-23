@@ -8,7 +8,7 @@ from codex_sidecar.config import config_path, load_config
 
 
 class TestConfigImportLegacy(unittest.TestCase):
-    def test_imports_from_legacy_home_in_cwd(self) -> None:
+    def test_does_not_import_from_legacy_home_in_cwd(self) -> None:
         with TemporaryDirectory() as td:
             old_cwd = os.getcwd()
             os.chdir(td)
@@ -34,15 +34,14 @@ class TestConfigImportLegacy(unittest.TestCase):
                 new_home = Path(td) / "config" / "sidecar"
                 cfg = load_config(new_home)
                 self.assertEqual(str(cfg.config_home), str(new_home))
+                self.assertEqual(str(cfg.watch_codex_home or ""), str(Path.home() / ".codex"))
 
                 p = config_path(new_home)
-                self.assertTrue(p.exists())
-                obj = json.loads(p.read_text(encoding="utf-8"))
-                self.assertEqual(str(obj.get("config_home") or ""), str(new_home))
+                self.assertFalse(p.exists())
             finally:
                 os.chdir(old_cwd)
 
-    def test_imports_from_legacy_snapshot_in_codex_home_tmp(self) -> None:
+    def test_does_not_import_from_legacy_snapshot_in_codex_home_tmp(self) -> None:
         with TemporaryDirectory() as td:
             old_env = dict(os.environ)
             old_cwd = os.getcwd()
@@ -72,11 +71,10 @@ class TestConfigImportLegacy(unittest.TestCase):
                 new_home = Path(td) / "config" / "sidecar"
                 cfg = load_config(new_home)
                 self.assertEqual(str(cfg.config_home), str(new_home))
+                self.assertEqual(str(cfg.watch_codex_home or ""), str(codex_home))
 
                 p = config_path(new_home)
-                self.assertTrue(p.exists())
-                obj = json.loads(p.read_text(encoding="utf-8"))
-                self.assertEqual(str(obj.get("config_home") or ""), str(new_home))
+                self.assertFalse(p.exists())
             finally:
                 os.environ.clear()
                 os.environ.update(old_env)
@@ -85,4 +83,3 @@ class TestConfigImportLegacy(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
