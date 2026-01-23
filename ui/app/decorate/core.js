@@ -128,30 +128,67 @@ function decorateMdBlocks(root) {
   }
 }
 
-function decorateThinkingMeta(row) {
-  if (!row || !row.classList) return;
-  if (!row.classList.contains("kind-reasoning_summary")) return;
+function _textForCopyFromToolCard(card) {
+  if (!card || !card.querySelectorAll) return "";
+  try {
+    const parts = [];
+    const nodes = card.querySelectorAll("pre.code, div.md, pre");
+    for (const el of nodes) {
+      try {
+        if (!el) continue;
+        if (el.closest && el.closest(".hidden")) continue;
+        if (el.tagName === "DIV" && el.classList && el.classList.contains("md")) {
+          const t = String(el.innerText || el.textContent || "").trim();
+          if (t) parts.push(t);
+        } else if (el.tagName === "PRE") {
+          const t = String(el.textContent || "").trimEnd();
+          if (t) parts.push(t);
+        }
+      } catch (_) {}
+    }
+    return parts.join("\n\n").trim();
+  } catch (_) {
+    return String(card.innerText || card.textContent || "").trim();
+  }
+}
+
+function _textForCopyFromRowBody(row) {
+  if (!row) return "";
+  try {
+    // Thinking block: copy current visible language.
+    const think = row.querySelector ? row.querySelector(".think") : null;
+    if (think) {
+      const wantZh = !!(row.classList && row.classList.contains("think-mode-zh"));
+      const zh = think.querySelector ? think.querySelector(".think-zh") : null;
+      const en = think.querySelector ? think.querySelector(".think-en") : null;
+      const el = wantZh ? (zh || en) : (en || zh);
+      return String(el ? (el.innerText || el.textContent || "") : "").trim();
+    }
+
+    // Markdown block.
+    const md = row.querySelector ? row.querySelector("div.md") : null;
+    if (md) return _textForCopyFromMd(md);
+
+    // Code / plain pre.
+    const pre = row.querySelector ? row.querySelector("pre") : null;
+    if (pre) return String(pre.textContent || "").trimEnd();
+
+    // Tool card (fallback).
+    const card = row.querySelector ? row.querySelector("div.tool-card") : null;
+    if (card) return _textForCopyFromToolCard(card);
+  } catch (_) {}
+  return "";
+}
+
+function decorateMetaHoldCopy(row) {
+  if (!row) return;
   const meta = row.querySelector ? row.querySelector(".meta-line") : null;
   if (!meta) return;
   wireHoldCopy(meta, {
     // Do not steal gestures on buttons/links/inputs in the meta line.
     ignoreSelector: "button,a,input,textarea,select,summary",
     toastIsLight: true,
-    getText: () => {
-      try {
-        const r = meta.closest ? meta.closest(".row") : row;
-        if (!r) return "";
-        const wantZh = !!(r.classList && r.classList.contains("think-mode-zh"));
-        const think = r.querySelector ? r.querySelector(".think") : null;
-        if (!think) return "";
-        const zh = think.querySelector ? think.querySelector(".think-zh") : null;
-        const en = think.querySelector ? think.querySelector(".think-en") : null;
-        const el = wantZh ? (zh || en) : (en || zh);
-        return String(el ? (el.innerText || el.textContent || "") : "").trim();
-      } catch (_) {
-        return "";
-      }
-    },
+    getText: () => _textForCopyFromRowBody(row),
     onTap: null,
   });
 }
@@ -165,6 +202,6 @@ export function decorateRow(row) {
   decoratePreBlocks(row);
   decorateMdBlocks(row);
   decorateToolCards(row);
-  decorateThinkingMeta(row);
+  decorateMetaHoldCopy(row);
   wireToolToggles(row);
 }
