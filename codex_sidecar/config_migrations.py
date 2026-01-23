@@ -23,11 +23,11 @@ def ensure_cfg_invariants(
 
 
 def _migrate_stub_provider(cfg: Any, config_home: Path, *, save_config: Callable[[Path, Any], None]) -> None:
-    # 兼容旧配置：移除 stub/none Provider 后，自动迁移到 openai（不丢失其他 provider 配置）。
+    # 兼容旧配置：移除 stub/none Provider 后，自动迁移到 nvidia（不丢失其他 provider 配置）。
     try:
         p = str(getattr(cfg, "translator_provider", "") or "").strip().lower()
         if p in ("stub", "none"):
-            cfg.translator_provider = "openai"
+            cfg.translator_provider = "nvidia"
             save_config(config_home, cfg)
     except Exception:
         pass
@@ -86,4 +86,3 @@ def apply_inplace_migrations(cfg: Any, config_home: Path, *, save_config: Callab
     _migrate_stub_provider(cfg, config_home, save_config=save_config)
     _migrate_nvidia_model(cfg, config_home, save_config=save_config)
     _migrate_replay_last_lines(cfg, config_home, save_config=save_config)
-
