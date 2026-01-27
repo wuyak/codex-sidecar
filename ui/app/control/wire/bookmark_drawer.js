@@ -419,6 +419,7 @@ export function wireBookmarkDrawer(dom, state, helpers = {}) {
         key,
         label,
         sub: "",
+        subagents: [],
         unread,
         file,
         fileBase,
@@ -477,6 +478,7 @@ export function wireBookmarkDrawer(dom, state, helpers = {}) {
       };
 
       const _group = (rows) => {
+        const curKey = String(state.currentKey || "all");
         const parents = [];
         const parentKeys = new Set();
         const kidsByParent = new Map();
@@ -515,21 +517,28 @@ export function wireBookmarkDrawer(dom, state, helpers = {}) {
           });
 
           try { p.sub = `子代理：${kids.length}`; } catch (_) {}
+          try {
+            p.subagents = kids.map((c, i) => {
+              const k = String(c && c.key ? c.key : "");
+              const custom = getCustomLabel(k);
+              const ts = _timeShort(String(c && c.stamp ? c.stamp : ""));
+              const label = custom || `子${i + 1}`;
+              const unread = Math.max(0, Number(c && c.unread) || 0);
+              return { key: k, label, sub: ts, unread };
+            });
+          } catch (_) { p.subagents = []; }
 
-          for (let i = 0; i < kids.length; i++) {
-            const c = kids[i];
-            try { c.indent = 1; } catch (_) {}
-            try { c.color = p.color || c.color; } catch (_) {}
-            // Auto-friendly child naming (custom label still wins via _threadLabel()).
-            try {
-              const custom = getCustomLabel(String(c.key || ""));
-              if (!custom) {
-                const ts = _timeShort(String(c.stamp || ""));
-                c.label = ts ? `子${i + 1} · ${ts}` : `子${i + 1}`;
+          try {
+            if (curKey && curKey !== "all") {
+              const subs = Array.isArray(p.subagents) ? p.subagents : [];
+              for (const it of subs) {
+                if (it && typeof it === "object" && String(it.key || "") === curKey) {
+                  p.active = true;
+                  break;
+                }
               }
-            } catch (_) {}
-            out.push(c);
-          }
+            }
+          } catch (_) {}
         }
 
         // Orphan children: keep accessible.
@@ -674,6 +683,49 @@ export function wireBookmarkDrawer(dom, state, helpers = {}) {
         main.className = "tab-main";
         main.appendChild(label);
         if (sub && String(sub.textContent || "").trim()) main.appendChild(sub);
+        // 子代理：在父会话行内用 chips 展示（比“整行重复一套操作按钮”更清爽）
+        try {
+          const subs = it && Array.isArray(it.subagents) ? it.subagents : [];
+          if (subs && subs.length) {
+            const chips = document.createElement("div");
+            chips.className = "subagent-chip-row";
+            try { row.classList.add("has-subagents"); } catch (_) {}
+            for (const s of subs) {
+              if (!s || typeof s !== "object") continue;
+              const subKey = String(s.key || "").trim();
+              if (!subKey) continue;
+              const btn = document.createElement("button");
+              btn.type = "button";
+              btn.className = "subagent-chip" + (String(state.currentKey || "all") === subKey ? " active" : "");
+              btn.dataset.action = "subagent";
+              btn.dataset.subkey = subKey;
+              const u = Math.max(0, Number(s.unread) || 0);
+              if (u > 0) {
+                btn.classList.add("has-unread");
+                try { btn.dataset.unread = u > 99 ? "99+" : String(u); } catch (_) {}
+              }
+              const name = String(s.label || "").trim();
+              const ts = String(s.sub || "").trim();
+              btn.setAttribute("aria-label", `切换到 ${name}${ts ? `（${ts}）` : ""}`);
+              try { btn.removeAttribute("title"); } catch (_) {}
+
+              const t1 = document.createElement("span");
+              t1.className = "chip-label";
+              t1.textContent = name || "子代理";
+              btn.appendChild(t1);
+
+              if (ts) {
+                const t2 = document.createElement("span");
+                t2.className = "chip-sub";
+                t2.textContent = ts;
+                btn.appendChild(t2);
+              }
+
+              chips.appendChild(btn);
+            }
+            if (chips.childNodes && chips.childNodes.length) main.appendChild(chips);
+          }
+        } catch (_) {}
         main.appendChild(input);
 
         row.appendChild(dot);

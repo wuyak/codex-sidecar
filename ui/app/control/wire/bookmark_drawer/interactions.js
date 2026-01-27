@@ -77,6 +77,22 @@ export function wireBookmarkDrawerInteractions(dom, state, helpers = {}) {
     if (btn && btn.dataset) {
       const action = String(btn.dataset.action || "");
       try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+      if (action === "subagent") {
+        const subKey = String(btn.dataset.subkey || "").trim();
+        if (!subKey) return;
+        try {
+          const hidden = ensureHiddenSet();
+          if (hidden && hidden.has(subKey)) {
+            hidden.delete(subKey);
+            saveHiddenThreads(hidden);
+            try { renderTabs(); } catch (_) {}
+            renderBookmarkDrawerList();
+          }
+        } catch (_) {}
+        await onSelectKey(subKey);
+        closeBookmarkDrawer(dom);
+        return;
+      }
       if (action === "rename") { enterInlineRename(row, key); return; }
       if (action === "export") {
         const p = getExportPrefsForKey(key);
@@ -288,4 +304,3 @@ export function wireBookmarkDrawerInteractions(dom, state, helpers = {}) {
     });
   } catch (_) {}
 }
-
