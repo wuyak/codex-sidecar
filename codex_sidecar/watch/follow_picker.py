@@ -97,8 +97,10 @@ class FollowPicker:
             )
 
         tid = _parse_thread_id_from_filename(cand)
-        # Even in pinned mode, try to detect Codex process-follow targets so the watcher
-        # can fill "parallel sessions" from the *current* process (avoids zombie tabs).
+
+        # When process-follow is enabled, "pin" should not force-follow a historical file.
+        # If Codex is not running (or hasn't opened a rollout yet), prefer idling rather than
+        # tailing the pinned file — this keeps "监听中" clean after restarts.
         codex_detected = False
         codex_pids: List[int] = []
         process_file: Optional[Path] = None
@@ -110,15 +112,55 @@ class FollowPicker:
             pids = self._detect_codex_processes()
             candidate_pids = list(pids)
             codex_detected = bool(pids)
-            if codex_detected:
+            if not codex_detected:
+                if self._only_follow_when_process:
+                    return FollowPick(
+                        picked=None,
+                        thread_id=tid,
+                        follow_mode="idle",
+                        codex_detected=False,
+                        codex_pids=[],
+                        process_file=None,
+                        process_files=[],
+                        candidate_pids=candidate_pids,
+                    )
+            else:
                 tree = self._collect_process_tree(pids)
                 opened, openers = self._find_rollout_opened_by_pids(tree, limit=12)
                 if opened:
                     process_file = opened[0]
                     process_files = opened
                     codex_pids = openers
+                    if self._only_follow_when_process:
+                        # If the pinned file is not part of the *current* Codex process-follow set,
+                        # treat the pin as stale and follow the active process sessions instead.
+                        try:
+                            if cand not in opened:
+                                return FollowPick(
+                                    picked=process_file,
+                                    thread_id=_parse_thread_id_from_filename(process_file),
+                                    follow_mode="process",
+                                    codex_detected=True,
+                                    codex_pids=codex_pids,
+                                    process_file=process_file,
+                                    process_files=process_files,
+                                    candidate_pids=candidate_pids,
+                                )
+                        except Exception:
+                            pass
                     follow_mode = "pinned_process"
                 else:
+                    if self._only_follow_when_process:
+                        return FollowPick(
+                            picked=None,
+                            thread_id=tid,
+                            follow_mode="wait_rollout",
+                            codex_detected=True,
+                            codex_pids=[],
+                            process_file=None,
+                            process_files=[],
+                            candidate_pids=candidate_pids,
+                        )
                     follow_mode = "pinned_wait_rollout"
 
         return FollowPick(

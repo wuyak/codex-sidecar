@@ -44,6 +44,7 @@
   - `watch/tui_gate_helpers.py`：TUI gate 的时间戳拆分/ToolCall 解析/脱敏/Markdown 生成（供 tailer 调用），便于单测与复用（行为保持不变）
   - `watch/rollout_ingest.py`：rollout 单行解析/去重/翻译入队；并对需要终端审批的工具调用（`sandbox_permissions=require_escalated` 等）构建“延迟判定”的 tool gate：若同 `call_id` 在阈值（默认 1.25s）内未出现 `tool_output`，才推送 `tool_gate`（waiting）；收到 `tool_output` 后推送 released（避免“自动通过/秒确认”的误报与噪音），并携带 `gate_id/gate_status/gate_result` 供 UI 可靠渲染（不靠文本猜测）；同时会根据同命令历史 `Wall time` 做自适应延迟，降低“已自动批准但命令执行较久”的误报
   - 子代理会话（subagent）：由于 watcher 可能只 tail 文件尾部而错过首行 `session_meta`，`watch/session_meta.py` 会在首次遇到新文件时读取文件头部少量行，提取 `session_meta.payload.source` 并归一化为 `source_kind/parent_thread_id/subagent_depth`，随后附加到每条消息上，供 UI 做父子会话分层展示：底部会话标签栏默认不显示子代理；主视图提供 sticky 的“子代理切换条”；会话管理抽屉在父会话行内用 chips 展示子代理以减少噪音。
+  - 跟随策略：当开启“进程跟随 + 仅在有进程时跟随”（`follow_codex_process=true` 且 `only_follow_when_process=true`）时，`pin` 不会再强制 tail 旧的 pinned 文件；若未检测到 Codex 进程则进入 `idle`，若已检测到进程但尚未打开 rollout 则进入 `wait_rollout`，避免重启/空窗期误跟到历史会话导致 UI 混乱。
   - `watch/rollout_tailer.py`：文件 replay/poll 的通用 tail 逻辑（按 offset 增量读取）
   - `watch/rollout_follow_state.py`：follow targets → cursors/primary 的落地逻辑（cursor 初始化/回放/active 标记），从 watcher 抽离保持行为不变
   - `watch/follow_targets.py`：follow targets 计算（process/pin/auto + excludes），降低 watcher 内联分支耦合

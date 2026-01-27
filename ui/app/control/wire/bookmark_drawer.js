@@ -516,7 +516,7 @@ export function wireBookmarkDrawer(dom, state, helpers = {}) {
             return String(a && a.key ? a.key : "").localeCompare(String(b && b.key ? b.key : ""));
           });
 
-          try { p.sub = `子代理：${kids.length}`; } catch (_) {}
+          try { p.sub = `${kids.length} 子代理`; } catch (_) {}
           try {
             p.subagents = kids.map((c, i) => {
               const k = String(c && c.key ? c.key : "");
@@ -681,8 +681,11 @@ export function wireBookmarkDrawer(dom, state, helpers = {}) {
 
         const main = document.createElement("div");
         main.className = "tab-main";
-        main.appendChild(label);
-        if (sub && String(sub.textContent || "").trim()) main.appendChild(sub);
+        const head = document.createElement("div");
+        head.className = "tab-head";
+        head.appendChild(label);
+        if (sub && String(sub.textContent || "").trim()) head.appendChild(sub);
+        main.appendChild(head);
         // 子代理：在父会话行内用 chips 展示（比“整行重复一套操作按钮”更清爽）
         try {
           const subs = it && Array.isArray(it.subagents) ? it.subagents : [];
