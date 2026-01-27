@@ -83,6 +83,14 @@ function _pickFallbackKey(state, excludeKey = "") {
     if (!k) continue;
     if (isOfflineKey(k)) continue;
     if (k === ex) continue;
+    // Prefer parent sessions: keep subagent threads inside their parent UI.
+    try {
+      const pid = String((t && t.parent_thread_id) ? t.parent_thread_id : "").trim();
+      const sk = String((t && t.source_kind) ? t.source_kind : "").trim().toLowerCase();
+      if (pid && sk === "subagent" && state && state.threadIndex && typeof state.threadIndex.has === "function" && state.threadIndex.has(pid)) {
+        continue;
+      }
+    } catch (_) {}
     if (hidden && typeof hidden.has === "function" && hidden.has(k)) continue;
     if (closed && typeof closed.has === "function" && closed.has(k)) continue;
     return k;
@@ -451,6 +459,18 @@ export function upsertThread(state, msg) {
     const tid = String(msg && msg.thread_id ? msg.thread_id : "").trim();
     if (tid && (!prev.thread_id || String(prev.thread_id || "").trim() !== tid)) prev.thread_id = tid;
   } catch (_) {}
+  try {
+    const sk = String(msg && msg.source_kind ? msg.source_kind : "").trim();
+    if (sk && (!prev.source_kind || String(prev.source_kind || "").trim() !== sk)) prev.source_kind = sk;
+  } catch (_) {}
+  try {
+    const pid = String(msg && msg.parent_thread_id ? msg.parent_thread_id : "").trim();
+    if (pid && (!prev.parent_thread_id || String(prev.parent_thread_id || "").trim() !== pid)) prev.parent_thread_id = pid;
+  } catch (_) {}
+  try {
+    const d = msg && msg.subagent_depth;
+    if (Number.isFinite(Number(d))) prev.subagent_depth = Number(d);
+  } catch (_) {}
 
   // Keep kinds for closed-thread baseline comparisons (avoid waking closed sessions on gate noise).
   try {
@@ -535,7 +555,56 @@ export function renderTabs(dom, state, onSelectKey) {
 
   // Tabs should keep a stable order (browser-like). Do not reorder by activity on every refresh.
   const itemsAll = Array.from(state.threadIndex.values());
-  const items = itemsAll.filter((t) => !isOfflineKey(String(t && t.key ? t.key : "")));
+  const currentKeyRaw = String(state.currentKey || "all");
+  const hiddenForResolve = (state && state.hiddenThreads && typeof state.hiddenThreads.has === "function")
+    ? state.hiddenThreads
+    : loadHiddenThreads();
+  const closedForResolve = (state && state.closedThreads && typeof state.closedThreads.has === "function")
+    ? state.closedThreads
+    : null;
+  const _parentVisibleInTabs = (pid) => {
+    const p = String(pid || "").trim();
+    if (!p) return false;
+    try {
+      if (!(state && state.threadIndex && typeof state.threadIndex.has === "function" && state.threadIndex.has(p))) return false;
+      if (hiddenForResolve && typeof hiddenForResolve.has === "function" && hiddenForResolve.has(p)) return false;
+      if (closedForResolve && typeof closedForResolve.has === "function" && closedForResolve.has(p)) return false;
+    } catch (_) {
+      return false;
+    }
+    return true;
+  };
+  const _resolveTabKey = (k) => {
+    const key = String(k || "");
+    if (!key || key === "all") return key;
+    try {
+      const t = state && state.threadIndex && typeof state.threadIndex.get === "function" ? state.threadIndex.get(key) : null;
+      const pid = String(t && t.parent_thread_id ? t.parent_thread_id : "").trim();
+      const sk = String(t && t.source_kind ? t.source_kind : "").trim().toLowerCase();
+      if (pid && sk === "subagent" && _parentVisibleInTabs(pid)) {
+        return pid;
+      }
+    } catch (_) {}
+    return key;
+  };
+  const currentTabKey = _resolveTabKey(currentKeyRaw);
+  const _isChildThread = (t) => {
+    try {
+      const pid = String(t && t.parent_thread_id ? t.parent_thread_id : "").trim();
+      const sk = String(t && t.source_kind ? t.source_kind : "").trim().toLowerCase();
+      if (!pid || sk !== "subagent") return false;
+      // If the parent thread is present, keep the child inside the parent UI.
+      return _parentVisibleInTabs(pid);
+    } catch (_) {
+      return false;
+    }
+  };
+  const items = itemsAll.filter((t) => {
+    const k = String(t && t.key ? t.key : "");
+    if (!k) return false;
+    if (isOfflineKey(k)) return false;
+    return !_isChildThread(t);
+  });
   const offlineItems = Array.isArray(state && state.offlineShow) ? state.offlineShow : [];
 
   try {
@@ -567,7 +636,7 @@ export function renderTabs(dom, state, onSelectKey) {
     s.add(k);
     saveHiddenThreads(s);
     _toastFromEl(sourceEl || host, `已从列表移除：${labelForToast || shortId(k)}`, { durationMs: 1600 });
-    if (String(state.currentKey || "all") === k) await onSelectKey(_pickFallbackKey(state, k));
+    if (String(currentTabKey || state.currentKey || "all") === k) await onSelectKey(_pickFallbackKey(state, k));
     else renderTabs(dom, state, onSelectKey);
   };
 
@@ -584,7 +653,7 @@ export function renderTabs(dom, state, onSelectKey) {
       was ? `已恢复：${labelForToast || shortId(k)}` : `已从列表移除：${labelForToast || shortId(k)}`,
       { durationMs: 1600 },
     );
-    if (!was && String(state.currentKey || "all") === k) await onSelectKey(_pickFallbackKey(state, k));
+    if (!was && String(currentTabKey || state.currentKey || "all") === k) await onSelectKey(_pickFallbackKey(state, k));
     else renderTabs(dom, state, onSelectKey);
   };
 
@@ -595,14 +664,14 @@ export function renderTabs(dom, state, onSelectKey) {
     if (s.has(k)) return;
     s.add(k);
     saveHiddenThreads(s);
-    if (String(state.currentKey || "all") === k) await onSelectKey(_pickFallbackKey(state, k));
+    if (String(currentTabKey || state.currentKey || "all") === k) await onSelectKey(_pickFallbackKey(state, k));
     else renderTabs(dom, state, onSelectKey);
   };
 
   const renderList = (container, existing, opts) => {
     const mode = String(opts && opts.mode ? opts.mode : "");
 
-    const currentKey = String(state.currentKey || "all");
+    const currentKey = String(currentTabKey || "all");
 
     const _appendThread = (t) => {
       const isHidden = !!(hidden && typeof hidden.has === "function" && hidden.has(t.key));
@@ -679,6 +748,88 @@ export function renderTabs(dom, state, onSelectKey) {
   try { if (railLive) railLive.replaceChildren(railFrag); } catch (_) { try { while (railLive && railLive.firstChild) railLive.removeChild(railLive.firstChild); railLive && railLive.appendChild(railFrag); } catch (_) {} }
 
   try { if (railLive) railLive.scrollLeft = prevScrollLeft; } catch (_) {}
+
+  // Subagent switcher (2nd-level tabs): keep child sessions grouped under their parent.
+  const _renderSubagentTabs = () => {
+    const host = dom && dom.subagentTabs ? dom.subagentTabs : null;
+    if (!host) return;
+    const ck = String(currentKeyRaw || "all");
+    if (!ck || ck === "all" || isOfflineKey(ck)) {
+      try { host.classList.add("hidden"); } catch (_) {}
+      try { host.replaceChildren(); } catch (_) { while (host.firstChild) host.removeChild(host.firstChild); }
+      return;
+    }
+
+    const parentKey = String(currentTabKey || ck);
+    if (!parentKey || parentKey === "all") {
+      try { host.classList.add("hidden"); } catch (_) {}
+      try { host.replaceChildren(); } catch (_) { while (host.firstChild) host.removeChild(host.firstChild); }
+      return;
+    }
+
+    const kids = [];
+    try {
+      for (const t of itemsAll) {
+        const pid = String(t && t.parent_thread_id ? t.parent_thread_id : "").trim();
+        const sk = String(t && t.source_kind ? t.source_kind : "").trim().toLowerCase();
+        if (sk !== "subagent" || !pid) continue;
+        if (pid !== parentKey) continue;
+        kids.push(t);
+      }
+    } catch (_) {}
+
+    if (!kids.length) {
+      try { host.classList.add("hidden"); } catch (_) {}
+      try { host.replaceChildren(); } catch (_) { while (host.firstChild) host.removeChild(host.firstChild); }
+      return;
+    }
+
+    kids.sort((a, b) => {
+      const sa = rolloutStampFromFile((a && a.file) ? a.file : "");
+      const sb = rolloutStampFromFile((b && b.file) ? b.file : "");
+      if (sa !== sb) return String(sa || "").localeCompare(String(sb || ""));
+      return String(a && a.key ? a.key : "").localeCompare(String(b && b.key ? b.key : ""));
+    });
+
+    try { host.classList.remove("hidden"); } catch (_) {}
+    try { host.replaceChildren(); } catch (_) { while (host.firstChild) host.removeChild(host.firstChild); }
+    const frag = document.createDocumentFragment();
+
+    const mkBtn = (label, sub, key, active) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "subtab" + (active ? " active" : "");
+      btn.dataset.key = String(key || "");
+      const t = document.createElement("span");
+      t.textContent = String(label || "");
+      btn.appendChild(t);
+      const ss = String(sub || "").trim();
+      if (ss) {
+        const s = document.createElement("span");
+        s.className = "subtab-sub";
+        s.textContent = ss;
+        btn.appendChild(s);
+      }
+      try { btn.removeAttribute("title"); } catch (_) {}
+      try { btn.setAttribute("aria-label", `${label}${ss ? ` ${ss}` : ""}`.trim()); } catch (_) {}
+      btn.addEventListener("click", () => { try { onSelectKey(String(key || "")); } catch (_) {} });
+      return btn;
+    };
+
+    // Parent (main) tab.
+    frag.appendChild(mkBtn("主", "", parentKey, ck === parentKey));
+
+    for (let i = 0; i < kids.length; i++) {
+      const t = kids[i];
+      const label = `子${i + 1}`;
+      const stampFull = rolloutStampFromFile((t && t.file) ? t.file : "");
+      const stampShort = _stampShort(stampFull);
+      frag.appendChild(mkBtn(label, stampShort, String(t && t.key ? t.key : ""), ck === String(t && t.key ? t.key : "")));
+    }
+
+    host.appendChild(frag);
+  };
+  try { _renderSubagentTabs(); } catch (_) {}
 
   // Offline “展示标签栏”：不进入 hiddenThreads，不产生未读；关闭=移除展示。
   if (!railOffline) return;

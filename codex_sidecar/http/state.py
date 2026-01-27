@@ -189,6 +189,9 @@ class SidecarState:
                     "last_ts": "",
                     "last_seq": 0,
                     "kinds": {},
+                    "source_kind": "",
+                    "parent_thread_id": "",
+                    "subagent_depth": 0,
                 }
             a = agg[key]
             a["count"] += 1
@@ -204,6 +207,28 @@ class SidecarState:
             kind = str(m.get("kind") or "")
             if kind:
                 a["kinds"][kind] = int(a["kinds"].get(kind, 0)) + 1
+
+            # Best-effort session metadata (e.g. subagent parent linkage).
+            try:
+                sk = str(m.get("source_kind") or "").strip()
+            except Exception:
+                sk = ""
+            if sk and not str(a.get("source_kind") or "").strip():
+                a["source_kind"] = sk
+            try:
+                pid = str(m.get("parent_thread_id") or "").strip()
+            except Exception:
+                pid = ""
+            if pid and not str(a.get("parent_thread_id") or "").strip():
+                a["parent_thread_id"] = pid
+            try:
+                depth = m.get("subagent_depth")
+                if isinstance(depth, int):
+                    a["subagent_depth"] = int(depth)
+                elif isinstance(depth, str) and str(depth).strip().isdigit():
+                    a["subagent_depth"] = int(str(depth).strip())
+            except Exception:
+                pass
         items = list(agg.values())
         items.sort(key=lambda x: (int(x.get("last_seq") or 0), x.get("last_ts") or ""), reverse=True)
         return items

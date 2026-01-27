@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .rollout_extract import extract_rollout_items
+from .session_meta import read_session_source_meta
 from .tui_gate_helpers import redact_secrets, ts_age_s
 
 
@@ -377,6 +378,21 @@ class RolloutLineIngestor:
         self._emit_ingest = emit_ingest
         self._translate_enqueue = translate_enqueue
         self._approval = _ApprovalGateTracker(dedupe=dedupe, emit_ingest=emit_ingest)
+        self._session_meta_by_file: Dict[str, Dict[str, Any]] = {}
+
+    def _get_session_meta(self, file_path: Path) -> Dict[str, Any]:
+        fp = str(file_path)
+        cached = self._session_meta_by_file.get(fp)
+        if isinstance(cached, dict):
+            return cached
+        try:
+            meta = read_session_source_meta(file_path)
+            if not isinstance(meta, dict):
+                meta = {}
+        except Exception:
+            meta = {}
+        self._session_meta_by_file[fp] = meta
+        return meta
 
     def poll_tool_gates(self) -> None:
         """
@@ -413,6 +429,7 @@ class RolloutLineIngestor:
             return 0
 
         ts, extracted = extract_rollout_items(obj)
+        meta = self._get_session_meta(file_path)
         ingested = 0
 
         for item in extracted:
@@ -453,6 +470,11 @@ class RolloutLineIngestor:
                 "file": str(file_path),
                 "line": int(line_no),
             }
+            if meta:
+                try:
+                    msg.update(meta)
+                except Exception:
+                    pass
             if self._emit_ingest(msg):
                 ingested += 1
 

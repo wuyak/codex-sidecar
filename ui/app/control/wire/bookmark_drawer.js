@@ -178,6 +178,14 @@ export function wireBookmarkDrawer(dom, state, helpers = {}) {
       if (!k) continue;
       if (isOfflineKey(k)) continue;
       if (k === ex) continue;
+      // Prefer parent sessions: keep subagent threads inside their parent UI.
+      try {
+        const pid = String((t && t.parent_thread_id) ? t.parent_thread_id : "").trim();
+        const sk = String((t && t.source_kind) ? t.source_kind : "").trim().toLowerCase();
+        if (pid && sk === "subagent" && state && state.threadIndex && typeof state.threadIndex.has === "function" && state.threadIndex.has(pid)) {
+          continue;
+        }
+      } catch (_) {}
       if (hidden && typeof hidden.has === "function" && hidden.has(k)) continue;
       if (closed && typeof closed.has === "function" && closed.has(k)) continue;
       return k;
@@ -407,35 +415,130 @@ export function wireBookmarkDrawer(dom, state, helpers = {}) {
       const hidden = _ensureHiddenSet();
       const closed = (state && state.closedThreads && typeof state.closedThreads.has === "function") ? state.closedThreads : new Map();
 
+      const mkEntry = (t, { key, label, file, fileBase, followed, isHidden, unread, color, isSubagent, parentKey, stamp }) => ({
+        key,
+        label,
+        sub: "",
+        unread,
+        file,
+        fileBase,
+        followed,
+        hidden: isHidden,
+        closed: false,
+        active: String(state.currentKey || "all") === key,
+        color,
+        isSubagent: !!isSubagent,
+        parentKey: String(parentKey || ""),
+        stamp: String(stamp || ""),
+        indent: 0,
+      });
+
+      const visibleRaw = [];
+      const hiddenRaw = [];
+
       for (const t of arr) {
         const key = String((t && t.key) ? t.key : "");
         if (!key) continue;
         if (isOfflineKey(key)) continue;
         if (closed && typeof closed.has === "function" && closed.has(key)) continue;
-        const label0 = _threadLabel(t);
-        const label = label0;
         const file = String((t && t.file) ? t.file : "");
         const fileBase = file ? (String(file).split("/").slice(-1)[0] || file) : "";
         const followed = !!(file && followFiles && followFiles.includes(file));
-        const tid = String((t && t.thread_id) ? t.thread_id : "");
         const isHidden = !!(hidden && typeof hidden.has === "function" && hidden.has(key));
         const unread = getUnreadCount(state, key);
         const clr = colorForKey(key);
-        const entry = {
+        const sk = String((t && t.source_kind) ? t.source_kind : "").trim().toLowerCase();
+        const parentKey = String((t && t.parent_thread_id) ? t.parent_thread_id : "").trim();
+        const isSubagent = !!(sk === "subagent" && parentKey);
+        const stamp = rolloutStampFromFile(file || "");
+        const label0 = _threadLabel(t);
+        const entry = mkEntry(t, {
           key,
-          label,
-          unread,
+          label: label0,
           file,
           fileBase,
           followed,
-          hidden: isHidden,
-          closed: false,
-          active: String(state.currentKey || "all") === key,
+          isHidden,
+          unread,
           color: clr,
-        };
-        if (isHidden) hiddenItems.push(entry);
-        else items.push(entry);
+          isSubagent,
+          parentKey,
+          stamp,
+        });
+        if (isHidden) hiddenRaw.push(entry);
+        else visibleRaw.push(entry);
       }
+
+      const _timeShort = (stampStr) => {
+        const s = String(stampStr || "").trim();
+        const m = s.match(/^\d{4}-\d{2}-\d{2} (\d{2}):(\d{2})/);
+        if (m) return `${m[1]}:${m[2]}`;
+        return s;
+      };
+
+      const _group = (rows) => {
+        const parents = [];
+        const parentKeys = new Set();
+        const kidsByParent = new Map();
+        const orphans = [];
+
+        for (const it of rows) {
+          if (!it || typeof it !== "object") continue;
+          if (it.isSubagent && it.parentKey) continue;
+          parents.push(it);
+          parentKeys.add(String(it.key || ""));
+        }
+
+        for (const it of rows) {
+          if (!it || typeof it !== "object") continue;
+          if (!it.isSubagent || !it.parentKey) continue;
+          const pk = String(it.parentKey || "");
+          if (pk && parentKeys.has(pk)) {
+            if (!kidsByParent.has(pk)) kidsByParent.set(pk, []);
+            kidsByParent.get(pk).push(it);
+          } else {
+            orphans.push(it);
+          }
+        }
+
+        const out = [];
+        for (const p of parents) {
+          out.push(p);
+          const pk = String(p && p.key ? p.key : "");
+          const kids = kidsByParent.get(pk) || [];
+          if (!kids.length) continue;
+          kids.sort((a, b) => {
+            const sa = String(a && a.stamp ? a.stamp : "");
+            const sb = String(b && b.stamp ? b.stamp : "");
+            if (sa !== sb) return sa.localeCompare(sb);
+            return String(a && a.key ? a.key : "").localeCompare(String(b && b.key ? b.key : ""));
+          });
+
+          try { p.sub = `子代理：${kids.length}`; } catch (_) {}
+
+          for (let i = 0; i < kids.length; i++) {
+            const c = kids[i];
+            try { c.indent = 1; } catch (_) {}
+            try { c.color = p.color || c.color; } catch (_) {}
+            // Auto-friendly child naming (custom label still wins via _threadLabel()).
+            try {
+              const custom = getCustomLabel(String(c.key || ""));
+              if (!custom) {
+                const ts = _timeShort(String(c.stamp || ""));
+                c.label = ts ? `子${i + 1} · ${ts}` : `子${i + 1}`;
+              }
+            } catch (_) {}
+            out.push(c);
+          }
+        }
+
+        // Orphan children: keep accessible.
+        for (const c of orphans) out.push(c);
+        return out;
+      };
+
+      items.push(..._group(visibleRaw));
+      hiddenItems.push(..._group(hiddenRaw));
     } catch (_) {}
 
     const _renderList = (target, rows, opts = {}) => {
@@ -479,6 +582,7 @@ export function wireBookmarkDrawer(dom, state, helpers = {}) {
         row.className = "tab"
           + (it.active ? " active" : "")
           + (it.closed ? " tab-closed" : "")
+          + (it.indent ? " tab-subagent" : "")
           + (isHiddenList ? " tab-hidden" : "");
         row.dataset.key = String(it.key || "");
         row.dataset.label = String(it.label || "");
@@ -499,7 +603,7 @@ export function wireBookmarkDrawer(dom, state, helpers = {}) {
         const sub = document.createElement("span");
         sub.className = "tab-sub";
         try {
-          sub.textContent = "";
+          sub.textContent = String(it.sub || "");
         } catch (_) { sub.textContent = ""; }
 
         const input = document.createElement("input");

@@ -138,6 +138,23 @@ function _findBookmarkButton(key) {
   return null;
 }
 
+function _resolveToastAnchorKey(state, key) {
+  const k = String(key || "").trim();
+  if (!k || k === "all") return k;
+  // If this key is already visible as a tab, use it.
+  try { if (_findBookmarkButton(k)) return k; } catch (_) {}
+  // Subagent sessions are grouped under their parent tab; anchor to the parent when possible.
+  try {
+    const t = state && state.threadIndex && typeof state.threadIndex.get === "function" ? state.threadIndex.get(k) : null;
+    const pid = String(t && t.parent_thread_id ? t.parent_thread_id : "").trim();
+    const sk = String(t && t.source_kind ? t.source_kind : "").trim().toLowerCase();
+    if (pid && sk === "subagent") {
+      if (_findBookmarkButton(pid)) return pid;
+    }
+  } catch (_) {}
+  return k;
+}
+
 function _placeToolGateToastAboveTab(el, key, yOffset = 0) {
   const toast = el && el.nodeType === 1 ? el : null;
   if (!toast) return false;
@@ -570,12 +587,12 @@ export function connectEventStream(dom, state, upsertThread, renderTabs, renderM
             else if (gateResult === "aborted") { title = "终端已取消"; level = "warn"; }
             const el = notifyCorner(notifyKey, title, summary || "tool gate 已解除。", { level, ttlMs: 8000 });
             _wireToolGateToastJump(dom, state, el, msg, refreshList, notifyKey);
-            try { if (el) _placeToolGateToastAboveTab(el, threadKey); } catch (_) {}
+            try { if (el) _placeToolGateToastAboveTab(el, _resolveToastAnchorKey(state, threadKey)); } catch (_) {}
             try { _scheduleToolGateToastLayout(state); } catch (_) {}
           } else if (gateStatus === "waiting") {
             const el = notifyCorner(notifyKey, "终端等待确认", summary, { level: "warn", sticky: true });
             _wireToolGateToastJump(dom, state, el, msg, refreshList, notifyKey);
-            try { if (el) _placeToolGateToastAboveTab(el, threadKey); } catch (_) {}
+            try { if (el) _placeToolGateToastAboveTab(el, _resolveToastAnchorKey(state, threadKey)); } catch (_) {}
             try { _scheduleToolGateToastLayout(state); } catch (_) {}
             // tool_gate 属于“强提醒”：提示音去重即可，不进入“未读角标”（避免污染会话未读计数）。
             if (_shouldRingForId(state, mid)) {
@@ -588,7 +605,7 @@ export function connectEventStream(dom, state, upsertThread, renderTabs, renderM
             // Unknown tool_gate variants: still surface as attention-worthy.
             const el = notifyCorner(notifyKey, "终端提示", summary, { level: "warn", sticky: true });
             _wireToolGateToastJump(dom, state, el, msg, refreshList, notifyKey);
-            try { if (el) _placeToolGateToastAboveTab(el, threadKey); } catch (_) {}
+            try { if (el) _placeToolGateToastAboveTab(el, _resolveToastAnchorKey(state, threadKey)); } catch (_) {}
             try { _scheduleToolGateToastLayout(state); } catch (_) {}
             if (_shouldRingForId(state, mid)) {
               try { maybePlayNotifySound(dom, state, { kind: "tool_gate" }); } catch (_) {}

@@ -458,6 +458,27 @@
 		      .row { border: 1px solid var(--c-border); border-left: 4px solid rgba(148, 163, 184, .55); border-radius: 12px; padding: 12px; margin: 10px 0; background: var(--c-surface); box-shadow: var(--shadow-sm); }
 			      #topbar.row { border: none; border-radius: 0; background: transparent; box-shadow: none; padding: 0; margin: 14px 0 14px; display:flex; align-items:center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 			      #topbar .top-title { font-size: calc(var(--ui-font-size, 14px) + 4px); font-weight: 900; }
+			      .subagent-tabs { display:flex; align-items:center; gap: 6px; flex-wrap: wrap; margin: -6px 0 10px; }
+			      .subagent-tabs.hidden { display: none; }
+			      .subagent-tabs .subtab {
+			        border: 1px solid var(--c-border);
+			        background: var(--c-soft-2);
+			        color: var(--c-text);
+			        padding: 5px 10px;
+			        border-radius: 999px;
+			        cursor: pointer;
+			        font-size: var(--ui-font-xs);
+			        font-weight: 800;
+			        line-height: 1.1;
+			        display:inline-flex;
+			        align-items:center;
+			        gap: 6px;
+			      }
+			      body[data-bm-skin="dark"] .subagent-tabs .subtab { background: rgba(30,41,59,.45); border-color: rgba(148,163,184,.22); }
+			      .subagent-tabs .subtab:hover { background: var(--c-soft); }
+			      .subagent-tabs .subtab.active { background: rgba(14,165,233,.14); border-color: rgba(14,165,233,.55); box-shadow: var(--ring); }
+			      body[data-bm-skin="dark"] .subagent-tabs .subtab.active { background: rgba(14,165,233,.16); }
+			      .subagent-tabs .subtab .subtab-sub { font-variant-numeric: tabular-nums; opacity: .78; font-weight: 900; }
 	      .row.kind-user_message { border-left-color:#38bdf8; }
 	      .row.kind-assistant_message { border-left-color:#4ade80; }
 	      .row.kind-tool_call, .row.kind-tool_output { border-left-color:#fbbf24; }
@@ -566,6 +587,18 @@
 	        box-shadow: 0 10px 24px rgba(0,0,0,.14);
 	      }
 	      .tab-dot { width: 10px; height: 10px; border-radius: 999px; display:inline-block; flex: 0 0 auto; }
+	      .tab.tab-subagent { padding-left: 18px; }
+	      .tab.tab-subagent .tab-dot { width: 8px; height: 8px; opacity: .82; }
+	      .tab.tab-subagent::before {
+	        content: "↳";
+	        position: absolute;
+	        left: 8px;
+	        top: 50%;
+	        transform: translateY(-50%);
+	        color: var(--c-muted);
+	        opacity: .75;
+	        font-weight: 900;
+	      }
 	      .tab[data-hint] { position: relative; }
 	      .tab[data-hint]::after {
 	        content: attr(data-hint);

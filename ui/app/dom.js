@@ -110,6 +110,7 @@ export function getDom() {
     confirmDialogCancel: byId("confirmDialogCancel"),
     confirmDialogOk: byId("confirmDialogOk"),
 
+    subagentTabs: byId("subagentTabs"),
     list: byId("list"),
   };
 }
