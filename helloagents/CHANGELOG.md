@@ -1,9 +1,15 @@
 # Changelog
 
 ## [Unreleased]
+- 文档：更新 `README.md` 为更贴心的用户向说明（包含 UI 按钮/触发方式、会话管理、导入/导出、翻译与设置配置指引），并前置 `USER_GUIDE.md` 入口与文档导航。
+- 文档：新增 `README.DRAFT.md`（全量信息挖掘版：A1–A15 + 附录 A/B/C + 自检清单 D）。
+- 文档：新增 `README.ENCYCLOPEDIA.md`（百科全书版：解释原理/数据流/边界/细节，并给出 KIND/API/CFG/UI 的可回溯锚点）。
+- 文档：新增/重写 `USER_GUIDE.md`（手把手用户操作指南：按“你要做什么”组织，补充 Dock/会话管理/导入/导出/翻译/提示音与排障；弱化技术细节）。
+- 文档：新增 `helloagents/plan/202601232226_readme_full/tasks.md`（README.DRAFT 全量挖掘任务清单；可自动推进且不需逐步确认）。
 - 调整(启动脚本)：启动入口收敛为 `./run.sh`（同时覆盖原 `ui.sh` 场景）；移除 `ui.sh` / `scripts/ui.sh`，需要“仅启动 UI/服务端”时使用 `./run.sh --ui`。
 - 调整：默认翻译 Provider 改为 `http`（默认 URL 为硅基流动 `translate.json` 示例；UI 可切换 `http/openai/nvidia`）；OpenAI `base_url` 允许留空，运行时默认回退为 `https://api.openai.com/v1`（密钥仍需在本机配置，仓库不提交）。
 - 修复(UI)：OpenAI `Base URL` 不再自动预填，也不在保存时强制写入默认 URL；未填写时仅作为“运行时默认值”回退到 `https://api.openai.com/v1`（避免 clone 后误以为已配置）。
+- 修复(UI)：KaTeX 数学渲染对 `$...$` 启用条件更严格：只有当同一消息块内的 `$` 都能被判定为“同一行的安全 `$...$` 行内数学配对”时才启用；否则禁用 `$` 分隔符，避免 shell prompt 的 `$` 误触发导致用户输入空格/换行显示异常。
 - 调整：HTTP 默认 Profile 命名为 `siliconflowfree`，并将 HTTP 翻译超时默认值调整为 `12` 秒（更贴近常用公网翻译服务的响应时间）。
 - 修复：配置加载不再自动从旧路径导入（如 `~/.config`、`$CODEX_HOME/tmp`、`./.codex-thinking-sidecar`），仅依赖当前项目的 `config/sidecar/config.json`，避免 clone 后误读本机旧密钥。
 - 文档：README 同步知识库目录结构说明（`helloagents/` v3 布局：`modules/archive/plan`）。
