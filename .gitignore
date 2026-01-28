@@ -48,3 +48,7 @@ old/.codex-thinking-sidecar/
 # Local notes
 修改意见整理/
 .ace-tool/
+
+# Docs (keep README.md tracked)
+README.*.md
+USER_GUIDE.md
