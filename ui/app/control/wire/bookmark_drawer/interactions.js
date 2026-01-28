@@ -11,6 +11,7 @@ export function wireBookmarkDrawerInteractions(dom, state, helpers = {}) {
   const onSelectKey = typeof h.onSelectKey === "function" ? h.onSelectKey : (async () => {});
   const renderTabs = typeof h.renderTabs === "function" ? h.renderTabs : (() => {});
   const renderBookmarkDrawerList = typeof h.renderBookmarkDrawerList === "function" ? h.renderBookmarkDrawerList : (() => {});
+  const toggleSubagents = typeof h.toggleSubagents === "function" ? h.toggleSubagents : (() => false);
   const threadDefaultLabel = typeof h.threadDefaultLabel === "function" ? h.threadDefaultLabel : (() => "unknown");
   const pickFallbackKey = typeof h.pickFallbackKey === "function" ? h.pickFallbackKey : (() => "all");
   const ensureHiddenSet = typeof h.ensureHiddenSet === "function" ? h.ensureHiddenSet : (() => (state.hiddenThreads = (state.hiddenThreads || new Set())));
@@ -77,6 +78,11 @@ export function wireBookmarkDrawerInteractions(dom, state, helpers = {}) {
     if (btn && btn.dataset) {
       const action = String(btn.dataset.action || "");
       try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+      if (action === "toggleSubagents") {
+        try { toggleSubagents(key); } catch (_) {}
+        renderBookmarkDrawerList();
+        return;
+      }
       if (action === "subagent") {
         const subKey = String(btn.dataset.subkey || "").trim();
         if (!subKey) return;
@@ -93,7 +99,11 @@ export function wireBookmarkDrawerInteractions(dom, state, helpers = {}) {
         closeBookmarkDrawer(dom);
         return;
       }
-      if (action === "rename") { enterInlineRename(row, key); return; }
+      if (action === "rename") {
+        const def = row && row.dataset ? String(row.dataset.defaultLabel || "") : "";
+        enterInlineRename(row, key, { defaultLabel: def });
+        return;
+      }
       if (action === "export") {
         const p = getExportPrefsForKey(key);
         const mode = p.quick ? "quick" : "full";

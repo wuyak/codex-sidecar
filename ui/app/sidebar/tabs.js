@@ -795,36 +795,52 @@ export function renderTabs(dom, state, onSelectKey) {
     try { host.replaceChildren(); } catch (_) { while (host.firstChild) host.removeChild(host.firstChild); }
     const frag = document.createDocumentFragment();
 
-    const mkBtn = (label, sub, key, active) => {
+    const mkBtn = (text, ariaText, key, active, opts = {}) => {
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.className = "subtab" + (active ? " active" : "");
+      const o = (opts && typeof opts === "object") ? opts : {};
+      btn.className = "subtab"
+        + (active ? " active" : "")
+        + (o.main ? " is-main" : "");
       btn.dataset.key = String(key || "");
       const t = document.createElement("span");
-      t.textContent = String(label || "");
+      t.className = "subtab-t";
+      t.textContent = String(text || "");
+      try { t.setAttribute("aria-hidden", "true"); } catch (_) {}
       btn.appendChild(t);
-      const ss = String(sub || "").trim();
-      if (ss) {
-        const s = document.createElement("span");
-        s.className = "subtab-sub";
-        s.textContent = ss;
-        btn.appendChild(s);
-      }
+      const spot = document.createElement("span");
+      spot.className = "subtab-spot";
+      try { spot.setAttribute("aria-hidden", "true"); } catch (_) {}
+      btn.appendChild(spot);
+      try {
+        const clr = colorForKey(String(key || ""));
+        if (clr && clr.fg) btn.style.setProperty("--subtab-color", String(clr.fg));
+      } catch (_) {}
       try { btn.removeAttribute("title"); } catch (_) {}
-      try { btn.setAttribute("aria-label", `${label}${ss ? ` ${ss}` : ""}`.trim()); } catch (_) {}
+      try { btn.setAttribute("aria-label", String(ariaText || text || "").trim()); } catch (_) {}
       btn.addEventListener("click", () => { try { onSelectKey(String(key || "")); } catch (_) {} });
       return btn;
     };
 
     // Parent (main) tab.
-    frag.appendChild(mkBtn("主", "", parentKey, ck === parentKey));
+    let parentAria = "主会话";
+    try {
+      const custom = getCustomLabel(parentKey);
+      if (custom) parentAria = `主会话：${custom}`;
+      else {
+        const t = itemsAll.find((x) => String(x && x.key ? x.key : "") === parentKey);
+        if (t) parentAria = `主会话：${threadLabels(t, { offlinePrefix: false }).label}`;
+      }
+    } catch (_) {}
+    frag.appendChild(mkBtn("主", parentAria, parentKey, ck === parentKey, { main: true }));
 
     for (let i = 0; i < kids.length; i++) {
       const t = kids[i];
-      const label = `子${i + 1}`;
       const stampFull = rolloutStampFromFile((t && t.file) ? t.file : "");
       const stampShort = _stampShort(stampFull);
-      frag.appendChild(mkBtn(label, stampShort, String(t && t.key ? t.key : ""), ck === String(t && t.key ? t.key : "")));
+      const key = String(t && t.key ? t.key : "");
+      const aria = `子${i + 1}${stampShort ? ` ${stampShort}` : ""}`.trim();
+      frag.appendChild(mkBtn(String(i + 1), aria, key, ck === key));
     }
 
     host.appendChild(frag);

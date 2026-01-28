@@ -10,6 +10,7 @@ import { wireImportDialog } from "./import_dialog.js";
 import { wireBookmarkDrawerInteractions } from "./bookmark_drawer/interactions.js";
 
 const _LS_TABS_COLLAPSED = "codex_sidecar_tabs_collapsed_v1";
+const _LS_SUBAGENT_PARENTS_EXPANDED = "codex_sidecar_subagent_parents_expanded_v1";
 
 const _readSavedBool = (lsKey, fallback) => {
   try {
@@ -22,6 +23,36 @@ const _readSavedBool = (lsKey, fallback) => {
   } catch (_) {
     return fallback;
   }
+};
+
+const _readSavedJsonArray = (lsKey) => {
+  try {
+    const raw = localStorage.getItem(lsKey);
+    if (!raw) return null;
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? v : null;
+  } catch (_) {
+    return null;
+  }
+};
+
+const _loadExpandedSubagentParents = () => {
+  const set = new Set();
+  const arr = _readSavedJsonArray(_LS_SUBAGENT_PARENTS_EXPANDED) || [];
+  for (const it of arr) {
+    const k = String(it || "").trim();
+    if (!k || k === "all") continue;
+    set.add(k);
+  }
+  return set;
+};
+
+const _saveExpandedSubagentParents = (set) => {
+  try {
+    const arr = Array.from(set || []).map((v) => String(v || "").trim()).filter((k) => k && k !== "all");
+    // avoid unbounded growth
+    localStorage.setItem(_LS_SUBAGENT_PARENTS_EXPANDED, JSON.stringify(arr.slice(0, 200)));
+  } catch (_) {}
 };
 
 const _applyTabsCollapsedLocal = (collapsed) => {
@@ -148,6 +179,27 @@ export function wireBookmarkDrawer(dom, state, helpers = {}) {
     const k = String((t && t.key) ? t.key : "");
     const custom = getCustomLabel(k);
     return custom || _threadDefaultLabel(t);
+  };
+
+  let _expandedSubagentParents = null;
+  const _ensureExpandedSubagentParents = () => {
+    if (_expandedSubagentParents && typeof _expandedSubagentParents.has === "function") return _expandedSubagentParents;
+    _expandedSubagentParents = _loadExpandedSubagentParents();
+    return _expandedSubagentParents;
+  };
+  const _isExpandedSubagentParent = (key) => {
+    const k = String(key || "").trim();
+    if (!k || k === "all") return false;
+    return _ensureExpandedSubagentParents().has(k);
+  };
+  const _toggleExpandedSubagentParent = (key) => {
+    const k = String(key || "").trim();
+    if (!k || k === "all") return false;
+    const set = _ensureExpandedSubagentParents();
+    if (set.has(k)) set.delete(k);
+    else set.add(k);
+    _saveExpandedSubagentParents(set);
+    return set.has(k);
   };
 
   let _bookmarkDrawerEditingKey = "";
@@ -472,8 +524,8 @@ export function wireBookmarkDrawer(dom, state, helpers = {}) {
 
       const _timeShort = (stampStr) => {
         const s = String(stampStr || "").trim();
-        const m = s.match(/^\d{4}-\d{2}-\d{2} (\d{2}):(\d{2})/);
-        if (m) return `${m[1]}:${m[2]}`;
+        const m = s.match(/^\d{4}-(\d{2})-(\d{2}) (\d{2}):(\d{2})/);
+        if (m) return `${m[1]}-${m[2]} ${m[3]}:${m[4]}`;
         return s;
       };
 
@@ -518,25 +570,43 @@ export function wireBookmarkDrawer(dom, state, helpers = {}) {
 
           try { p.sub = `${kids.length} 子代理`; } catch (_) {}
           try {
-            p.subagents = kids.map((c, i) => {
+            const rows0 = kids.map((c, i) => {
               const k = String(c && c.key ? c.key : "");
               const custom = getCustomLabel(k);
               const ts = _timeShort(String(c && c.stamp ? c.stamp : ""));
               const label = custom || `子${i + 1}`;
               const unread = Math.max(0, Number(c && c.unread) || 0);
-              return { key: k, label, sub: ts, unread };
+              const child = {
+                ...c,
+                indent: 1,
+                label,
+                defaultLabel: `子${i + 1}`,
+                sub: ts,
+                subagents: [],
+                active: curKey === k,
+              };
+              return child;
             });
+            p.subagents = rows0;
+            p.subagentsExpanded = _isExpandedSubagentParent(pk);
           } catch (_) { p.subagents = []; }
 
           try {
-            if (curKey && curKey !== "all") {
+            const expanded = !!p.subagentsExpanded;
+            if (curKey && curKey !== "all" && !expanded) {
               const subs = Array.isArray(p.subagents) ? p.subagents : [];
               for (const it of subs) {
-                if (it && typeof it === "object" && String(it.key || "") === curKey) {
-                  p.active = true;
-                  break;
-                }
+                if (it && typeof it === "object" && String(it.key || "") === curKey) { p.active = true; break; }
               }
+            }
+          } catch (_) {}
+
+          // If expanded, append the child rows under the parent.
+          try {
+            const expanded = !!p.subagentsExpanded;
+            if (expanded) {
+              const subs = Array.isArray(p.subagents) ? p.subagents : [];
+              for (const c of subs) out.push(c);
             }
           } catch (_) {}
         }
@@ -595,6 +665,11 @@ export function wireBookmarkDrawer(dom, state, helpers = {}) {
           + (isHiddenList ? " tab-hidden" : "");
         row.dataset.key = String(it.key || "");
         row.dataset.label = String(it.label || "");
+        try {
+          const dl = String(it.defaultLabel || "").trim();
+          if (dl) row.dataset.defaultLabel = dl;
+          else if (row.dataset && row.dataset.defaultLabel) delete row.dataset.defaultLabel;
+        } catch (_) {}
         if (isHiddenList) row.dataset.hidden = "1";
         row.setAttribute("role", "button");
         row.tabIndex = 0;
@@ -624,6 +699,23 @@ export function wireBookmarkDrawer(dom, state, helpers = {}) {
 
         const actions = document.createElement("div");
         actions.className = "tab-actions";
+
+        const subs = it && Array.isArray(it.subagents) ? it.subagents : [];
+        const isParentWithSubs = !it.indent && subs && subs.length;
+        const subsExpanded = !!(it && it.subagentsExpanded);
+        if (isParentWithSubs) {
+          try { row.classList.add("has-subagents"); } catch (_) {}
+          const subToggleBtn = document.createElement("button");
+          subToggleBtn.className = "mini-btn";
+          subToggleBtn.type = "button";
+          subToggleBtn.dataset.action = "toggleSubagents";
+          subToggleBtn.dataset.expanded = subsExpanded ? "1" : "0";
+          subToggleBtn.setAttribute("aria-label", subsExpanded ? "折叠子会话" : "展开子会话");
+          try { subToggleBtn.removeAttribute("title"); } catch (_) {}
+          subToggleBtn.innerHTML = `<svg class="ico" aria-hidden="true"><use href="${subsExpanded ? "#i-arrow-up" : "#i-arrow-down"}"></use></svg>`;
+          wireMiniBtnHoverTip(subToggleBtn);
+          actions.appendChild(subToggleBtn);
+        }
 
         const renameBtn = document.createElement("button");
         renameBtn.className = "mini-btn";
@@ -686,49 +778,6 @@ export function wireBookmarkDrawer(dom, state, helpers = {}) {
         head.appendChild(label);
         if (sub && String(sub.textContent || "").trim()) head.appendChild(sub);
         main.appendChild(head);
-        // 子代理：在父会话行内用 chips 展示（比“整行重复一套操作按钮”更清爽）
-        try {
-          const subs = it && Array.isArray(it.subagents) ? it.subagents : [];
-          if (subs && subs.length) {
-            const chips = document.createElement("div");
-            chips.className = "subagent-chip-row";
-            try { row.classList.add("has-subagents"); } catch (_) {}
-            for (const s of subs) {
-              if (!s || typeof s !== "object") continue;
-              const subKey = String(s.key || "").trim();
-              if (!subKey) continue;
-              const btn = document.createElement("button");
-              btn.type = "button";
-              btn.className = "subagent-chip" + (String(state.currentKey || "all") === subKey ? " active" : "");
-              btn.dataset.action = "subagent";
-              btn.dataset.subkey = subKey;
-              const u = Math.max(0, Number(s.unread) || 0);
-              if (u > 0) {
-                btn.classList.add("has-unread");
-                try { btn.dataset.unread = u > 99 ? "99+" : String(u); } catch (_) {}
-              }
-              const name = String(s.label || "").trim();
-              const ts = String(s.sub || "").trim();
-              btn.setAttribute("aria-label", `切换到 ${name}${ts ? `（${ts}）` : ""}`);
-              try { btn.removeAttribute("title"); } catch (_) {}
-
-              const t1 = document.createElement("span");
-              t1.className = "chip-label";
-              t1.textContent = name || "子代理";
-              btn.appendChild(t1);
-
-              if (ts) {
-                const t2 = document.createElement("span");
-                t2.className = "chip-sub";
-                t2.textContent = ts;
-                btn.appendChild(t2);
-              }
-
-              chips.appendChild(btn);
-            }
-            if (chips.childNodes && chips.childNodes.length) main.appendChild(chips);
-          }
-        } catch (_) {}
         main.appendChild(input);
 
         row.appendChild(dot);
@@ -1016,6 +1065,7 @@ export function wireBookmarkDrawer(dom, state, helpers = {}) {
     onSelectKey,
     renderTabs,
     renderBookmarkDrawerList: _renderBookmarkDrawerList,
+    toggleSubagents: _toggleExpandedSubagentParent,
     threadDefaultLabel: _threadDefaultLabel,
     pickFallbackKey: _pickFallbackKey,
     ensureHiddenSet: _ensureHiddenSet,
