@@ -28,6 +28,66 @@ except Exception:
 PY
 }
 
+health_pid() {
+  local url="$1"
+  python3 -X utf8 - <<PY
+import json, urllib.request
+url = ${url@Q}
+try:
+    with urllib.request.urlopen(url, timeout=0.6) as resp:
+        if resp.status != 200:
+            raise SystemExit(1)
+        data = resp.read()
+    obj = json.loads(data.decode("utf-8", errors="replace"))
+    pid = obj.get("pid")
+    if obj.get("ok") is True and isinstance(pid, int) and pid > 0:
+        print(pid)
+        raise SystemExit(0)
+    raise SystemExit(1)
+except Exception:
+    raise SystemExit(1)
+PY
+}
+
+server_config_home() {
+  local url="$1"
+  python3 -X utf8 - <<PY
+import json, urllib.request
+url = ${url@Q}
+try:
+    with urllib.request.urlopen(url, timeout=0.8) as resp:
+        if resp.status != 200:
+            raise SystemExit(1)
+        data = resp.read()
+    obj = json.loads(data.decode("utf-8", errors="replace"))
+    cfg_home = str(obj.get("config_home") or "")
+    print(cfg_home)
+    raise SystemExit(0)
+except Exception:
+    raise SystemExit(1)
+PY
+}
+
+check_ui_once() {
+  local url="$1"
+  python3 -X utf8 - <<PY
+import urllib.request
+url = ${url@Q}
+try:
+    with urllib.request.urlopen(url, timeout=0.8) as resp:
+        if resp.status != 200:
+            raise SystemExit(1)
+        data = resp.read(200000)
+    text = data.decode("utf-8", errors="replace")
+    # When the UI root is missing, the server returns a dev-friendly HTML fallback.
+    if "UI file missing:" in text:
+        raise SystemExit(1)
+    raise SystemExit(0)
+except Exception:
+    raise SystemExit(1)
+PY
+}
+
 open_browser() {
   local url="$1"
   if command -v cmd.exe >/dev/null 2>&1; then
@@ -111,8 +171,41 @@ maybe_autorecover_port() {
 
   if [ "${no_server}" = "1" ]; then return 0; fi
 
-  if check_health_once "${health_url}"; then
-    echo "[sidecar] INFO: 已有 sidecar 在运行：${base_url}，将直接打开 UI" >&2
+  local health_pid_val=""
+  if health_pid_val="$(health_pid "${health_url}")"; then
+    local existing_cfg_home=""
+    existing_cfg_home="$(server_config_home "${base_url%/}/api/config" 2>/dev/null || true)"
+    if check_ui_once "${ui_url}" && { [ -z "${existing_cfg_home}" ] || [ "${existing_cfg_home}" = "${config_home}" ]; }; then
+      echo "[sidecar] INFO: 已有 sidecar 在运行：${base_url}，将直接打开 UI" >&2
+      open_browser "${ui_url}"
+      exit 0
+    fi
+
+    # The server is alive but looks broken (missing UI) or points to a different config_home.
+    # Try to restart it if it's a local codex_sidecar process.
+    if kill -0 "${health_pid_val}" 2>/dev/null; then
+      local cmd=""
+      cmd="$(pid_cmdline "${health_pid_val}")"
+      if ! looks_like_sidecar_cmd "${cmd}"; then
+        echo "[sidecar] ERROR: ${base_url} 返回了 PID ${health_pid_val}，但该进程看起来不是 codex_sidecar：${cmd}" >&2
+        echo "[sidecar] ERROR: 为安全起见不会自动终止。请手动停止该进程或换一个端口（PORT=... / --port ...）。" >&2
+        exit 3
+      fi
+      echo "[sidecar] WARN: 检测到已有 sidecar 但 UI/配置不匹配（PID ${health_pid_val}）；尝试终止后重启…" >&2
+      if ! kill "${health_pid_val}" 2>/dev/null; then
+        echo "[sidecar] ERROR: 无法终止旧 sidecar（PID ${health_pid_val}）。请手动 kill 后重试。" >&2
+        exit 3
+      fi
+      if ! wait_pid_exit "${health_pid_val}"; then
+        echo "[sidecar] WARN: 旧 sidecar 未在预期时间退出，发送 SIGKILL（PID ${health_pid_val}）…" >&2
+        kill -9 "${health_pid_val}" 2>/dev/null || true
+        wait_pid_exit "${health_pid_val}" || true
+      fi
+      echo "[sidecar] INFO: 已清理旧 sidecar（PID ${health_pid_val}），准备重新启动。" >&2
+      return 0
+    fi
+
+    echo "[sidecar] WARN: ${base_url} 的 sidecar 似乎 UI/配置异常，但 PID ${health_pid_val} 非本机可控进程；将直接打开 UI。" >&2
     open_browser "${ui_url}"
     exit 0
   fi
