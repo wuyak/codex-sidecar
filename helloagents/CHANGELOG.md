@@ -3,10 +3,8 @@
 ## [Unreleased]
 - UI：子代理（subagent）会话分层展示：底部会话标签栏不再被子代理“刷屏”；会话管理抽屉在父会话行内用 chips 展示子代理并可一键切换；主视图“子代理切换条”改为 sticky（滚动中也能切换）。
 - 修复(跟随策略)：开启“进程跟随 + 仅在有进程时跟随”时，`pin` 不再强制监听历史会话；Codex 未运行或尚未打开 rollout 时进入 idle/wait_rollout，避免重启后“监听中”堆满旧会话。
-- 文档：更新 `README.md` 为更贴心的用户向说明（包含 UI 按钮/触发方式、会话管理、导入/导出、翻译与设置配置指引），并前置 `USER_GUIDE.md` 入口与文档导航。
-- 文档：新增 `README.DRAFT.md`（全量信息挖掘版：A1–A15 + 附录 A/B/C + 自检清单 D）。
-- 文档：新增 `README.ENCYCLOPEDIA.md`（百科全书版：解释原理/数据流/边界/细节，并给出 KIND/API/CFG/UI 的可回溯锚点）。
-- 文档：新增/重写 `USER_GUIDE.md`（手把手用户操作指南：按“你要做什么”组织，补充 Dock/会话管理/导入/导出/翻译/提示音与排障；弱化技术细节）。
+- 文档：`README.md` 作为仓库唯一说明文档（包含 UI 按钮/触发方式、会话管理、导入/导出、翻译与设置配置指引）。
+- 整理：仅保留 `README.md`；`README.*.md` 与 `USER_GUIDE.md` 作为本地文档并已加入 `.gitignore`。
 - 文档：新增 `helloagents/plan/202601232226_readme_full/tasks.md`（README.DRAFT 全量挖掘任务清单；可自动推进且不需逐步确认）。
 - 调整(启动脚本)：启动入口收敛为 `./run.sh`（同时覆盖原 `ui.sh` 场景）；移除 `ui.sh` / `scripts/ui.sh`，需要“仅启动 UI/服务端”时使用 `./run.sh --ui`。
 - 调整：默认翻译 Provider 改为 `http`（默认 URL 为硅基流动 `translate.json` 示例；UI 可切换 `http/openai/nvidia`）；OpenAI `base_url` 允许留空，运行时默认回退为 `https://api.openai.com/v1`（密钥仍需在本机配置，仓库不提交）。
