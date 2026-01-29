@@ -201,6 +201,7 @@
 Provider 怎么选（按你手头有什么）：
 - **HTTP**：你有一个现成的翻译 HTTP 接口（最通用）  
   - 支持多个 Profiles：可以为不同接口存不同 URL/Token，然后切换 selected
+  - 默认内置：`siliconflowfree` + `googlefree`（Google(Free) 非官方端点，可能会限流/变更；`googlefree` 会做 Markdown 格式稳定化以尽量保留行序/空行/代码块）
 - **GPT（Responses API 兼容）**：你有 OpenAI / 网关 / 代理  
   - Base URL 可以不填（默认会用 `https://api.openai.com/v1`）  
   - 但 **Model** 和 **API Key** 必填

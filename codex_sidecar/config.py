@@ -233,6 +233,12 @@ def default_config(config_home: Path) -> SidecarConfig:
                         "url": "https://siliconflow.zvo.cn/translate.json?to=chinese_simplified",
                         "token": "",
                         "timeout_s": 12,
+                    },
+                    {
+                        "name": "googlefree",
+                        "url": "https://translate-pa.googleapis.com/v1/translate?from=auto&to=zh-CN",
+                        "token": "",
+                        "timeout_s": 12,
                     }
                 ],
             },

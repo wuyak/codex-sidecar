@@ -124,8 +124,51 @@ def _migrate_http_default_profile_name(cfg: Any, config_home: Path, *, save_conf
         pass
 
 
+def _migrate_http_add_googlefree_profile(cfg: Any, config_home: Path, *, save_config: Callable[[Path, Any], None]) -> None:
+    # Add a second built-in HTTP profile for users who kept the default single-profile config.
+    # Keep it conservative: only apply when it still looks like the stock "siliconflowfree" profile.
+    try:
+        tc = getattr(cfg, "translator_config", None)
+        if not isinstance(tc, dict):
+            return
+        http_tc = tc.get("http") if isinstance(tc.get("http"), dict) else tc
+        if not isinstance(http_tc, dict):
+            return
+        profiles = http_tc.get("profiles")
+        if not isinstance(profiles, list):
+            return
+        if any(isinstance(p, dict) and str(p.get("name") or "").strip() == "googlefree" for p in profiles):
+            return
+        if len(profiles) != 1:
+            return
+        p0 = profiles[0]
+        if not isinstance(p0, dict):
+            return
+        name = str(p0.get("name") or "").strip()
+        url = str(p0.get("url") or "").strip()
+        token = str(p0.get("token") or "").strip()
+        if name != "siliconflowfree":
+            return
+        if "siliconflow.zvo.cn/translate.json" not in url:
+            return
+        if token:
+            return
+        profiles.append(
+            {
+                "name": "googlefree",
+                "url": "https://translate-pa.googleapis.com/v1/translate?from=auto&to=zh-CN",
+                "token": "",
+                "timeout_s": 12,
+            }
+        )
+        save_config(config_home, cfg)
+    except Exception:
+        pass
+
+
 def apply_inplace_migrations(cfg: Any, config_home: Path, *, save_config: Callable[[Path, Any], None]) -> None:
     _migrate_stub_provider(cfg, config_home, save_config=save_config)
     _migrate_nvidia_model(cfg, config_home, save_config=save_config)
     _migrate_replay_last_lines(cfg, config_home, save_config=save_config)
     _migrate_http_default_profile_name(cfg, config_home, save_config=save_config)
+    _migrate_http_add_googlefree_profile(cfg, config_home, save_config=save_config)

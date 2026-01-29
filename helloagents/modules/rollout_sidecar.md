@@ -97,7 +97,7 @@
 - 通知可靠性：服务端 SSE 广播对“高优先级事件”（`tool_gate`/`assistant_message`）做背压保护；当浏览器处理不过来导致订阅队列满时，会优先丢弃低价值噪音（例如翻译回填 update），保证“终端确认提示/最终回答”不被静默丢弃
 - 会话列表同步：断线恢复后会标记 `threadsDirty`，下一次列表回源时同步 `/api/threads`，避免侧栏漏会话/排序漂移
 - 多会话不串线：推荐通过会话书签栏切换（或启用“锁定”）来浏览单会话；`all` 视图更适合快速总览（不再在每条消息上额外展示会话标识，避免信息噪音）
-- 翻译 Provider 可插拔并可在 UI 中切换：`http/openai/nvidia`（旧配置中的 `stub/none` 会自动迁移到 `openai`）
+- 翻译 Provider 可插拔并可在 UI 中切换：`http/openai/nvidia`（HTTP 内置 Profile 默认含 `siliconflowfree` 与 `googlefree`；`googlefree` 会做 Markdown 格式稳定化以尽量保留行序/空行/代码块；旧配置中的 `stub/none` 会自动迁移到 `openai`）
 ## UI 展示内容与翻译策略
 - UI 现在会展示更多事件类型：用户输入（`user_message`）、工具调用与输出（`tool_call` / `tool_output`）、最终回答（`assistant_message`）、思考摘要（`reasoning_summary`）。
 - 翻译策略：仅对“思考摘要”（`reasoning_summary`）进行翻译；工具输出与最终回答不翻译。

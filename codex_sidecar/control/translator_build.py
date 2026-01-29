@@ -70,6 +70,7 @@ def build_translator(cfg: SidecarConfig) -> Translator:
     if provider == "http":
         tc = cfg.translator_config or {}
         selected = select_http_profile(tc if isinstance(tc, dict) else {})
+        profile_name = str(selected.get("name") or "").strip()
         url = str(selected.get("url") or "").strip()
         timeout_s = float(selected.get("timeout_s") or 12.0)
         auth_token = str(selected.get("token") or "").strip()
@@ -78,6 +79,7 @@ def build_translator(cfg: SidecarConfig) -> Translator:
         return HttpTranslator(
             url=url,
             timeout_s=timeout_s,
+            profile_name=profile_name,
             auth_token=auth_token,
             auth_header=auth_header,
             auth_prefix=auth_prefix,
