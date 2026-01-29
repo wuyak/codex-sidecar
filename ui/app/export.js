@@ -7,6 +7,7 @@ import { baseName, pickCustomLabel, sanitizeFileName } from "./export/naming.js"
 import { classifyToolCallText } from "./export/tool_calls.js";
 import { getQuickBlocks } from "./export/quick_blocks.js";
 import { balanceFences, convertKnownHtmlCodeBlocksToFences, safeCodeFence } from "./export/markdown_utils.js";
+import { subagentNames } from "./subagent_names.js";
 import {
   extractExitCode,
   extractOutputBody,
@@ -481,7 +482,12 @@ export async function exportThreadMarkdown(state, key, opts = {}) {
 
   const custom = pickCustomLabel(k, threadId, file);
   const fileBase = baseName(file);
-  const title = custom || fileBase || (threadId ? shortId(threadId) : shortId(k)) || "导出";
+  let title = custom || fileBase || (threadId ? shortId(threadId) : shortId(k)) || "导出";
+  // 子代理：导出名使用“父会话-子N”，避免跨父会话混淆；父会话重命名时自动跟随。
+  try {
+    const info = subagentNames(state, k);
+    if (info && info.long) title = String(info.long || title);
+  } catch (_) {}
 
   const lines = [];
   lines.push(`# ${title}`);

@@ -177,6 +177,15 @@ export function wireBookmarkDrawerInteractions(dom, state, helpers = {}) {
         return;
       }
       if (action === "rename") {
+        try {
+          const t = state && state.threadIndex && typeof state.threadIndex.get === "function" ? state.threadIndex.get(key) : null;
+          const pid = String((t && t.parent_thread_id) ? t.parent_thread_id : "").trim();
+          const sk = String((t && t.source_kind) ? t.source_kind : "").trim().toLowerCase();
+          if (pid && sk === "subagent") {
+            toastFromEl(btn, "子代理名称随主会话自动生成");
+            return;
+          }
+        } catch (_) {}
         const def = row && row.dataset ? String(row.dataset.defaultLabel || "") : "";
         enterInlineRename(row, key, { defaultLabel: def });
         return;

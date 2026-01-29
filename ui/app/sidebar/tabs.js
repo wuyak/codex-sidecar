@@ -6,6 +6,7 @@ import { loadHiddenChildrenByParent, loadHiddenThreads, saveHiddenChildrenByPare
 import { saveClosedThreads } from "../closed_threads.js";
 import { getUnreadCount, jumpToNextUnread } from "../unread.js";
 import { flashToastAt } from "../utils/toast.js";
+import { subagentNames } from "../subagent_names.js";
 
 function _canHoverTip(e) {
   try {
@@ -280,6 +281,14 @@ function _wireBookmarkInteractions(btn) {
     longFired = true;
     const k = String(btn.dataset && btn.dataset.key ? btn.dataset.key : "").trim();
     if (!k || k === "all") return;
+    try {
+      const sk = String(btn.dataset && btn.dataset.sk ? btn.dataset.sk : "").trim().toLowerCase();
+      const pid = String(btn.dataset && btn.dataset.pid ? btn.dataset.pid : "").trim();
+      if (sk === "subagent" && pid) {
+        _toastFromEl(btn, "子代理名称随主会话自动生成");
+        return;
+      }
+    } catch (_) {}
     try { btn.classList.add("editing", "active"); } catch (_) {}
     const parts = _ensureBookmarkStructure(btn);
     if (!parts) return;
@@ -748,8 +757,16 @@ export function renderTabs(dom, state, onSelectKey) {
       const labels = threadLabels(t, { offlinePrefix: true });
       const defaultLabel = labels.label;
       const fullLabel = labels.full;
-      const custom = getCustomLabel(t.key);
-      const label = custom || defaultLabel;
+      let label = getCustomLabel(t.key) || defaultLabel;
+      // 子代理：当父会话不可见（被隐藏/关闭）导致子会话以“独立标签”出现时，显示“父会话-子N”，避免混淆。
+      try {
+        const pid = String(t && t.parent_thread_id ? t.parent_thread_id : "").trim();
+        const sk = String(t && t.source_kind ? t.source_kind : "").trim().toLowerCase();
+        if (pid && sk === "subagent" && !_parentVisibleInTabs(pid)) {
+          const info = subagentNames(state, String(t && t.key ? t.key : ""));
+          if (info && info.long) label = String(info.long || label);
+        }
+      } catch (_) {}
       btn.className = "bookmark" + (isHidden ? " tab-hidden" : "") + (currentKey === t.key ? " active" : "") + (u > 0 ? " has-unread" : "");
 
       try {
@@ -765,6 +782,13 @@ export function renderTabs(dom, state, onSelectKey) {
       try {
         btn.dataset.label = label;
         btn.dataset.defaultLabel = defaultLabel;
+      } catch (_) {}
+      try {
+        const sk = String((t && t.source_kind) ? t.source_kind : "").trim().toLowerCase();
+        const pid = String((t && t.parent_thread_id) ? t.parent_thread_id : "").trim();
+        btn.dataset.sk = sk;
+        if (pid) btn.dataset.pid = pid;
+        else { try { delete btn.dataset.pid; } catch (_) { btn.dataset.pid = ""; } }
       } catch (_) {}
       try { btn.setAttribute("aria-label", label); } catch (_) {}
       try {

@@ -8,6 +8,7 @@ import { isOfflineKey, offlineKeyFromRel } from "../../offline.js";
 import { hideUiHoverTip, showUiHoverTip, toastFromEl } from "./ui_hints.js";
 import { wireImportDialog } from "./import_dialog.js";
 import { wireBookmarkDrawerInteractions } from "./bookmark_drawer/interactions.js";
+import { subagentNames } from "../../subagent_names.js";
 
 const _LS_TABS_COLLAPSED = "codex_sidecar_tabs_collapsed_v1";
 const _LS_SUBAGENT_PARENTS_EXPANDED = "codex_sidecar_subagent_parents_expanded_v1";
@@ -504,7 +505,14 @@ export function wireBookmarkDrawer(dom, state, helpers = {}) {
         const parentKey = String((t && t.parent_thread_id) ? t.parent_thread_id : "").trim();
         const isSubagent = !!(sk === "subagent" && parentKey);
         const stamp = rolloutStampFromFile(file || "");
-        const label0 = _threadLabel(t);
+        let label0 = _threadLabel(t);
+        // 子代理：默认显示“父会话-子N”，避免在父会话不可见时变回原文件名导致混淆。
+        try {
+          if (isSubagent) {
+            const info = subagentNames(state, key);
+            if (info && info.long) label0 = String(info.long || label0);
+          }
+        } catch (_) {}
         const entry = mkEntry(t, {
           key,
           label: label0,
@@ -572,9 +580,8 @@ export function wireBookmarkDrawer(dom, state, helpers = {}) {
           try {
             const rows0 = kids.map((c, i) => {
               const k = String(c && c.key ? c.key : "");
-              const custom = getCustomLabel(k);
               const ts = _timeShort(String(c && c.stamp ? c.stamp : ""));
-              const label = custom || `子${i + 1}`;
+              const label = `子${i + 1}`;
               const unread = Math.max(0, Number(c && c.unread) || 0);
               const child = {
                 ...c,
