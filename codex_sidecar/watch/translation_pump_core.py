@@ -85,6 +85,15 @@ class TranslationPump:
         except Exception:
             return
 
+    def _translator_for_item(self, item: Dict[str, Any]) -> Translator:
+        try:
+            tr = item.get("_tr", None)
+            if tr is not None:
+                return tr
+        except Exception:
+            pass
+        return self._translator
+
     def enqueue(
         self,
         mid: str,
@@ -105,6 +114,7 @@ class TranslationPump:
         # - Force retranslate: coalesce if already queued/running (run once after inflight).
         if force:
             follow_item: Dict[str, Any] = {"id": m, "text": t, "key": str(thread_key or ""), "batchable": False}
+            follow_item["_tr"] = self._translator
             fz = str(fallback_zh or "")
             if fz.strip():
                 follow_item["fallback_zh"] = fz
@@ -126,6 +136,7 @@ class TranslationPump:
             "key": str(thread_key or ""),
             "batchable": bool(batchable),
         }
+        item["_tr"] = self._translator
         if force:
             fz = str(fallback_zh or "")
             if fz.strip():
@@ -298,11 +309,12 @@ class TranslationPump:
                 continue
 
             batch = collect_batch_from_lo(item, lo_queue=self._lo, pending=pending, batch_size=self._batch_size)
+            tr = self._translator_for_item(item)
 
             t0 = time.monotonic()
             try:
                 if len(batch) == 1:
-                    zh, err = translate_one(self._translator, text)
+                    zh, err = translate_one(tr, text)
                     if stop_event.is_set():
                         continue
                     if (not str(zh or "").strip()) and str(err or "").strip():
@@ -327,7 +339,7 @@ class TranslationPump:
 
                 pairs = collect_pairs(batch)
                 if len(pairs) <= 1:
-                    zh, err = translate_one(self._translator, text)
+                    zh, err = translate_one(tr, text)
                     if stop_event.is_set():
                         continue
                     self._emit_translate(mid, zh, err)
@@ -348,12 +360,12 @@ class TranslationPump:
                     continue
 
                 processed = emit_translate_batch(
-                    translator=self._translator,
+                    translator=tr,
                     pairs=pairs,
                     pack_translate_batch=_pack_translate_batch,
                     unpack_translate_batch=_unpack_translate_batch,
-                    translate_one=lambda t: translate_one(self._translator, t),
-                    normalize_err=lambda f: normalize_translate_error(self._translator, f),
+                    translate_one=lambda t: translate_one(tr, t),
+                    normalize_err=lambda f: normalize_translate_error(tr, f),
                     emit_translate=self._emit_translate,
                     done_id=self._done_id,
                     stop_requested=stop_event.is_set,

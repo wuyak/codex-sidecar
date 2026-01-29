@@ -22,9 +22,11 @@ def collect_batch_from_lo(
     try:
         batchable = bool(first_item.get("batchable"))
         key = str(first_item.get("key") or "")
+        tr = first_item.get("_tr", None)
     except Exception:
         batchable = False
         key = ""
+        tr = None
 
     if (not batchable) or (not key):
         return batch
@@ -38,7 +40,7 @@ def collect_batch_from_lo(
         except Exception:
             break
         try:
-            if bool(nxt.get("batchable")) and str(nxt.get("key") or "") == key:
+            if bool(nxt.get("batchable")) and str(nxt.get("key") or "") == key and nxt.get("_tr", None) is tr:
                 batch.append(nxt)
             else:
                 pending.append(nxt)
