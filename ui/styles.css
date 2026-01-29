@@ -469,19 +469,20 @@
 			        flex-wrap: nowrap;
 			        overflow-x: auto;
 			        -webkit-overflow-scrolling: touch;
-			        margin: -4px 0 8px;
-			        padding: 0;
-			        border: none;
-			        background: transparent;
-			        box-shadow: none;
+			        margin: -2px 0 8px;
+			        padding: 4px 4px;
+			        border-radius: 999px;
+			        border: 1px solid var(--dock-border);
+			        background: var(--dock-bg);
+			        box-shadow: var(--shadow-sm);
 			        max-width: calc(100% - var(--content-safe-right));
 			        scrollbar-width: none;
 			      }
 			      .subagent-tabs::-webkit-scrollbar { display: none; }
 			      .subagent-tabs.hidden { display: none; }
 			      .subagent-tabs .subtab {
-			        border: 1px solid var(--c-border);
-			        background: rgba(255,255,255,.90);
+			        border: 1px solid rgba(148,163,184,.35);
+			        background: transparent;
 			        color: var(--c-text);
 			        padding: 0;
 			        width: 28px;
@@ -498,9 +499,10 @@
 			        position: relative;
 			        user-select: none;
 			      }
-			      .subagent-tabs .subtab.is-main { width: 30px; height: 30px; }
-			      body[data-bm-skin="dark"] .subagent-tabs .subtab { background: rgba(15,23,42,.78); border-color: rgba(148,163,184,.22); }
-			      .subagent-tabs .subtab:hover { background: var(--c-soft-2); }
+			      .subagent-tabs .subtab.is-main { width: 30px; height: 30px; border-color: rgba(14,165,233,.35); background: rgba(14,165,233,.08); }
+			      body[data-bm-skin="dark"] .subagent-tabs .subtab { border-color: rgba(148,163,184,.26); }
+			      body[data-bm-skin="dark"] .subagent-tabs .subtab.is-main { border-color: rgba(56,189,248,.32); background: rgba(56,189,248,.10); }
+			      .subagent-tabs .subtab:hover { background: rgba(148,163,184,.12); }
 			      .subagent-tabs .subtab.active { background: rgba(14,165,233,.14); border-color: rgba(14,165,233,.55); box-shadow: var(--ring); }
 			      body[data-bm-skin="dark"] .subagent-tabs .subtab.active { background: rgba(14,165,233,.16); }
 			      .subagent-tabs .subtab .subtab-t { font-variant-numeric: tabular-nums; }
@@ -512,11 +514,11 @@
 			        height: 7px;
 			        border-radius: 999px;
 			        background: var(--subtab-color, var(--c-muted));
-			        border: 1px solid rgba(255,255,255,.92);
+			        box-shadow: 0 0 0 1px rgba(15,23,42,.12);
 			        opacity: .92;
 			        pointer-events: none;
 			      }
-			      body[data-bm-skin="dark"] .subagent-tabs .subtab .subtab-spot { border-color: rgba(15,23,42,.92); }
+			      body[data-bm-skin="dark"] .subagent-tabs .subtab .subtab-spot { box-shadow: 0 0 0 1px rgba(15,23,42,.92); }
 	      .row.kind-user_message { border-left-color:#38bdf8; }
 	      .row.kind-assistant_message { border-left-color:#4ade80; }
 	      .row.kind-tool_call, .row.kind-tool_output { border-left-color:#fbbf24; }

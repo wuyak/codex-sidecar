@@ -6,6 +6,7 @@ import { flashToastAt } from "../utils/toast.js";
 import { markUnread, updateUnreadButton } from "../unread.js";
 import { maybePlayNotifySound } from "../sound.js";
 import { cleanThinkingText } from "../markdown.js";
+import { loadHiddenChildrenByParent, saveHiddenChildrenByParent, saveHiddenThreads } from "../sidebar/hidden.js";
 
 function _toolGateWaiting(text) {
   const s = String(text || "");
@@ -542,7 +543,30 @@ export function connectEventStream(dom, state, upsertThread, renderTabs, renderM
       } catch (_) {}
 
       const k = keyOf(msg);
-      const isHidden = !!(state && state.hiddenThreads && typeof state.hiddenThreads.has === "function" && state.hiddenThreads.has(k));
+      let isHidden = !!(state && state.hiddenThreads && typeof state.hiddenThreads.has === "function" && state.hiddenThreads.has(k));
+      // 子代理：若主会话已“关闭监听”，子会话也应自动跟随隐藏（避免暴露在监听列表/产生未读/提示音）。
+      try {
+        const pid = String((msg && (msg.parent_thread_id || msg.parentThreadId)) ? (msg.parent_thread_id || msg.parentThreadId) : "").trim();
+        const sk = String((msg && (msg.source_kind || msg.sourceKind)) ? (msg.source_kind || msg.sourceKind) : "").trim().toLowerCase();
+        if (!isHidden && pid && sk === "subagent") {
+          const parentHidden = !!(state && state.hiddenThreads && typeof state.hiddenThreads.has === "function" && state.hiddenThreads.has(pid));
+          if (parentHidden) {
+            if (!state.hiddenThreads || typeof state.hiddenThreads.add !== "function") state.hiddenThreads = new Set();
+            if (!state.hiddenThreads.has(k)) {
+              state.hiddenThreads.add(k);
+              // Track auto-hidden children so we can restore them when the parent is restored.
+              const m = loadHiddenChildrenByParent();
+              const prev = Array.isArray(m[pid]) ? m[pid] : [];
+              const next = new Set(prev);
+              next.add(String(k || "").trim());
+              m[pid] = Array.from(next).filter(Boolean).slice(0, 200);
+              saveHiddenChildrenByParent(m);
+              saveHiddenThreads(state.hiddenThreads);
+            }
+            isHidden = true;
+          }
+        }
+      } catch (_) {}
       // Updates should not bump thread counts.
       if (op !== "update") upsertThread(state, msg);
 

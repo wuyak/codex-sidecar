@@ -1,5 +1,5 @@
 import { exportCurrentThreadMarkdown } from "../export.js";
-import { saveHiddenThreads, saveShowHiddenFlag } from "../sidebar/hidden.js";
+import { loadHiddenChildrenByParent, saveHiddenChildrenByParent, saveHiddenThreads, saveShowHiddenFlag } from "../sidebar/hidden.js";
 
 export function syncSidebarHeadButtons(dom, state) {
   const key = String(state.currentKey || "all");
@@ -35,6 +35,61 @@ export function wireSidebarHeadActions(dom, state, helpers) {
       const was = state.hiddenThreads.has(key);
       if (was) state.hiddenThreads.delete(key);
       else state.hiddenThreads.add(key);
+
+      const _subagentChildrenKeys = (parentKey) => {
+        const pk = String(parentKey || "").trim();
+        if (!pk || pk === "all") return [];
+        const out = [];
+        try {
+          if (!state || !state.threadIndex || typeof state.threadIndex.values !== "function") return [];
+          for (const t of state.threadIndex.values()) {
+            const k = String((t && t.key) ? t.key : "").trim();
+            if (!k || k === "all") continue;
+            const pid = String((t && t.parent_thread_id) ? t.parent_thread_id : "").trim();
+            const sk = String((t && t.source_kind) ? t.source_kind : "").trim().toLowerCase();
+            if (sk !== "subagent") continue;
+            if (pid !== pk) continue;
+            if (k === pk) continue;
+            out.push(k);
+          }
+        } catch (_) {}
+        return out;
+      };
+
+      try {
+        if (!was) {
+          // Hide parent -> hide its child subagent threads (auto).
+          const m = loadHiddenChildrenByParent();
+          const kids = _subagentChildrenKeys(key);
+          const added = [];
+          for (const ck of kids) {
+            if (state.hiddenThreads.has(ck)) continue;
+            state.hiddenThreads.add(ck);
+            added.push(ck);
+          }
+          if (added.length) {
+            const prev = Array.isArray(m[key]) ? m[key] : [];
+            const next = new Set(prev);
+            for (const x of added) next.add(String(x || "").trim());
+            m[key] = Array.from(next).filter(Boolean).slice(0, 200);
+            saveHiddenChildrenByParent(m);
+          }
+        } else {
+          // Restore parent -> restore children that were auto-hidden with it.
+          const m = loadHiddenChildrenByParent();
+          const prev = Array.isArray(m[key]) ? m[key] : [];
+          const nowKids = new Set(_subagentChildrenKeys(key));
+          for (const ck0 of prev) {
+            const ck = String(ck0 || "").trim();
+            if (!ck) continue;
+            if (!nowKids.has(ck)) continue;
+            if (state.hiddenThreads.has(ck)) state.hiddenThreads.delete(ck);
+          }
+          try { delete m[key]; } catch (_) {}
+          saveHiddenChildrenByParent(m);
+        }
+      } catch (_) {}
+
       saveHiddenThreads(state.hiddenThreads);
       toastBtn(dom.hideThreadBtn, was ? "已取消隐藏" : "已隐藏会话");
       // If we just hid the current session and hidden items are not shown, jump to "all" to avoid “消失”困惑。

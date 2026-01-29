@@ -3,7 +3,7 @@ import { exportThreadMarkdown } from "../../../export.js";
 import { getExportPrefsForKey } from "../../../export_prefs.js";
 import { getCustomLabel, setCustomLabel } from "../../../sidebar/labels.js";
 import { saveClosedThreads } from "../../../closed_threads.js";
-import { saveHiddenThreads } from "../../../sidebar/hidden.js";
+import { loadHiddenChildrenByParent, saveHiddenChildrenByParent, saveHiddenThreads } from "../../../sidebar/hidden.js";
 import { removeOfflineShowByKey, saveOfflineShowList } from "../../../offline_show.js";
 
 export function wireBookmarkDrawerInteractions(dom, state, helpers = {}) {
@@ -18,6 +18,83 @@ export function wireBookmarkDrawerInteractions(dom, state, helpers = {}) {
   const toastFromEl = typeof h.toastFromEl === "function" ? h.toastFromEl : (() => {});
 
   let bookmarkDrawerEditingKey = "";
+
+  const _subagentChildrenKeys = (parentKey) => {
+    const pk = String(parentKey || "").trim();
+    if (!pk || pk === "all") return [];
+    const out = [];
+    try {
+      if (!state || !state.threadIndex || typeof state.threadIndex.values !== "function") return [];
+      for (const t of state.threadIndex.values()) {
+        const k = String((t && t.key) ? t.key : "").trim();
+        if (!k || k === "all") continue;
+        const pid = String((t && t.parent_thread_id) ? t.parent_thread_id : "").trim();
+        const sk = String((t && t.source_kind) ? t.source_kind : "").trim().toLowerCase();
+        if (sk !== "subagent") continue;
+        if (pid !== pk) continue;
+        if (k === pk) continue;
+        out.push(k);
+      }
+    } catch (_) {}
+    return out;
+  };
+
+  const _isSubagentOfHiddenParent = (key) => {
+    const k = String(key || "").trim();
+    if (!k || k === "all") return false;
+    try {
+      const t = state && state.threadIndex && typeof state.threadIndex.get === "function" ? state.threadIndex.get(k) : null;
+      const pid = String(t && t.parent_thread_id ? t.parent_thread_id : "").trim();
+      const sk = String(t && t.source_kind ? t.source_kind : "").trim().toLowerCase();
+      if (!pid || sk !== "subagent") return false;
+      return !!(state && state.hiddenThreads && typeof state.hiddenThreads.has === "function" && state.hiddenThreads.has(pid));
+    } catch (_) {
+      return false;
+    }
+  };
+
+  const _autoHideChildrenForParent = (parentKey, hiddenSet) => {
+    const pk = String(parentKey || "").trim();
+    if (!pk || pk === "all") return { added: [], map: null };
+    const hidden = hiddenSet && typeof hiddenSet.add === "function" ? hiddenSet : ensureHiddenSet();
+    const kids = _subagentChildrenKeys(pk);
+    if (!kids.length) return { added: [], map: null };
+    const m = loadHiddenChildrenByParent();
+    const added = [];
+    for (const ck of kids) {
+      if (hidden.has(ck)) continue;
+      hidden.add(ck);
+      added.push(ck);
+    }
+    if (added.length) {
+      const prev = Array.isArray(m[pk]) ? m[pk] : [];
+      const next = new Set(prev);
+      for (const x of added) next.add(String(x || "").trim());
+      m[pk] = Array.from(next).filter(Boolean).slice(0, 200);
+      saveHiddenChildrenByParent(m);
+      return { added, map: m };
+    }
+    return { added: [], map: m };
+  };
+
+  const _autoRestoreChildrenForParent = (parentKey, hiddenSet) => {
+    const pk = String(parentKey || "").trim();
+    if (!pk || pk === "all") return false;
+    const hidden = hiddenSet && typeof hiddenSet.delete === "function" ? hiddenSet : ensureHiddenSet();
+    const m = loadHiddenChildrenByParent();
+    const prev = Array.isArray(m[pk]) ? m[pk] : [];
+    if (!prev.length) return false;
+    const nowKids = new Set(_subagentChildrenKeys(pk));
+    for (const ck0 of prev) {
+      const ck = String(ck0 || "").trim();
+      if (!ck) continue;
+      if (!nowKids.has(ck)) continue;
+      if (hidden.has(ck)) hidden.delete(ck);
+    }
+    try { delete m[pk]; } catch (_) {}
+    saveHiddenChildrenByParent(m);
+    return true;
+  };
 
   const enterInlineRename = (row, key, opts = {}) => {
     const k = String(key || "");
@@ -167,6 +244,7 @@ export function wireBookmarkDrawerInteractions(dom, state, helpers = {}) {
       if (action === "listenOff") {
         const hidden = ensureHiddenSet();
         if (!hidden.has(key)) hidden.add(key);
+        try { _autoHideChildrenForParent(key, hidden); } catch (_) {}
         saveHiddenThreads(hidden);
         try { renderTabs(); } catch (_) {}
         renderBookmarkDrawerList();
@@ -176,8 +254,13 @@ export function wireBookmarkDrawerInteractions(dom, state, helpers = {}) {
         return;
       }
       if (action === "listenOn") {
+        if (_isSubagentOfHiddenParent(key)) {
+          toastFromEl(btn, "主会话已关闭监听");
+          return;
+        }
         const hidden = ensureHiddenSet();
         if (hidden.has(key)) hidden.delete(key);
+        try { _autoRestoreChildrenForParent(key, hidden); } catch (_) {}
         saveHiddenThreads(hidden);
         try { renderTabs(); } catch (_) {}
         renderBookmarkDrawerList();
@@ -186,6 +269,7 @@ export function wireBookmarkDrawerInteractions(dom, state, helpers = {}) {
       if (action === "remove") {
         const hidden = ensureHiddenSet();
         if (!hidden.has(key)) hidden.add(key);
+        try { _autoHideChildrenForParent(key, hidden); } catch (_) {}
         saveHiddenThreads(hidden);
         try { renderTabs(); } catch (_) {}
         renderBookmarkDrawerList();
@@ -195,8 +279,13 @@ export function wireBookmarkDrawerInteractions(dom, state, helpers = {}) {
         return;
       }
       if (action === "restore") {
+        if (_isSubagentOfHiddenParent(key)) {
+          toastFromEl(btn, "主会话已关闭监听");
+          return;
+        }
         const hidden = ensureHiddenSet();
         if (hidden.has(key)) hidden.delete(key);
+        try { _autoRestoreChildrenForParent(key, hidden); } catch (_) {}
         saveHiddenThreads(hidden);
         try { renderTabs(); } catch (_) {}
         renderBookmarkDrawerList();
@@ -207,8 +296,13 @@ export function wireBookmarkDrawerInteractions(dom, state, helpers = {}) {
 
     // 点击条目：切换会话（若来自“已移除”，则先恢复）
     if (isHiddenRow) {
+      if (_isSubagentOfHiddenParent(key)) {
+        toastFromEl(row, "主会话已关闭监听");
+        return;
+      }
       const hidden = ensureHiddenSet();
       if (hidden.has(key)) hidden.delete(key);
+      try { _autoRestoreChildrenForParent(key, hidden); } catch (_) {}
       saveHiddenThreads(hidden);
       try { renderTabs(); } catch (_) {}
       renderBookmarkDrawerList();

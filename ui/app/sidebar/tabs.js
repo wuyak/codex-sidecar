@@ -2,7 +2,7 @@ import { colorForKey, keyOf, rolloutStampFromFile, shortId } from "../utils.js";
 import { isOfflineKey } from "../offline.js";
 import { removeOfflineShowByKey, saveOfflineShowList } from "../offline_show.js";
 import { getCustomLabel, setCustomLabel } from "./labels.js";
-import { loadHiddenThreads, saveHiddenThreads } from "./hidden.js";
+import { loadHiddenChildrenByParent, loadHiddenThreads, saveHiddenChildrenByParent, saveHiddenThreads } from "./hidden.js";
 import { saveClosedThreads } from "../closed_threads.js";
 import { getUnreadCount, jumpToNextUnread } from "../unread.js";
 import { flashToastAt } from "../utils/toast.js";
@@ -628,12 +628,73 @@ export function renderTabs(dom, state, onSelectKey) {
     return state.hiddenThreads;
   };
 
+  const _subagentChildrenKeys = (parentKey) => {
+    const pk = String(parentKey || "").trim();
+    if (!pk || pk === "all") return [];
+    const out = [];
+    try {
+      if (!(state && state.threadIndex && typeof state.threadIndex.values === "function")) return [];
+      for (const t of state.threadIndex.values()) {
+        const k = String((t && t.key) ? t.key : "").trim();
+        if (!k || k === "all") continue;
+        const pid = String((t && t.parent_thread_id) ? t.parent_thread_id : "").trim();
+        const sk = String((t && t.source_kind) ? t.source_kind : "").trim().toLowerCase();
+        if (sk !== "subagent") continue;
+        if (pid !== pk) continue;
+        if (k === pk) continue;
+        out.push(k);
+      }
+    } catch (_) {}
+    return out;
+  };
+
+  const _autoHideChildrenForParent = (parentKey, hiddenSet) => {
+    const pk = String(parentKey || "").trim();
+    if (!pk || pk === "all") return;
+    const hidden0 = hiddenSet && typeof hiddenSet.add === "function" ? hiddenSet : _ensureHiddenSet();
+    const kids = _subagentChildrenKeys(pk);
+    if (!kids.length) return;
+    const m = loadHiddenChildrenByParent();
+    const added = [];
+    for (const ck of kids) {
+      if (hidden0.has(ck)) continue;
+      hidden0.add(ck);
+      added.push(ck);
+    }
+    if (added.length) {
+      const prev = Array.isArray(m[pk]) ? m[pk] : [];
+      const next = new Set(prev);
+      for (const x of added) next.add(String(x || "").trim());
+      m[pk] = Array.from(next).filter(Boolean).slice(0, 200);
+      saveHiddenChildrenByParent(m);
+    }
+  };
+
+  const _autoRestoreChildrenForParent = (parentKey, hiddenSet) => {
+    const pk = String(parentKey || "").trim();
+    if (!pk || pk === "all") return;
+    const hidden0 = hiddenSet && typeof hiddenSet.delete === "function" ? hiddenSet : _ensureHiddenSet();
+    const m = loadHiddenChildrenByParent();
+    const prev = Array.isArray(m[pk]) ? m[pk] : [];
+    if (!prev.length) return;
+    const nowKids = new Set(_subagentChildrenKeys(pk));
+    for (const ck0 of prev) {
+      const ck = String(ck0 || "").trim();
+      if (!ck) continue;
+      if (!nowKids.has(ck)) continue;
+      if (hidden0.has(ck)) hidden0.delete(ck);
+    }
+    try { delete m[pk]; } catch (_) {}
+    saveHiddenChildrenByParent(m);
+  };
+
   const _hideKey = async (key, labelForToast = "", sourceEl = null) => {
     const k = String(key || "").trim();
     if (!k || k === "all") return;
     const s = _ensureHiddenSet();
     if (s.has(k)) return;
     s.add(k);
+    try { _autoHideChildrenForParent(k, s); } catch (_) {}
     saveHiddenThreads(s);
     _toastFromEl(sourceEl || host, `已从列表移除：${labelForToast || shortId(k)}`, { durationMs: 1600 });
     if (String(currentTabKey || state.currentKey || "all") === k) await onSelectKey(_pickFallbackKey(state, k));
@@ -647,6 +708,10 @@ export function renderTabs(dom, state, onSelectKey) {
     const was = s.has(k);
     if (was) s.delete(k);
     else s.add(k);
+    try {
+      if (!was) _autoHideChildrenForParent(k, s);
+      else _autoRestoreChildrenForParent(k, s);
+    } catch (_) {}
     saveHiddenThreads(s);
     _toastFromEl(
       sourceEl || host,
@@ -663,6 +728,7 @@ export function renderTabs(dom, state, onSelectKey) {
     const s = _ensureHiddenSet();
     if (s.has(k)) return;
     s.add(k);
+    try { _autoHideChildrenForParent(k, s); } catch (_) {}
     saveHiddenThreads(s);
     if (String(currentTabKey || state.currentKey || "all") === k) await onSelectKey(_pickFallbackKey(state, k));
     else renderTabs(dom, state, onSelectKey);
