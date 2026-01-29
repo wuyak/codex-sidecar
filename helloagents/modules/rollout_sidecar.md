@@ -84,7 +84,7 @@
 - 会话列表性能：书签渲染做了降频与增量更新（复用节点），降低高频 SSE 下的重排/重绘
 - UI 事件流分层：`ui/app/events/*`（timeline/buffer/stream）拆分，便于维护与进一步优化
 - 刷新期保护：刷新列表期间 SSE 会暂存到 `ssePending`；若积压过大则触发溢出兜底，刷新结束后自动回源同步一次
-- UI 装饰分层：长按复制/复制反馈由 `decorate/copy_hold.js` 负责；工具“详情/收起”切换由 `decorate/tool_toggle.js` 负责；`decorate/core.js` 仅做装饰编排
+- UI 装饰分层：长按复制/复制反馈由 `decorate/copy_hold.js` 负责；工具“详情/收起”切换由 `decorate/tool_toggle.js` 负责；`decorate/core.js` 仅做装饰编排（Markdown 块长按复制会忽略内部代码块 `pre`，避免嵌套触发导致复制内容被覆盖）
 - 工具“详情/收起”稳定：切换前后基于锚点 `top` 差值进行滚动补偿（无漂移）；并在从代码块内点击切换时，基于点击位置做滚动校正，避免收起后视口落到代码块下方
 - UI 会话栏分层：会话标签持久化拆到 `sidebar/labels.js`；书签渲染与交互在 `sidebar/tabs.js`；`sidebar.js` 作为 facade
 - UI 工具函数分层：`utils/*`（time/id/color/json/clipboard/error），`utils.js` 作为 facade

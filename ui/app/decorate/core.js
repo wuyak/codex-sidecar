@@ -120,6 +120,8 @@ function decorateMdBlocks(root) {
       md.parentNode.insertBefore(wrap, md);
       wrap.appendChild(md);
       wireHoldCopy(md, {
+        // Avoid nested hold-copy conflicts: code blocks inside markdown already have their own hold-copy handler.
+        ignoreSelector: "pre,button,a,input,textarea,select,summary",
         getText: () => _textForCopyFromMd(md),
         toastIsLight: true,
         onTap: null,
