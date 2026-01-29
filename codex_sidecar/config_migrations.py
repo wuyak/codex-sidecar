@@ -125,8 +125,10 @@ def _migrate_http_default_profile_name(cfg: Any, config_home: Path, *, save_conf
 
 
 def _migrate_http_add_googlefree_profile(cfg: Any, config_home: Path, *, save_config: Callable[[Path, Any], None]) -> None:
-    # Add a second built-in HTTP profile for users who kept the default single-profile config.
-    # Keep it conservative: only apply when it still looks like the stock "siliconflowfree" profile.
+    # Add the built-in "googlefree" HTTP profile when the config uses the profiles list.
+    # This keeps it non-intrusive:
+    # - Does not change the currently selected profile
+    # - Only appends when missing
     try:
         tc = getattr(cfg, "translator_config", None)
         if not isinstance(tc, dict):
@@ -138,20 +140,6 @@ def _migrate_http_add_googlefree_profile(cfg: Any, config_home: Path, *, save_co
         if not isinstance(profiles, list):
             return
         if any(isinstance(p, dict) and str(p.get("name") or "").strip() == "googlefree" for p in profiles):
-            return
-        if len(profiles) != 1:
-            return
-        p0 = profiles[0]
-        if not isinstance(p0, dict):
-            return
-        name = str(p0.get("name") or "").strip()
-        url = str(p0.get("url") or "").strip()
-        token = str(p0.get("token") or "").strip()
-        if name != "siliconflowfree":
-            return
-        if "siliconflow.zvo.cn/translate.json" not in url:
-            return
-        if token:
             return
         profiles.append(
             {
