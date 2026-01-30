@@ -1,9 +1,16 @@
 import { renderMarkdown } from "../markdown.js";
+import { escapeHtml } from "../utils.js";
 
 const _MD_CACHE_MAX = 3000;
+const _MD_PARSE_MAX_CHARS = 180_000;
 
 export function renderMarkdownCached(state, cacheKey, text) {
   const src = String(text || "");
+  // Guardrail: extremely large markdown blocks can freeze the browser if parsed synchronously.
+  // Fall back to plain <pre> rendering to keep the UI responsive.
+  if (src.length > _MD_PARSE_MAX_CHARS) {
+    return `<pre class="md-raw">${escapeHtml(src)}</pre>`;
+  }
   const k = String(cacheKey || "");
   if (!k || !state || typeof state !== "object" || !state.mdCache || typeof state.mdCache.get !== "function") {
     return String(renderMarkdown(src) || "");
@@ -29,4 +36,3 @@ export function renderMarkdownCached(state, cacheKey, text) {
   } catch (_) {}
   return html;
 }
-

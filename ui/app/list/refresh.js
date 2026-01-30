@@ -5,6 +5,19 @@ import { isOfflineKey, offlineRelFromKey } from "../offline.js";
 import { saveOfflineShowList, upsertOfflineShow } from "../offline_show.js";
 import { loadOfflineZhMap } from "../offline_zh.js";
 
+function _yieldToBrowser(timeoutMs = 120) {
+  const t = Number.isFinite(Number(timeoutMs)) ? Number(timeoutMs) : 120;
+  return new Promise((resolve) => {
+    try {
+      if (typeof requestIdleCallback === "function") {
+        requestIdleCallback(() => resolve(), { timeout: Math.max(0, t) });
+        return;
+      }
+    } catch (_) {}
+    setTimeout(() => resolve(), 0);
+  });
+}
+
 export async function refreshList(dom, state, renderTabs, renderMessage, renderEmpty) {
   const token = (state && typeof state === "object")
     ? (state.refreshToken = (Number(state.refreshToken) || 0) + 1)
@@ -150,9 +163,12 @@ export async function refreshList(dom, state, renderTabs, renderMessage, renderE
     state.lastRenderedMs = NaN;
     if (filtered.length === 0) renderEmpty(dom);
     else {
-      const frag = document.createDocumentFragment();
       const tailImmediate = 80;
+      // Render in chunks to keep the page responsive for large histories.
+      const CHUNK = 36;
+      let frag = document.createDocumentFragment();
       for (let i = 0; i < filtered.length; i++) {
+        if (token && state && state.refreshToken !== token) return;
         const m = filtered[i];
         const deferDecorate = (filtered.length - i) > tailImmediate;
         renderMessage(dom, state, m, { list: frag, autoscroll: false, deferDecorate });
@@ -162,6 +178,11 @@ export async function refreshList(dom, state, renderTabs, renderMessage, renderE
         if (mid && state.rowIndex && state.rowIndex.has(mid) && state.timeline && Array.isArray(state.timeline)) {
           const seq = Number.isFinite(Number(m && m.seq)) ? Number(m.seq) : NaN;
           state.timeline.push({ id: mid, ms, seq });
+        }
+        if (((i + 1) % CHUNK) === 0) {
+          if (dom.list) dom.list.appendChild(frag);
+          frag = document.createDocumentFragment();
+          await _yieldToBrowser();
         }
       }
       if (dom.list) dom.list.appendChild(frag);

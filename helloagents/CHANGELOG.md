@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- 修复(UI)：刷新消息列表时改为分片渲染（idle/timeout 让出主线程），并对超长 Markdown 回退为纯文本 `<pre>` 展示，避免会话历史过大时浏览器出现“页面未响应”导致监听/渲染中断。
 - 新增(翻译)：HTTP 翻译新增内置 Profile `googlefree`，支持通过 `translate-pa.googleapis.com/v1/translate`（以及 `translate.googleapis.com/translate_a/single`）进行“Google(Free)”翻译（非 Google Cloud 付费 API）；并为 `googlefree` 启用 Markdown 格式稳定化（保留行序/空行/代码块）。
 - 修复(翻译)：切换翻译引擎（Provider/Profile）后，翻译队列中的任务会“绑定入队时的翻译器快照”执行，避免队列中途换引擎导致批量混用与“重译无变化”的错觉；`lo` 队列批量聚合条件收紧为“同一会话 key + 同一翻译器快照”。
 - 修复(UI)：在 Markdown 内容内长按代码块时，复制内容不再被外层 Markdown 块的“长按复制”覆盖；现在会仅复制该代码块文本。
