@@ -2,7 +2,9 @@ import { escapeHtml } from "../utils.js";
 import { renderInlineMarkdown, smartJoinParts } from "./inline.js";
 import { isTableSeparatorLine, parseTableAlign, renderTable, splitTableRow } from "./table.js";
 
-export function renderMarkdown(md) {
+export function renderMarkdown(md, opts) {
+  const opt = (opts && typeof opts === "object") ? opts : {};
+  const preserveNewlines = !!opt.preserveNewlines;
   const src = String(md ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   const lines = src.split("\n");
   const blocks = [];
@@ -13,9 +15,11 @@ export function renderMarkdown(md) {
 
   const flushPara = () => {
     if (!para.length) return;
-    const text = smartJoinParts(para).replace(/\s+/g, " ").trim();
+    const text = preserveNewlines
+      ? para.join("\n")
+      : smartJoinParts(para).replace(/\s+/g, " ").trim();
     para = [];
-    if (!text) return;
+    if (!text || !text.trim()) return;
     blocks.push(`<p>${renderInlineMarkdown(text)}</p>`);
   };
 
@@ -161,7 +165,7 @@ export function renderMarkdown(md) {
     }
 
     flushList();
-    para.push(t.trim());
+    para.push(preserveNewlines ? t : t.trim());
   }
 
   if (inCode) flushCode();

@@ -34,21 +34,42 @@ export function smartJoinParts(parts) {
   return out;
 }
 
+function _renderTextSegment(seg) {
+  let h = escapeHtml(seg);
+  h = h.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  return h;
+}
+
 export function renderInlineMarkdown(text) {
   const raw = String(text ?? "");
   if (!raw) return "";
-  const parts = raw.split("`");
   const out = [];
-  for (let i = 0; i < parts.length; i++) {
-    const seg = parts[i] ?? "";
-    if ((i % 2) === 1) {
-      out.push(`<code>${escapeHtml(seg)}</code>`);
-    } else {
-      let h = escapeHtml(seg);
-      h = h.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-      out.push(h);
+  let i = 0;
+  while (i < raw.length) {
+    const open = raw.indexOf("`", i);
+    if (open < 0) {
+      out.push(_renderTextSegment(raw.slice(i)));
+      break;
     }
+
+    // Our inline parser only supports single-backtick code spans.
+    // Treat runs like "``" or "```" as literal text to avoid swallowing the rest of the paragraph.
+    if (raw[open + 1] === "`") {
+      out.push(_renderTextSegment(raw.slice(i, open + 1)));
+      i = open + 1;
+      continue;
+    }
+
+    const close = raw.indexOf("`", open + 1);
+    if (close < 0) {
+      out.push(_renderTextSegment(raw.slice(i)));
+      break;
+    }
+
+    out.push(_renderTextSegment(raw.slice(i, open)));
+    out.push(`<code>${escapeHtml(raw.slice(open + 1, close))}</code>`);
+    i = close + 1;
   }
+
   return out.join("");
 }
-

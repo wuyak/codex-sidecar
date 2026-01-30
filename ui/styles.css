@@ -1126,6 +1126,8 @@
 		        text-wrap: pretty;
 		        overflow-wrap: anywhere;
 		      }
+	      /* User input: preserve hard newlines/spaces inside Markdown blocks. */
+	      .row.kind-user_message .md { white-space: pre-wrap; }
 	      .md h1, .md h2, .md h3 {
 	        margin: 12px 0 6px;
 	        line-height: 1.25;

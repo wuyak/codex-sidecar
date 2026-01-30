@@ -105,11 +105,12 @@ export function renderMessage(dom, state, msg, opts = {}) {
   } else if (kind === "user_message") {
     metaLeftExtra = `${sessionPill}<span class="pill">用户输入</span>`;
     const txt = String(msg.text || "");
+    const mdOpt = { preserveNewlines: true };
     const split = splitLeadingCodeBlock(txt);
     if (split && split.code) {
-      body = `${split.code ? `<pre class="code">${escapeHtml(split.code)}</pre>` : ``}${split.rest ? `<div class="md">${renderMarkdownCached(state, `md:${mid}:user_rest`, split.rest)}</div>` : ``}`;
+      body = `${split.code ? `<pre class="code">${escapeHtml(split.code)}</pre>` : ``}${split.rest ? `<div class="md">${renderMarkdownCached(state, `md:${mid}:user_rest`, split.rest, mdOpt)}</div>` : ``}`;
     } else {
-      body = `<div class="md">${renderMarkdownCached(state, `md:${mid}:user`, txt)}</div>`;
+      body = `<div class="md">${renderMarkdownCached(state, `md:${mid}:user`, txt, mdOpt)}</div>`;
     }
   } else if (kind === "assistant_message") {
     metaLeftExtra = `${sessionPill}<span class="pill">回答</span>`;

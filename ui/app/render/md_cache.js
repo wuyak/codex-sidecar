@@ -32,24 +32,26 @@ function _statsFor(cache) {
   return st;
 }
 
-export function renderMarkdownCached(state, cacheKey, text) {
+export function renderMarkdownCached(state, cacheKey, text, opts) {
   const src = String(text || "");
   const k = String(cacheKey || "");
+  let optKey = "";
+  try { optKey = (opts && typeof opts === "object") ? JSON.stringify(opts) : ""; } catch (_) { optKey = ""; }
   if (!k || !state || typeof state !== "object" || !state.mdCache || typeof state.mdCache.get !== "function") {
-    return String(renderMarkdown(src) || "");
+    return String(renderMarkdown(src, opts) || "");
   }
   const cache = state.mdCache;
   const st = _statsFor(cache);
   try {
     const prev = cache.get(k);
-    if (prev && typeof prev === "object" && prev.text === src && typeof prev.html === "string") {
+    if (prev && typeof prev === "object" && prev.text === src && prev.optKey === optKey && typeof prev.html === "string") {
       // bump LRU
       cache.delete(k);
       cache.set(k, prev);
       return prev.html;
     }
   } catch (_) {}
-  const html = String(renderMarkdown(src) || "");
+  const html = String(renderMarkdown(src, opts) || "");
   try {
     const nextChars = src.length + html.length;
     // Do not cache huge entries (keeps display identical while avoiding memory spikes).
@@ -59,7 +61,7 @@ export function renderMarkdownCached(state, cacheKey, text) {
         const old = cache.get(k);
         if (old && typeof old === "object") st.chars -= _entryChars(old);
       } catch (_) {}
-      cache.set(k, { text: src, html, chars: nextChars });
+      cache.set(k, { text: src, html, chars: nextChars, optKey });
       st.chars += nextChars;
     }
 

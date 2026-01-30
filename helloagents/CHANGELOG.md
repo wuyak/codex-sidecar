@@ -172,6 +172,7 @@
 - UI: SSE 会话缓冲对 `op=update` 做按消息 id 覆盖合并，减少翻译回填期间的缓冲溢出与不必要的回源刷新。
 - UI: 事件流分层：拆分 `ui/app/events.js` → `ui/app/events/*`（timeline/buffer/stream），并对刷新期间 `ssePending` 的 `op=update` 做按 id 合并，降低译文回填压力。
 - UI: 刷新期 SSE `ssePending` 增加长度上限与溢出兜底（溢出后自动回源 `refreshList()`），提升长时间挂着稳定性。
+- 修复(UI Markdown)：用户输入（`user_message`）在 Markdown 渲染时保留原始换行与空白（不再将段落内 `\n` 归一化为单个空格）。
 - 修复(UI Markdown)：混合列表/子项场景下有序列表被分段渲染时，序号不再反复从 1 开始（保留原始序号并输出 `<li value>`）。
 - UI: 装饰分层：`decorate/core.js` 复用 `decorate/copy_hold.js` 并抽离 `decorate/tool_toggle.js`，去重并提升可读性。
 - UI: 侧栏分层：拆分 `sidebar.js` → `sidebar/*`（labels/tabs），保留 facade 导出不变。
